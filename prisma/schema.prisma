@@ -1,0 +1,509 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  DISPATCHER
+  DRIVER
+}
+
+enum DriverStatus {
+  ACTIVE
+  VACATION
+  SICK_LEAVE
+  INACTIVE
+}
+
+enum LoadStatus {
+  AVAILABLE
+  ASSIGNED
+  ACCEPTED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum VehicleSize {
+  SMALL      // sedan, hatchback
+  MEDIUM     // mid-size SUV
+  LARGE      // full-size SUV, pickup
+  OVERSIZED  // lifted trucks, vans
+}
+
+enum DocumentType {
+  BOL                // Bill of Lading
+  POD                // Proof of Delivery
+  DAMAGE_REPORT
+  LOAD_PHOTO
+  RATE_CONFIRMATION
+  FUEL_RECEIPT
+  CDL_LICENSE
+  MEDICAL_CARD
+  INSURANCE
+  REGISTRATION
+  OTHER
+}
+
+enum MaintenanceType {
+  OIL_CHANGE
+  TIRE_ROTATION
+  BRAKE_SERVICE
+  GENERAL_REPAIR
+  INSPECTION
+  OTHER
+}
+
+enum ExpenseType {
+  FUEL
+  TOLLS
+  REPAIRS
+  MAINTENANCE
+  INSURANCE
+  REGISTRATION
+  OTHER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  DOCUMENT_UPLOAD
+  ASSIGNMENT
+  PAYMENT
+}
+
+enum AuditEntity {
+  USER
+  DRIVER
+  TRUCK
+  LOAD
+  DOCUMENT
+  PAY_STUB
+  MAINTENANCE
+  EXPENSE
+}
+
+// Models
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  role            UserRole  @default(DRIVER)
+  firstName       String
+  lastName        String
+  phone           String?
+  telegramChatId  String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  driver          Driver?
+  auditLogs       AuditLog[]
+
+  @@index([email])
+}
+
+model Driver {
+  id                    String         @id @default(cuid())
+  userId                String         @unique
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic Info
+  hireDate              DateTime
+  status                DriverStatus   @default(ACTIVE)
+
+  // CDL Info
+  cdlNumber             String
+  cdlState              String
+  cdlExpiry             DateTime
+  endorsements          String[]       // Array of endorsements (H, N, T, etc)
+
+  // Medical & Compliance
+  medicalCardExpiry     DateTime
+
+  // Emergency Contact
+  emergencyContactName  String
+  emergencyContactPhone String
+
+  // Financial
+  ratePerMile           Float          @default(0.60)
+
+  // GPS Tracking
+  lastKnownLatitude     Float?
+  lastKnownLongitude    Float?
+  lastLocationUpdate    DateTime?
+
+  // Backup driver relation
+  backupForTruck        Truck?         @relation("BackupDriver")
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  // Relations
+  primaryTruck          Truck?         @relation("PrimaryDriver")
+  loads                 Load[]
+  payStubs              PayStub[]
+  vacationPeriods       VacationPeriod[]
+  documents             Document[]
+  recurringLoadTemplates RecurringLoadTemplate[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Truck {
+  id                  String    @id @default(cuid())
+
+  // Basic Info
+  truckNumber         String    @unique
+  vin                 String    @unique
+  make                String
+  model               String
+  year                Int
+  licensePlate        String
+
+  // Registration & Insurance
+  registrationExpiry  DateTime
+  insuranceProvider   String
+  insurancePolicyNo   String
+  insuranceExpiry     DateTime
+
+  // Mileage
+  currentMileage      Int       @default(0)
+
+  // Car Hauler Capacity
+  maxSmallCars        Int       @default(8)
+  maxMediumCars       Int       @default(6)
+  maxLargeCars        Int       @default(4)
+  maxOversized        Int       @default(2)
+
+  // Status
+  isActive            Boolean   @default(true)
+
+  // Driver Assignment
+  primaryDriverId     String?   @unique
+  primaryDriver       Driver?   @relation("PrimaryDriver", fields: [primaryDriverId], references: [id])
+
+  backupDriverId      String?   @unique
+  backupDriver        Driver?   @relation("BackupDriver", fields: [backupDriverId], references: [id])
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  loads               Load[]
+  maintenanceRecords  MaintenanceRecord[]
+  expenses            TruckExpense[]
+  recurringLoadTemplates RecurringLoadTemplate[]
+
+  @@index([truckNumber])
+  @@index([isActive])
+}
+
+model Load {
+  id                      String      @id @default(cuid())
+  loadNumber              String      @unique
+
+  // Assignment
+  driverId                String?
+  driver                  Driver?     @relation(fields: [driverId], references: [id])
+
+  truckId                 String?
+  truck                   Truck?      @relation(fields: [truckId], references: [id])
+
+  // Status
+  status                  LoadStatus  @default(AVAILABLE)
+
+  // Pickup Details
+  pickupAddress           String
+  pickupCity              String
+  pickupState             String
+  pickupZip               String
+  pickupLatitude          Float?
+  pickupLongitude         Float?
+  pickupContactName       String
+  pickupContactPhone      String
+  scheduledPickupDate     DateTime
+  actualPickupDate        DateTime?
+
+  // Delivery Details
+  deliveryAddress         String
+  deliveryCity            String
+  deliveryState           String
+  deliveryZip             String
+  deliveryLatitude        Float?
+  deliveryLongitude       Float?
+  deliveryContactName     String
+  deliveryContactPhone    String
+  scheduledDeliveryDate   DateTime
+  actualDeliveryDate      DateTime?
+
+  // Load Details
+  distance                Int         // loaded miles
+  deadheadMiles           Int         @default(0)
+  loadRate                Float
+  customRatePerMile       Float?      // override default driver rate
+  detentionTime           Int?        // hours
+  detentionPay            Float?      @default(0)
+
+  // Notes
+  notes                   String?     @db.Text
+  specialInstructions     String?     @db.Text
+
+  // Recurring
+  isRecurring             Boolean     @default(false)
+  recurringGroupId        String?
+
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  // Relations
+  vehicles                Vehicle[]
+  documents               Document[]
+
+  @@index([loadNumber])
+  @@index([status])
+  @@index([driverId])
+  @@index([truckId])
+}
+
+model Vehicle {
+  id          String       @id @default(cuid())
+  loadId      String
+  load        Load         @relation(fields: [loadId], references: [id], onDelete: Cascade)
+
+  // Vehicle Info
+  vin         String
+  make        String
+  model       String
+  year        Int
+  color       String?
+  size        VehicleSize
+
+  // Condition
+  isOperable  Boolean      @default(true)
+  damageNotes String?      @db.Text
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([loadId])
+}
+
+model Document {
+  id          String        @id @default(cuid())
+
+  // Document Info
+  type        DocumentType
+  fileName    String
+  filePath    String
+  fileSize    Int
+  mimeType    String
+
+  // Expiry (for compliance docs)
+  expiryDate  DateTime?
+
+  // Associations
+  loadId      String?
+  load        Load?         @relation(fields: [loadId], references: [id], onDelete: Cascade)
+
+  driverId    String?
+  driver      Driver?       @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  uploadedById String?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([type])
+  @@index([loadId])
+  @@index([driverId])
+}
+
+model PayStub {
+  id            String    @id @default(cuid())
+  stubNumber    String    @unique
+
+  driverId      String
+  driver        Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  // Period
+  periodStart   DateTime
+  periodEnd     DateTime
+
+  // Calculations
+  totalMiles    Int
+  totalAmount   Float
+  avgRatePerMile Float
+
+  // Payment
+  isPaid        Boolean   @default(false)
+  paidDate      DateTime?
+
+  // PDF
+  pdfPath       String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([driverId])
+  @@index([isPaid])
+}
+
+model MaintenanceRecord {
+  id              String           @id @default(cuid())
+
+  truckId         String
+  truck           Truck            @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  type            MaintenanceType
+  description     String           @db.Text
+
+  performedDate   DateTime
+  mileageAtService Int
+  nextServiceDue  Int?             // mileage
+
+  cost            Float            @default(0)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([truckId])
+}
+
+model TruckExpense {
+  id          String       @id @default(cuid())
+
+  truckId     String
+  truck       Truck        @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  type        ExpenseType
+  description String
+  amount      Float
+  date        DateTime
+
+  // Receipt
+  receiptPath String?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([truckId])
+  @@index([type])
+}
+
+model VacationPeriod {
+  id          String    @id @default(cuid())
+
+  driverId    String
+  driver      Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  startDate   DateTime
+  endDate     DateTime
+  type        String    // VACATION or SICK_LEAVE
+  notes       String?   @db.Text
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([driverId])
+}
+
+model AuditLog {
+  id          String       @id @default(cuid())
+
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action      AuditAction
+  entity      AuditEntity
+  entityId    String
+
+  changes     Json?        // before/after object
+  ipAddress   String?
+
+  createdAt   DateTime     @default(now())
+
+  @@index([userId])
+  @@index([entity])
+  @@index([entityId])
+  @@index([createdAt])
+}
+
+model Setting {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  value       String    @db.Text
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([key])
+}
+
+model RecurringLoadTemplate {
+  id                      String              @id @default(cuid())
+  recurringGroupId        String              @unique
+
+  // Same fields as Load for template
+  pickupAddress           String
+  pickupCity              String
+  pickupState             String
+  pickupZip               String
+  pickupContactName       String
+  pickupContactPhone      String
+
+  deliveryAddress         String
+  deliveryCity            String
+  deliveryState           String
+  deliveryZip             String
+  deliveryContactName     String
+  deliveryContactPhone    String
+
+  distance                Int
+  deadheadMiles           Int         @default(0)
+  loadRate                Float
+  customRatePerMile       Float?
+  detentionTime           Int?
+  detentionPay            Float?      @default(0)
+
+  notes                   String?     @db.Text
+  specialInstructions     String?     @db.Text
+
+  // Recurring Configuration
+  frequency               RecurringFrequency
+  dayOfWeek               Int?        // 0-6 for weekly (0 = Sunday)
+  dayOfMonth              Int?        // 1-31 for monthly
+  isActive                Boolean     @default(true)
+
+  // Assignment (optional default)
+  driverId                String?
+  driver                  Driver?     @relation(fields: [driverId], references: [id])
+
+  truckId                 String?
+  truck                   Truck?      @relation(fields: [truckId], references: [id])
+
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+  lastGeneratedAt         DateTime?
+
+  @@index([recurringGroupId])
+  @@index([frequency])
+  @@index([isActive])
+}
+
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
