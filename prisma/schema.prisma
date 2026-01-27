@@ -33,15 +33,15 @@ enum LoadStatus {
 }
 
 enum VehicleSize {
-  SMALL      // sedan, hatchback
-  MEDIUM     // mid-size SUV
-  LARGE      // full-size SUV, pickup
-  OVERSIZED  // lifted trucks, vans
+  SMALL // sedan, hatchback
+  MEDIUM // mid-size SUV
+  LARGE // full-size SUV, pickup
+  OVERSIZED // lifted trucks, vans
 }
 
 enum DocumentType {
-  BOL                // Bill of Lading
-  POD                // Proof of Delivery
+  BOL // Bill of Lading
+  POD // Proof of Delivery
   DAMAGE_REPORT
   LOAD_PHOTO
   RATE_CONFIRMATION
@@ -95,115 +95,120 @@ enum AuditEntity {
 
 // Models
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  password        String
-  role            UserRole  @default(DRIVER)
-  firstName       String
-  lastName        String
-  phone           String?
-  telegramChatId  String?
+  id             String   @id @default(cuid())
+  email          String   @unique
+  password       String
+  role           UserRole @default(DRIVER)
+  firstName      String
+  lastName       String
+  phone          String?
+  telegramChatId String?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  driver          Driver?
-  auditLogs       AuditLog[]
+  driver    Driver?
+  auditLogs AuditLog[]
 
   @@index([email])
 }
 
 model Driver {
-  id                    String         @id @default(cuid())
-  userId                String         @unique
-  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Basic Info
-  hireDate              DateTime
-  status                DriverStatus   @default(ACTIVE)
+  hireDate DateTime
+  status   DriverStatus @default(ACTIVE)
 
   // CDL Info
-  cdlNumber             String
-  cdlState              String
-  cdlExpiry             DateTime
-  endorsements          String[]       // Array of endorsements (H, N, T, etc)
+  cdlNumber    String
+  cdlState     String
+  cdlExpiry    DateTime
+  endorsements String[] // Array of endorsements (H, N, T, etc)
 
   // Medical & Compliance
-  medicalCardExpiry     DateTime
+  medicalCardExpiry DateTime
 
   // Emergency Contact
   emergencyContactName  String
   emergencyContactPhone String
 
   // Financial
-  ratePerMile           Float          @default(0.60)
+  ratePerMile Float @default(0.60)
 
   // GPS Tracking
-  lastKnownLatitude     Float?
-  lastKnownLongitude    Float?
-  lastLocationUpdate    DateTime?
+  lastKnownLatitude  Float?
+  lastKnownLongitude Float?
+  lastLocationUpdate DateTime?
+
+  // Traccar Integration
+  traccarDeviceId String? @unique // Device ID for Traccar Client
 
   // Backup driver relation
-  backupForTruck        Truck?         @relation("BackupDriver")
+  backupForTruck Truck? @relation("BackupDriver")
 
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  primaryTruck          Truck?         @relation("PrimaryDriver")
-  loads                 Load[]
-  payStubs              PayStub[]
-  vacationPeriods       VacationPeriod[]
-  documents             Document[]
+  primaryTruck           Truck?                  @relation("PrimaryDriver")
+  loads                  Load[]
+  payStubs               PayStub[]
+  vacationPeriods        VacationPeriod[]
+  documents              Document[]
   recurringLoadTemplates RecurringLoadTemplate[]
+  positions              Position[] // Traccar position history
 
   @@index([userId])
   @@index([status])
+  @@index([traccarDeviceId])
 }
 
 model Truck {
-  id                  String    @id @default(cuid())
+  id String @id @default(cuid())
 
   // Basic Info
-  truckNumber         String    @unique
-  vin                 String    @unique
-  make                String
-  model               String
-  year                Int
-  licensePlate        String
+  truckNumber  String @unique
+  vin          String @unique
+  make         String
+  model        String
+  year         Int
+  licensePlate String
 
   // Registration & Insurance
-  registrationExpiry  DateTime
-  insuranceProvider   String
-  insurancePolicyNo   String
-  insuranceExpiry     DateTime
+  registrationExpiry DateTime
+  insuranceProvider  String
+  insurancePolicyNo  String
+  insuranceExpiry    DateTime
 
   // Mileage
-  currentMileage      Int       @default(0)
+  currentMileage Int @default(0)
 
   // Car Hauler Capacity
-  maxSmallCars        Int       @default(8)
-  maxMediumCars       Int       @default(6)
-  maxLargeCars        Int       @default(4)
-  maxOversized        Int       @default(2)
+  maxSmallCars  Int @default(8)
+  maxMediumCars Int @default(6)
+  maxLargeCars  Int @default(4)
+  maxOversized  Int @default(2)
 
   // Status
-  isActive            Boolean   @default(true)
+  isActive Boolean @default(true)
 
   // Driver Assignment
-  primaryDriverId     String?   @unique
-  primaryDriver       Driver?   @relation("PrimaryDriver", fields: [primaryDriverId], references: [id])
+  primaryDriverId String? @unique
+  primaryDriver   Driver? @relation("PrimaryDriver", fields: [primaryDriverId], references: [id])
 
-  backupDriverId      String?   @unique
-  backupDriver        Driver?   @relation("BackupDriver", fields: [backupDriverId], references: [id])
+  backupDriverId String? @unique
+  backupDriver   Driver? @relation("BackupDriver", fields: [backupDriverId], references: [id])
 
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  loads               Load[]
-  maintenanceRecords  MaintenanceRecord[]
-  expenses            TruckExpense[]
+  loads                  Load[]
+  maintenanceRecords     MaintenanceRecord[]
+  expenses               TruckExpense[]
   recurringLoadTemplates RecurringLoadTemplate[]
 
   @@index([truckNumber])
@@ -211,65 +216,65 @@ model Truck {
 }
 
 model Load {
-  id                      String      @id @default(cuid())
-  loadNumber              String      @unique
+  id         String @id @default(cuid())
+  loadNumber String @unique
 
   // Assignment
-  driverId                String?
-  driver                  Driver?     @relation(fields: [driverId], references: [id])
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id])
 
-  truckId                 String?
-  truck                   Truck?      @relation(fields: [truckId], references: [id])
+  truckId String?
+  truck   Truck?  @relation(fields: [truckId], references: [id])
 
   // Status
-  status                  LoadStatus  @default(AVAILABLE)
+  status LoadStatus @default(AVAILABLE)
 
   // Pickup Details
-  pickupAddress           String
-  pickupCity              String
-  pickupState             String
-  pickupZip               String
-  pickupLatitude          Float?
-  pickupLongitude         Float?
-  pickupContactName       String
-  pickupContactPhone      String
-  scheduledPickupDate     DateTime
-  actualPickupDate        DateTime?
+  pickupAddress       String
+  pickupCity          String
+  pickupState         String
+  pickupZip           String
+  pickupLatitude      Float?
+  pickupLongitude     Float?
+  pickupContactName   String
+  pickupContactPhone  String
+  scheduledPickupDate DateTime
+  actualPickupDate    DateTime?
 
   // Delivery Details
-  deliveryAddress         String
-  deliveryCity            String
-  deliveryState           String
-  deliveryZip             String
-  deliveryLatitude        Float?
-  deliveryLongitude       Float?
-  deliveryContactName     String
-  deliveryContactPhone    String
-  scheduledDeliveryDate   DateTime
-  actualDeliveryDate      DateTime?
+  deliveryAddress       String
+  deliveryCity          String
+  deliveryState         String
+  deliveryZip           String
+  deliveryLatitude      Float?
+  deliveryLongitude     Float?
+  deliveryContactName   String
+  deliveryContactPhone  String
+  scheduledDeliveryDate DateTime
+  actualDeliveryDate    DateTime?
 
   // Load Details
-  distance                Int         // loaded miles
-  deadheadMiles           Int         @default(0)
-  loadRate                Float
-  customRatePerMile       Float?      // override default driver rate
-  detentionTime           Int?        // hours
-  detentionPay            Float?      @default(0)
+  distance          Int // loaded miles
+  deadheadMiles     Int    @default(0)
+  loadRate          Float
+  customRatePerMile Float? // override default driver rate
+  detentionTime     Int? // hours
+  detentionPay      Float? @default(0)
 
   // Notes
-  notes                   String?     @db.Text
-  specialInstructions     String?     @db.Text
+  notes               String? @db.Text
+  specialInstructions String? @db.Text
 
   // Recurring
-  isRecurring             Boolean     @default(false)
-  recurringGroupId        String?
+  isRecurring      Boolean @default(false)
+  recurringGroupId String?
 
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  vehicles                Vehicle[]
-  documents               Document[]
+  vehicles  Vehicle[]
+  documents Document[]
 
   @@index([loadNumber])
   @@index([status])
@@ -278,52 +283,52 @@ model Load {
 }
 
 model Vehicle {
-  id          String       @id @default(cuid())
-  loadId      String
-  load        Load         @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  loadId String
+  load   Load   @relation(fields: [loadId], references: [id], onDelete: Cascade)
 
   // Vehicle Info
-  vin         String
-  make        String
-  model       String
-  year        Int
-  color       String?
-  size        VehicleSize
+  vin   String
+  make  String
+  model String
+  year  Int
+  color String?
+  size  VehicleSize
 
   // Condition
-  isOperable  Boolean      @default(true)
-  damageNotes String?      @db.Text
+  isOperable  Boolean @default(true)
+  damageNotes String? @db.Text
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([loadId])
 }
 
 model Document {
-  id          String        @id @default(cuid())
+  id String @id @default(cuid())
 
   // Document Info
-  type        DocumentType
-  fileName    String
-  filePath    String
-  fileSize    Int
-  mimeType    String
+  type     DocumentType
+  fileName String
+  filePath String
+  fileSize Int
+  mimeType String
 
   // Expiry (for compliance docs)
-  expiryDate  DateTime?
+  expiryDate DateTime?
 
   // Associations
-  loadId      String?
-  load        Load?         @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  loadId String?
+  load   Load?   @relation(fields: [loadId], references: [id], onDelete: Cascade)
 
-  driverId    String?
-  driver      Driver?       @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   uploadedById String?
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([type])
   @@index([loadId])
@@ -331,61 +336,61 @@ model Document {
 }
 
 model PayStub {
-  id            String    @id @default(cuid())
-  stubNumber    String    @unique
+  id         String @id @default(cuid())
+  stubNumber String @unique
 
-  driverId      String
-  driver        Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   // Period
-  periodStart   DateTime
-  periodEnd     DateTime
+  periodStart DateTime
+  periodEnd   DateTime
 
   // Calculations
-  totalMiles    Int
-  totalAmount   Float
+  totalMiles     Int
+  totalAmount    Float
   avgRatePerMile Float
 
   // Payment
-  isPaid        Boolean   @default(false)
-  paidDate      DateTime?
+  isPaid   Boolean   @default(false)
+  paidDate DateTime?
 
   // PDF
-  pdfPath       String?
+  pdfPath String?
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([driverId])
   @@index([isPaid])
 }
 
 model MaintenanceRecord {
-  id              String           @id @default(cuid())
+  id String @id @default(cuid())
 
-  truckId         String
-  truck           Truck            @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  truckId String
+  truck   Truck  @relation(fields: [truckId], references: [id], onDelete: Cascade)
 
-  type            MaintenanceType
-  description     String           @db.Text
+  type        MaintenanceType
+  description String          @db.Text
 
-  performedDate   DateTime
+  performedDate    DateTime
   mileageAtService Int
-  nextServiceDue  Int?             // mileage
+  nextServiceDue   Int? // mileage
 
-  cost            Float            @default(0)
+  cost Float @default(0)
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([truckId])
 }
 
 model TruckExpense {
-  id          String       @id @default(cuid())
+  id String @id @default(cuid())
 
-  truckId     String
-  truck       Truck        @relation(fields: [truckId], references: [id], onDelete: Cascade)
+  truckId String
+  truck   Truck  @relation(fields: [truckId], references: [id], onDelete: Cascade)
 
   type        ExpenseType
   description String
@@ -395,44 +400,44 @@ model TruckExpense {
   // Receipt
   receiptPath String?
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([truckId])
   @@index([type])
 }
 
 model VacationPeriod {
-  id          String    @id @default(cuid())
+  id String @id @default(cuid())
 
-  driverId    String
-  driver      Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
-  startDate   DateTime
-  endDate     DateTime
-  type        String    // VACATION or SICK_LEAVE
-  notes       String?   @db.Text
+  startDate DateTime
+  endDate   DateTime
+  type      String // VACATION or SICK_LEAVE
+  notes     String?  @db.Text
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([driverId])
 }
 
 model AuditLog {
-  id          String       @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId      String
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  action      AuditAction
-  entity      AuditEntity
-  entityId    String
+  action   AuditAction
+  entity   AuditEntity
+  entityId String
 
-  changes     Json?        // before/after object
-  ipAddress   String?
+  changes   Json? // before/after object
+  ipAddress String?
 
-  createdAt   DateTime     @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([entity])
@@ -441,61 +446,61 @@ model AuditLog {
 }
 
 model Setting {
-  id          String    @id @default(cuid())
-  key         String    @unique
-  value       String    @db.Text
+  id    String @id @default(cuid())
+  key   String @unique
+  value String @db.Text
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([key])
 }
 
 model RecurringLoadTemplate {
-  id                      String              @id @default(cuid())
-  recurringGroupId        String              @unique
+  id               String @id @default(cuid())
+  recurringGroupId String @unique
 
   // Same fields as Load for template
-  pickupAddress           String
-  pickupCity              String
-  pickupState             String
-  pickupZip               String
-  pickupContactName       String
-  pickupContactPhone      String
+  pickupAddress      String
+  pickupCity         String
+  pickupState        String
+  pickupZip          String
+  pickupContactName  String
+  pickupContactPhone String
 
-  deliveryAddress         String
-  deliveryCity            String
-  deliveryState           String
-  deliveryZip             String
-  deliveryContactName     String
-  deliveryContactPhone    String
+  deliveryAddress      String
+  deliveryCity         String
+  deliveryState        String
+  deliveryZip          String
+  deliveryContactName  String
+  deliveryContactPhone String
 
-  distance                Int
-  deadheadMiles           Int         @default(0)
-  loadRate                Float
-  customRatePerMile       Float?
-  detentionTime           Int?
-  detentionPay            Float?      @default(0)
+  distance          Int
+  deadheadMiles     Int    @default(0)
+  loadRate          Float
+  customRatePerMile Float?
+  detentionTime     Int?
+  detentionPay      Float? @default(0)
 
-  notes                   String?     @db.Text
-  specialInstructions     String?     @db.Text
+  notes               String? @db.Text
+  specialInstructions String? @db.Text
 
   // Recurring Configuration
-  frequency               RecurringFrequency
-  dayOfWeek               Int?        // 0-6 for weekly (0 = Sunday)
-  dayOfMonth              Int?        // 1-31 for monthly
-  isActive                Boolean     @default(true)
+  frequency  RecurringFrequency
+  dayOfWeek  Int? // 0-6 for weekly (0 = Sunday)
+  dayOfMonth Int? // 1-31 for monthly
+  isActive   Boolean            @default(true)
 
   // Assignment (optional default)
-  driverId                String?
-  driver                  Driver?     @relation(fields: [driverId], references: [id])
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id])
 
-  truckId                 String?
-  truck                   Truck?      @relation(fields: [truckId], references: [id])
+  truckId String?
+  truck   Truck?  @relation(fields: [truckId], references: [id])
 
-  createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
-  lastGeneratedAt         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastGeneratedAt DateTime?
 
   @@index([recurringGroupId])
   @@index([frequency])
@@ -506,4 +511,34 @@ enum RecurringFrequency {
   DAILY
   WEEKLY
   MONTHLY
+}
+
+// Traccar Position History
+model Position {
+  id String @id @default(cuid())
+
+  // Device Reference
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  deviceId String // Traccar Device ID (e.g., KAMION-01)
+
+  // Location Data
+  latitude  Float
+  longitude Float
+  altitude  Float?
+  speed     Float? @default(0) // km/h
+  bearing   Float? // Direction in degrees (0-360)
+  accuracy  Float? // Accuracy in meters
+
+  // Device Status
+  battery Float? // Battery level 0-100
+
+  // Timestamp
+  recordedAt DateTime @default(now()) // When position was recorded by device
+  receivedAt DateTime @default(now()) // When server received the data
+
+  @@index([driverId])
+  @@index([deviceId])
+  @@index([recordedAt])
+  @@index([driverId, recordedAt])
 }
