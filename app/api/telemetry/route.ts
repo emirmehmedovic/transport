@@ -34,7 +34,10 @@ async function handleTelemetry(request: NextRequest) {
       // Parse from query string
       const searchParams = request.nextUrl.searchParams;
       params = {
-        id: searchParams.get('id') || searchParams.get('deviceid'),
+        id:
+          searchParams.get('id') ||
+          searchParams.get('deviceid') ||
+          searchParams.get('device_id'),
         lat: searchParams.get('lat'),
         lon: searchParams.get('lon'),
         speed: searchParams.get('speed'),
@@ -47,16 +50,57 @@ async function handleTelemetry(request: NextRequest) {
     } else {
       // Parse from POST body
       const body = await request.json().catch(() => ({}));
+      const location = body.location ?? body;
+      const coords = location?.coords ?? {};
+
+      let templateParams: URLSearchParams | null = null;
+      if (typeof location?._ === 'string' && location._) {
+        const raw = location._.replace(/^[?&]/, '');
+        templateParams = new URLSearchParams(raw);
+      }
+
       params = {
-        id: body.id || body.deviceid,
-        lat: body.lat,
-        lon: body.lon,
-        speed: body.speed,
-        bearing: body.bearing,
-        altitude: body.altitude,
-        battery: body.battery || body.batt,
-        accuracy: body.accuracy,
-        timestamp: body.timestamp,
+        id:
+          body.id ||
+          body.deviceid ||
+          body.device_id ||
+          location?.id ||
+          location?.deviceid ||
+          location?.device_id ||
+          body?.params?.device_id ||
+          location?.params?.device_id ||
+          templateParams?.get('id') ||
+          templateParams?.get('deviceid') ||
+          templateParams?.get('device_id'),
+        lat:
+          body.lat ||
+          body.latitude ||
+          location?.lat ||
+          location?.latitude ||
+          coords?.latitude ||
+          templateParams?.get('lat'),
+        lon:
+          body.lon ||
+          body.longitude ||
+          location?.lon ||
+          location?.longitude ||
+          coords?.longitude ||
+          templateParams?.get('lon'),
+        speed: body.speed || location?.speed || coords?.speed || templateParams?.get('speed'),
+        bearing:
+          body.bearing ||
+          body.heading ||
+          location?.bearing ||
+          location?.heading ||
+          coords?.heading,
+        altitude: body.altitude || location?.altitude || coords?.altitude,
+        battery:
+          body.battery ||
+          body.batt ||
+          location?.battery?.level ||
+          coords?.battery?.level,
+        accuracy: body.accuracy || location?.accuracy || coords?.accuracy,
+        timestamp: body.timestamp || location?.timestamp,
       };
     }
 
