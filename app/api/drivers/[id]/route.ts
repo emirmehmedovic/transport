@@ -148,10 +148,8 @@ export async function PUT(
       emergencyPhone,
       ratePerMile,
       status,
+      traccarDeviceId,
     } = parsed.data;
-
-    // Extract traccarDeviceId separately (not in schema)
-    const traccarDeviceId = body.traccarDeviceId || null;
 
     // Provjera da li vozač postoji
     const existingDriver = await prisma.driver.findUnique({

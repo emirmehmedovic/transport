@@ -34,6 +34,7 @@ export const driverSchema = z
     status: z
       .enum(["ACTIVE", "VACATION", "SICK_LEAVE", "INACTIVE"])
       .optional(),
+    traccarDeviceId: z.string().optional(),
   })
   .strict();
 

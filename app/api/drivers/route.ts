@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
       emergencyPhone,
       ratePerMile,
       status,
+      traccarDeviceId,
     } = parsed.data;
 
     // Provjera da li user postoji i da li nije već vozač
@@ -160,6 +161,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Provjera da li traccarDeviceId već postoji
+    if (traccarDeviceId) {
+      const deviceExists = await prisma.driver.findFirst({
+        where: { traccarDeviceId },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      if (deviceExists) {
+        return NextResponse.json(
+          {
+            error: `Traccar Device ID "${traccarDeviceId}" je već dodijeljen vozaču ${deviceExists.user.firstName} ${deviceExists.user.lastName}`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Kreiranje vozača
     const driver = await prisma.driver.create({
       data: {
@@ -174,6 +199,7 @@ export async function POST(req: NextRequest) {
         emergencyContactPhone: emergencyPhone || "",
         ratePerMile: ratePerMile ?? 0.6,
         status: status || "ACTIVE",
+        traccarDeviceId: traccarDeviceId || null,
       },
       include: {
         user: {
