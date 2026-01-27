@@ -19,6 +19,7 @@ interface Driver {
   emergencyPhone: string | null;
   ratePerMile: number | null;
   status: string;
+  traccarDeviceId: string | null;
   user: {
     firstName: string;
     lastName: string;
@@ -46,6 +47,7 @@ export default function EditDriverPage() {
     emergencyPhone: "",
     ratePerMile: "",
     status: "ACTIVE",
+    traccarDeviceId: "",
   });
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function EditDriverPage() {
         emergencyPhone: driver.emergencyPhone || "",
         ratePerMile: driver.ratePerMile?.toString() || "",
         status: driver.status,
+        traccarDeviceId: driver.traccarDeviceId || "",
       });
     } catch (err: any) {
       setError(err.message);
@@ -313,6 +316,50 @@ export default function EditDriverPage() {
                   <option value="INACTIVE">Neaktivan</option>
                   <option value="ON_VACATION">Na odmoru</option>
                 </select>
+              </div>
+            </div>
+
+            {/* GPS Tracking Section */}
+            <div className="pt-6 border-t border-dark-200">
+              <h3 className="text-lg font-semibold text-dark-900 mb-4">📍 GPS Praćenje (Traccar)</h3>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-blue-800 mb-2">
+                  <strong>Traccar Device ID</strong> - Jedinstveni identifikator za GPS praćenje preko Traccar Client aplikacije
+                </p>
+                <p className="text-xs text-blue-600">
+                  Format: KAMION-01, KAMION-02, itd. (mora biti jedinstveno)
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Traccar Device ID */}
+                <Input
+                  label="Traccar Device ID"
+                  type="text"
+                  name="traccarDeviceId"
+                  value={formData.traccarDeviceId}
+                  onChange={handleChange}
+                  placeholder="KAMION-01"
+                />
+
+                <div className="flex items-center">
+                  <div className="text-sm text-dark-500">
+                    {formData.traccarDeviceId ? (
+                      <div className="flex items-center gap-2 text-green-600">
+                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                        <span>GPS praćenje konfigurisano</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-orange-600">
+                        <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                        <span>GPS praćenje nije konfigurisano</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-dark-400 mt-2">
+                      Nakon spremanja, postavite isti ID u Traccar Client aplikaciji na telefonu vozača.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 

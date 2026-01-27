@@ -150,6 +150,9 @@ export async function PUT(
       status,
     } = parsed.data;
 
+    // Extract traccarDeviceId separately (not in schema)
+    const traccarDeviceId = body.traccarDeviceId || null;
+
     // Provjera da li vozač postoji
     const existingDriver = await prisma.driver.findUnique({
       where: { id: params.id },
@@ -182,6 +185,33 @@ export async function PUT(
       }
     }
 
+    // Provjera da li traccarDeviceId već postoji (osim za trenutnog vozača)
+    if (traccarDeviceId && traccarDeviceId !== existingDriver.traccarDeviceId) {
+      const deviceExists = await prisma.driver.findFirst({
+        where: {
+          traccarDeviceId: traccarDeviceId,
+          id: { not: params.id },
+        },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      if (deviceExists) {
+        return NextResponse.json(
+          {
+            error: `Traccar Device ID "${traccarDeviceId}" je već dodijeljen vozaču ${deviceExists.user.firstName} ${deviceExists.user.lastName}`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Ažuriranje vozača
     const driver = await prisma.driver.update({
       where: { id: params.id },
@@ -196,6 +226,7 @@ export async function PUT(
         emergencyContactPhone: emergencyPhone || "",
         ratePerMile: ratePerMile ?? existingDriver.ratePerMile,
         status,
+        traccarDeviceId: traccarDeviceId || null,
       },
       include: {
         user: {
