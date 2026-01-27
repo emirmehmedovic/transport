@@ -30,3 +30,6 @@ pnpm-debug.log*
 
 # Prisma generated files
 /app/generated/prisma
+
+# Uploaded documents (local/test)
+/uploads/documents/

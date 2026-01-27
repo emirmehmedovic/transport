@@ -120,10 +120,26 @@ export async function PUT(
     }
 
     const decoded = verifyToken(token);
-    if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
+    if (
+      !decoded ||
+      !decoded.userId ||
+      (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")
+    ) {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
         { status: 403 }
+      );
+    }
+
+    const actingUser = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true },
+    });
+
+    if (!actingUser) {
+      return NextResponse.json(
+        { error: "Neautorizovan pristup" },
+        { status: 401 }
       );
     }
 

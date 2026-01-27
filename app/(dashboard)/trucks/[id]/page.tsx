@@ -649,11 +649,11 @@ export default function TruckDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="w-5 h-5" />
-              Nedavni loadovi ({truck.loads.length})
+              Nedavni loadovi ({truck.loads?.length ?? 0})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {truck.loads.length > 0 ? (
+            {truck.loads?.length ? (
               <div className="space-y-3 max-h-[300px] overflow-y-auto">
                 {truck.loads.map((load) => (
                   <div
