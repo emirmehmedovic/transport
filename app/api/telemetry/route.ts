@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { checkGeofences } from '@/lib/geofence';
 
 /**
  * POST/GET /api/telemetry
@@ -151,6 +152,11 @@ async function handleTelemetry(request: NextRequest) {
     });
 
     console.log(`[Telemetry] Position saved for device ${deviceId} at (${latitude}, ${longitude})`);
+
+    // Check geofence zones (non-blocking)
+    checkGeofences(driver.id, latitude, longitude, speed).catch((error) => {
+      console.error('[Telemetry] Geofence check failed:', error);
+    });
 
     // Return 200 OK (Traccar Client expects this)
     return new NextResponse('OK', { status: 200 });

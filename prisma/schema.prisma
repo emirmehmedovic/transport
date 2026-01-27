@@ -160,6 +160,7 @@ model Driver {
   documents              Document[]
   recurringLoadTemplates RecurringLoadTemplate[]
   positions              Position[] // Traccar position history
+  geofenceEvents         GeofenceEvent[] // Geofence entry/exit events
 
   @@index([userId])
   @@index([status])
@@ -541,4 +542,76 @@ model Position {
   @@index([deviceId])
   @@index([recordedAt])
   @@index([driverId, recordedAt])
+}
+
+// Geofencing Zones
+model Zone {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+
+  // Geographic area (circular zone)
+  centerLat Float
+  centerLon Float
+  radius    Int // meters
+
+  // Zone type and settings
+  type     ZoneType @default(CUSTOM)
+  isActive Boolean  @default(true)
+
+  // Notification settings
+  notifyOnEntry Boolean @default(true)
+  notifyOnExit  Boolean @default(true)
+
+  // Associated load/location (optional)
+  loadId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  events GeofenceEvent[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([loadId])
+}
+
+enum ZoneType {
+  PICKUP // Pickup location zone
+  DELIVERY // Delivery location zone
+  DEPOT // Company depot/yard
+  REST_AREA // Rest area
+  BORDER_CROSSING // Border crossing point
+  CUSTOM // Custom user-defined zone
+}
+
+// Geofence Events (entry/exit tracking)
+model GeofenceEvent {
+  id String @id @default(cuid())
+
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  eventType  GeofenceEventType
+  latitude   Float
+  longitude  Float
+  speed      Float?
+  detectedAt DateTime          @default(now())
+
+  // Notification status
+  notificationSent Boolean @default(false)
+
+  @@index([zoneId])
+  @@index([driverId])
+  @@index([detectedAt])
+  @@index([driverId, detectedAt])
+}
+
+enum GeofenceEventType {
+  ENTRY
+  EXIT
 }
