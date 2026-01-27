@@ -264,7 +264,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("bs-BA", {
       style: "currency",
-      currency: "USD",
+      currency: "BAM",
       maximumFractionDigits: 0,
     }).format(value || 0);
 
@@ -279,7 +279,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
             onClick={() => window.location.reload()}
             className="ml-auto inline-flex items-center gap-2 text-xs font-bold bg-white px-3 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all text-red-600"
           >
-            <RefreshCcw className="w-3 h-3" /> Reload
+            <RefreshCcw className="w-3 h-3" /> Osvježi
           </button>
         </div>
       )}
@@ -295,7 +295,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
           <div className="relative z-10">
             <div className="flex justify-between items-start mb-8">
               <div>
-                <p className="text-dark-300 text-sm font-medium mb-1">Total Revenue</p>
+                <p className="text-dark-300 text-sm font-medium mb-1">Ukupni prihod</p>
                 <h3 className="text-3xl font-bold tracking-tight">
                   {loading ? "..." : formatCurrency(data?.KPIs.revenue.thisMonth || 0)}
                 </h3>
@@ -307,21 +307,21 @@ function AdminDashboard({ user }: { user: AuthUser }) {
             
             <div className="space-y-4">
                <div className="flex items-center justify-between text-sm">
-                  <span className="text-dark-300">This Week</span>
+                  <span className="text-dark-300">Ove sedmice</span>
                   <span className="font-semibold">{loading ? "..." : formatCurrency(data?.KPIs.revenue.thisWeek || 0)}</span>
                </div>
                <div className="w-full bg-white/10 rounded-full h-1.5">
                   <div className="bg-primary-500 h-1.5 rounded-full w-[65%]"></div>
                </div>
                <p className="text-xs text-dark-400 mt-2">
-                  Revenue is up <span className="text-green-400 font-bold">+12%</span> from last week.
+                  Prihod je porastao <span className="text-green-400 font-bold">+12%</span> u odnosu na prošlu sedmicu.
                </p>
             </div>
           </div>
 
           <div className="relative z-10 mt-auto">
              <button className="w-full py-3 bg-white text-dark-900 rounded-2xl text-sm font-bold hover:bg-dark-50 transition-colors shadow-lg">
-                View Financial Report
+                Pregledaj finansijski izvještaj
              </button>
           </div>
         </div>
@@ -330,48 +330,51 @@ function AdminDashboard({ user }: { user: AuthUser }) {
         <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
           {[
             {
-              title: "Active Loads",
+              title: "Aktivni loadovi",
               value: data?.KPIs.activeLoads ?? 0,
               icon: Package,
-              trend: "+2 new",
+              trend: "+2 nova",
               color: "text-blue-600",
               bgColor: "bg-blue-50",
             },
             {
-              title: "Drivers on Road",
+              title: "Vozači na putu",
               value: data?.KPIs.driversOnRoad ?? 0,
               icon: Navigation,
-              trend: "All active",
+              trend: "Svi aktivni",
               color: "text-emerald-600",
               bgColor: "bg-emerald-50",
             },
             {
-              title: "Active Trucks",
+              title: "Aktivni kamioni",
               value: data?.KPIs.activeTrucks ?? 0,
               icon: Truck,
-              trend: "2 maintenance",
+              trend: "2 na servisu",
               color: "text-indigo-600",
               bgColor: "bg-indigo-50",
             },
             {
-              title: "Pending Alerts",
+              title: "Aktivni alarmi",
               value: data?.KPIs.alerts ?? 0,
               icon: AlertTriangle,
-              trend: "Action needed",
+              trend: "Potrebna akcija",
               color: "text-orange-600",
               bgColor: "bg-orange-50",
             },
           ].map((item) => (
-            <div key={item.title} className="bg-white rounded-3xl p-6 shadow-soft hover:shadow-soft-lg transition-all group cursor-pointer flex flex-col justify-between h-[160px]">
-              <div className="flex justify-between items-start">
+            <div key={item.title} className="bg-dark-50 rounded-3xl p-6 shadow-soft hover:shadow-soft-lg transition-all group cursor-pointer flex flex-col justify-between h-[160px] relative overflow-hidden border-[6px] border-white">
+              <div className="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-primary-100 rounded-full blur-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary-50 rounded-full blur-3xl -mb-12 -ml-12"></div>
+
+              <div className="flex justify-between items-start relative z-10">
                 <div className={`p-3.5 rounded-2xl ${item.bgColor} group-hover:scale-110 transition-transform`}>
                   <item.icon className={`w-6 h-6 ${item.color}`} />
                 </div>
                 <span className="px-3 py-1 bg-dark-50 rounded-full text-[10px] font-bold text-dark-500 uppercase tracking-wide">
-                   Weekly
+                   Sedmično
                 </span>
               </div>
-              <div>
+              <div className="relative z-10">
                  <h4 className="text-3xl font-bold text-dark-900 mb-1">{loading ? "..." : item.value}</h4>
                  <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-dark-500">{item.title}</span>
@@ -389,8 +392,8 @@ function AdminDashboard({ user }: { user: AuthUser }) {
         <div className="xl:col-span-2 bg-white rounded-3xl p-8 shadow-soft">
           <div className="flex items-center justify-between mb-8">
             <div>
-               <h3 className="text-lg font-bold text-dark-900">Revenue Analytics</h3>
-               <p className="text-sm text-dark-500">Monthly revenue performance</p>
+               <h3 className="text-lg font-bold text-dark-900">Analitika prihoda</h3>
+               <p className="text-sm text-dark-500">Mjesečni učinak prihoda</p>
             </div>
             <div className="flex gap-2">
                <button className="px-4 py-2 rounded-xl text-sm font-medium bg-dark-50 text-dark-600 hover:bg-dark-100 transition-colors">2023</button>
@@ -430,7 +433,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
                       contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                       itemStyle={{ color: '#fff' }}
                       cursor={{ stroke: '#e2e8f0', strokeWidth: 2 }}
-                      formatter={(value: number) => [formatCurrency(value), "Revenue"]}
+                      formatter={(value: number) => [formatCurrency(value), "Prihod"]}
                     />
                     <Line
                       type="monotone"
@@ -443,7 +446,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
                   </LineChart>
                 </ResponsiveContainer>
             ) : (
-                <div className="flex h-full items-center justify-center text-dark-400">No data available</div>
+                <div className="flex h-full items-center justify-center text-dark-400">Nema dostupnih podataka</div>
             )}
           </div>
         </div>
@@ -454,19 +457,19 @@ function AdminDashboard({ user }: { user: AuthUser }) {
            
            {/* Quick Actions Mini Panel */}
            <div className="bg-white rounded-3xl p-6 shadow-soft flex-1">
-              <h3 className="text-lg font-bold text-dark-900 mb-4">Quick Actions</h3>
+              <h3 className="text-lg font-bold text-dark-900 mb-4">Brze radnje</h3>
               <div className="grid grid-cols-2 gap-3">
                   <button className="p-3 rounded-2xl border border-dark-100 hover:border-primary-200 hover:bg-primary-50 transition-all text-center flex flex-col items-center gap-2">
                      <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
                         <Package className="w-4 h-4" />
                      </div>
-                     <span className="text-xs font-bold text-dark-700">New Load</span>
+                     <span className="text-xs font-bold text-dark-700">Novi load</span>
                   </button>
                   <button className="p-3 rounded-2xl border border-dark-100 hover:border-primary-200 hover:bg-primary-50 transition-all text-center flex flex-col items-center gap-2">
                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
                         <Users className="w-4 h-4" />
                      </div>
-                     <span className="text-xs font-bold text-dark-700">Add Driver</span>
+                     <span className="text-xs font-bold text-dark-700">Dodaj vozača</span>
                   </button>
               </div>
            </div>
@@ -477,11 +480,11 @@ function AdminDashboard({ user }: { user: AuthUser }) {
       <section className="bg-white rounded-3xl shadow-soft overflow-hidden">
         <div className="p-6 border-b border-dark-50 flex items-center justify-between">
            <div>
-              <h3 className="text-lg font-bold text-dark-900">Recent Active Loads</h3>
-              <p className="text-sm text-dark-500">Overview of currently active shipments</p>
+              <h3 className="text-lg font-bold text-dark-900">Aktivni loadovi</h3>
+              <p className="text-sm text-dark-500">Pregled trenutno aktivnih pošiljki</p>
            </div>
            <button className="px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
-              View All
+              Prikaži sve
            </button>
         </div>
         <div className="overflow-x-auto">
@@ -489,25 +492,25 @@ function AdminDashboard({ user }: { user: AuthUser }) {
             <thead className="bg-dark-50 text-dark-500 font-medium">
               <tr>
                 <th className="px-6 py-4 rounded-tl-3xl">Load ID</th>
-                <th className="px-6 py-4">Route</th>
-                <th className="px-6 py-4">Driver</th>
+                <th className="px-6 py-4">Ruta</th>
+                <th className="px-6 py-4">Vozač</th>
                 <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 rounded-tr-3xl">Truck</th>
+                <th className="px-6 py-4 rounded-tr-3xl">Kamion</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-dark-50">
               {loading ? (
-                 <tr><td colSpan={5} className="px-6 py-8 text-center">Loading...</td></tr>
+                 <tr><td colSpan={5} className="px-6 py-8 text-center">Učitavanje...</td></tr>
               ) : data?.activeLoads.length === 0 ? (
-                 <tr><td colSpan={5} className="px-6 py-8 text-center text-dark-400">No active loads found.</td></tr>
+                 <tr><td colSpan={5} className="px-6 py-8 text-center text-dark-400">Nema aktivnih loadova.</td></tr>
               ) : (
                  data?.activeLoads.map((load) => (
                     <tr key={load.id} className="hover:bg-dark-50/50 transition-colors">
                        <td className="px-6 py-4 font-bold text-dark-900">{load.loadNumber}</td>
                        <td className="px-6 py-4">
                           <div className="flex flex-col">
-                             <span className="font-medium text-dark-900">{load.pickupCity}, {load.pickupState}</span>
-                             <span className="text-xs text-dark-400">to {load.deliveryCity}, {load.deliveryState}</span>
+                            <span className="font-medium text-dark-900">{load.pickupCity}, {load.pickupState}</span>
+                             <span className="text-xs text-dark-400">do {load.deliveryCity}, {load.deliveryState}</span>
                           </div>
                        </td>
                        <td className="px-6 py-4">
@@ -539,8 +542,8 @@ function AdminDashboard({ user }: { user: AuthUser }) {
       {/* Map Section */}
       <section className="bg-white rounded-3xl shadow-soft p-6 h-[500px] relative overflow-hidden">
          <div className="absolute top-6 left-6 z-10 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-sm">
-            <h3 className="font-bold text-dark-900">Live Map</h3>
-            <p className="text-xs text-dark-500">{data?.activeLoads.length ?? 0} active routes</p>
+            <h3 className="font-bold text-dark-900">Mapa uživo</h3>
+            <p className="text-xs text-dark-500">{data?.activeLoads.length ?? 0} aktivnih ruta</p>
          </div>
          <div className="h-full w-full rounded-2xl overflow-hidden bg-dark-50">
             {loading ? (

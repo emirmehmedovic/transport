@@ -28,8 +28,8 @@ export async function createAuditLog(data: AuditLogData) {
         action: data.action,
         entity: data.entity,
         entityId: data.entityId,
-        changes: data.changes || null,
-        ipAddress: data.ipAddress || null,
+        changes: data.changes,
+        ipAddress: data.ipAddress,
       },
     });
 

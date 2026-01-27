@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause for fuel records
     const fuelWhere: any = {
+      type: "FUEL",
       date: {
         gte: startDate,
         lte: endDate,
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause for maintenance records
     const maintenanceWhere: any = {
-      performedAt: {
+      performedDate: {
         gte: startDate,
         lte: endDate,
       },
@@ -78,15 +79,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch fuel records
-    const fuelRecords = await prisma.fuelRecord.findMany({
+    const fuelRecords = await prisma.truckExpense.findMany({
       where: fuelWhere,
       select: {
         id: true,
         date: true,
-        gallons: true,
-        pricePerGallon: true,
-        totalCost: true,
-        location: true,
+        amount: true,
+        description: true,
         truck: {
           select: {
             id: true,
@@ -107,7 +106,7 @@ export async function GET(request: NextRequest) {
         type: true,
         description: true,
         cost: true,
-        performedAt: true,
+        performedDate: true,
         truck: {
           select: {
             id: true,
@@ -116,12 +115,12 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        performedAt: 'asc',
+        performedDate: 'asc',
       },
     });
 
     // Calculate totals
-    const totalFuelCost = fuelRecords.reduce((sum, record) => sum + record.totalCost, 0);
+    const totalFuelCost = fuelRecords.reduce((sum, record) => sum + record.amount, 0);
     const totalMaintenanceCost = maintenanceRecords.reduce((sum, record) => sum + record.cost, 0);
     const totalExpenses = totalFuelCost + totalMaintenanceCost;
 
@@ -174,7 +173,7 @@ export async function GET(request: NextRequest) {
 }
 
 function groupFuelByPeriod(records: any[], groupBy: 'daily' | 'weekly' | 'monthly') {
-  const grouped = new Map<string, { fuelCost: number; gallons: number }>();
+  const grouped = new Map<string, { fuelCost: number }>();
 
   records.forEach((record) => {
     const date = new Date(record.date);
@@ -190,9 +189,8 @@ function groupFuelByPeriod(records: any[], groupBy: 'daily' | 'weekly' | 'monthl
       key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    const existing = grouped.get(key) || { fuelCost: 0, gallons: 0 };
-    existing.fuelCost += record.totalCost;
-    existing.gallons += record.gallons;
+    const existing = grouped.get(key) || { fuelCost: 0 };
+    existing.fuelCost += record.amount;
     grouped.set(key, existing);
   });
 
@@ -203,7 +201,7 @@ function groupMaintenanceByPeriod(records: any[], groupBy: 'daily' | 'weekly' | 
   const grouped = new Map<string, { maintenanceCost: number }>();
 
   records.forEach((record) => {
-    const date = new Date(record.performedAt);
+    const date = new Date(record.performedDate);
     let key: string;
 
     if (groupBy === 'daily') {
@@ -232,7 +230,7 @@ function mergeTimeSeries(
 
   return Array.from(allKeys)
     .map((date) => {
-      const fuel = fuelMap.get(date) || { fuelCost: 0, gallons: 0 };
+      const fuel = fuelMap.get(date) || { fuelCost: 0 };
       const maintenance = maintenanceMap.get(date) || { maintenanceCost: 0 };
 
       return {
@@ -240,7 +238,6 @@ function mergeTimeSeries(
         fuelCost: fuel.fuelCost,
         maintenanceCost: maintenance.maintenanceCost,
         totalCost: fuel.fuelCost + maintenance.maintenanceCost,
-        gallons: fuel.gallons,
       };
     })
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -272,8 +269,8 @@ function groupExpensesByTruck(fuelRecords: any[], maintenanceRecords: any[]) {
       totalCost: 0,
     };
 
-    existing.fuelCost += record.totalCost;
-    existing.totalCost += record.totalCost;
+    existing.fuelCost += record.amount;
+    existing.totalCost += record.amount;
     grouped.set(truckId, existing);
   });
 

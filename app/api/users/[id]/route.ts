@@ -41,8 +41,8 @@ export async function GET(
           select: {
             id: true,
             status: true,
-            licenseNumber: true,
-            licenseExpiry: true,
+            cdlNumber: true,
+            cdlExpiry: true,
           },
         },
       },
@@ -160,9 +160,10 @@ export async function PUT(
     // Kreiranje audit log-a
     await prisma.auditLog.create({
       data: {
-        action: "UPDATE_USER",
+        action: "UPDATE",
         userId: decoded.userId,
-        details: `Ažuriran korisnik: ${user.firstName} ${user.lastName} (${user.email})`,
+        entity: "USER",
+        entityId: user.id,
       },
     });
 
@@ -230,9 +231,10 @@ export async function DELETE(
     // Kreiranje audit log-a
     await prisma.auditLog.create({
       data: {
-        action: "DELETE_USER",
+        action: "DELETE",
         userId: decoded.userId,
-        details: `Obrisan korisnik: ${user.firstName} ${user.lastName} (${user.email})`,
+        entity: "USER",
+        entityId: user.id,
       },
     });
 

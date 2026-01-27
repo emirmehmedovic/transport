@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       status: {
         in: ['DELIVERED', 'COMPLETED'],
       },
-      actualDelivery: {
+      actualDeliveryDate: {
         gte: startDate,
         lte: endDate,
       },
@@ -76,8 +76,8 @@ export async function GET(request: NextRequest) {
         loadNumber: true,
         loadRate: true,
         detentionPay: true,
-        actualDelivery: true,
-        totalMiles: true,
+        actualDeliveryDate: true,
+        distance: true,
         driver: {
           select: {
             id: true,
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        actualDelivery: 'asc',
+        actualDeliveryDate: 'asc',
       },
     });
 
@@ -107,13 +107,13 @@ export async function GET(request: NextRequest) {
       0
     );
 
-    const totalMiles = loads.reduce(
-      (sum, load) => sum + (load.totalMiles || 0),
+    const distance = loads.reduce(
+      (sum, load) => sum + (load.distance || 0),
       0
     );
 
     const avgRevenuePerLoad = loads.length > 0 ? totalRevenue / loads.length : 0;
-    const avgRevenuePerMile = totalMiles > 0 ? totalRevenue / totalMiles : 0;
+    const avgRevenuePerMile = distance > 0 ? totalRevenue / distance : 0;
 
     // Group data by period
     const groupedData = groupLoadsByPeriod(loads, groupBy);
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
       summary: {
         totalRevenue,
         totalLoads: loads.length,
-        totalMiles,
+        distance,
         avgRevenuePerLoad,
         avgRevenuePerMile,
       },
@@ -157,9 +157,9 @@ function groupLoadsByPeriod(
   const grouped = new Map<string, { revenue: number; loads: number; miles: number }>();
 
   loads.forEach((load) => {
-    if (!load.actualDelivery) return;
+    if (!load.actualDeliveryDate) return;
 
-    const date = new Date(load.actualDelivery);
+    const date = new Date(load.actualDeliveryDate);
     let key: string;
 
     if (groupBy === 'daily') {
@@ -177,7 +177,7 @@ function groupLoadsByPeriod(
     const existing = grouped.get(key) || { revenue: 0, loads: 0, miles: 0 };
     existing.revenue += load.loadRate + (load.detentionPay || 0);
     existing.loads += 1;
-    existing.miles += load.totalMiles || 0;
+    existing.miles += load.distance || 0;
     grouped.set(key, existing);
   });
 
@@ -213,7 +213,7 @@ function groupByDriver(loads: any[]) {
 
     existing.revenue += load.loadRate + (load.detentionPay || 0);
     existing.loads += 1;
-    existing.miles += load.totalMiles || 0;
+    existing.miles += load.distance || 0;
     grouped.set(driverId, existing);
   });
 
@@ -242,7 +242,7 @@ function groupByTruck(loads: any[]) {
 
     existing.revenue += load.loadRate + (load.detentionPay || 0);
     existing.loads += 1;
-    existing.miles += load.totalMiles || 0;
+    existing.miles += load.distance || 0;
     grouped.set(truckId, existing);
   });
 

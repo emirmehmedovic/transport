@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { DollarSign, Download, FileText, CheckCircle, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 
 interface PayStub {
   id: string;
@@ -38,6 +37,8 @@ export default function WagesPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const USD_TO_BAM = 1.8;
+  const MILES_TO_KILOMETERS = 1.60934;
 
   // Generate form state
   const [selectedDriver, setSelectedDriver] = useState('');
@@ -53,7 +54,7 @@ export default function WagesPage() {
   const fetchPayStubs = async () => {
     try {
       const response = await fetch('/api/wages/pay-stubs');
-      if (!response.ok) throw new Error('Failed to fetch');
+      if (!response.ok) throw new Error('Neuspjelo dohvaćanje obračuna');
       const data = await response.json();
       setPayStubs(data.payStubs || []);
     } catch (error) {
@@ -66,7 +67,7 @@ export default function WagesPage() {
   const fetchDrivers = async () => {
     try {
       const response = await fetch('/api/drivers');
-      if (!response.ok) throw new Error('Failed to fetch');
+      if (!response.ok) throw new Error('Neuspjelo dohvaćanje vozača');
       const data = await response.json();
       setDrivers(data.drivers || []);
     } catch (error) {
@@ -76,7 +77,7 @@ export default function WagesPage() {
 
   const handleGenerate = async () => {
     if (!selectedDriver || !periodStart || !periodEnd) {
-      alert('Please fill all fields');
+      alert('Molimo popunite sva polja');
       return;
     }
 
@@ -98,7 +99,7 @@ export default function WagesPage() {
       }
 
       const data = await response.json();
-      alert(`Pay stub generated! Number: ${data.payStub.stubNumber}`);
+      alert(`Obračun generisan! Broj: ${data.payStub.stubNumber}`);
 
       // Refresh list
       fetchPayStubs();
@@ -107,7 +108,7 @@ export default function WagesPage() {
       setPeriodStart('');
       setPeriodEnd('');
     } catch (error: any) {
-      alert(error.message || 'Failed to generate pay stub');
+      alert(error.message || 'Neuspjelo generisanje obračuna');
     } finally {
       setGenerating(false);
     }
@@ -124,39 +125,46 @@ export default function WagesPage() {
         throw new Error(error.error);
       }
 
-      alert('PDF generated successfully!');
+      alert('PDF uspješno generisan!');
       fetchPayStubs();
     } catch (error: any) {
-      alert(error.message || 'Failed to generate PDF');
+      alert(error.message || 'Neuspjelo generisanje PDF-a');
     }
   };
 
   const handleMarkPaid = async (id: string) => {
-    if (!confirm('Mark this pay stub as paid?')) return;
+    if (!confirm('Označiti ovaj obračun kao plaćen?')) return;
 
     try {
       const response = await fetch(`/api/wages/pay-stubs/${id}/mark-paid`, {
         method: 'PATCH',
       });
 
-      if (!response.ok) throw new Error('Failed');
+      if (!response.ok) throw new Error('Neuspješno označavanje kao plaćeno');
 
-      alert('Marked as paid!');
+      alert('Označeno kao plaćeno!');
       fetchPayStubs();
     } catch (error) {
-      alert('Failed to mark as paid');
+      alert('Neuspješno označavanje kao plaćeno');
     }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    const amountInBAM = amount * USD_TO_BAM;
+    return new Intl.NumberFormat('bs-BA', {
       style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+      currency: 'BAM',
+      minimumFractionDigits: 2,
+    }).format(amountInBAM);
+  };
+
+  const formatKilometers = (miles: number) => {
+    const km = miles * MILES_TO_KILOMETERS;
+    return km.toLocaleString('bs-BA', { maximumFractionDigits: 2 });
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr).toLocaleDateString('bs-BA', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -171,20 +179,20 @@ export default function WagesPage() {
     <div className="space-y-8 font-sans">
       <PageHeader
         icon={DollarSign}
-        title="Isplate & Pay Stubs"
-        subtitle="Generišite i pratite isplate vozačima uz uvid u status plaćanja."
+        title="Isplate i obračuni"
+        subtitle="Generišite i pratite obračune za vozače uz uvid u status plaćanja."
         actions={
           <button
             onClick={() => setShowGenerateModal(true)}
             className="flex items-center gap-2 rounded-full px-5 py-2.5 border border-white/15 bg-white/5 text-dark-50 font-semibold hover:bg-white/10 hover:border-white/25 transition-colors"
           >
-            + Generate Pay Stub
+            + Generiši obračun
           </button>
         }
       >
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno stubs</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno obračuna</p>
             <p className="text-2xl font-bold mt-1">{payStubs.length}</p>
           </div>
           <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
@@ -196,7 +204,7 @@ export default function WagesPage() {
             <p className="text-2xl font-bold mt-1">{unpaid}</p>
           </div>
           <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno (USD)</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno (BAM)</p>
             <p className="text-2xl font-bold mt-1">{formatCurrency(totalAmount)}</p>
           </div>
         </div>
@@ -204,8 +212,8 @@ export default function WagesPage() {
 
       <Card className="rounded-[2rem] border border-dark-100 shadow-soft-xl overflow-hidden">
         <CardHeader className="border-b border-dark-100 pb-4 flex flex-col gap-2">
-          <CardTitle className="text-2xl">Pay Stubs</CardTitle>
-          <p className="text-sm text-dark-500">Pregled svih obračuna sa statusom plaćanja i dostupnim PDF-ovima.</p>
+          <CardTitle className="text-2xl">Obračuni</CardTitle>
+          <p className="text-sm text-dark-500">Pregled svih obračuna sa statusom plaćanja i dostupnim PDF dokumentima.</p>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -213,19 +221,19 @@ export default function WagesPage() {
           ) : payStubs.length === 0 ? (
             <div className="p-8 text-center text-dark-500">
               <FileText className="w-12 h-12 mx-auto mb-3 text-dark-300" />
-              <p>Nema pay stubova</p>
+              <p>Nema obračuna</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-dark-50 border-b border-dark-100">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Stub #</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Obračun #</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Vozač</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Period</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Milje</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Iznos</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Kilometri</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Iznos (BAM)</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-dark-600 uppercase">Status plaćanja</th>
                     <th className="px-6 py-3 text-right text-xs font-semibold text-dark-600 uppercase">Akcije</th>
                   </tr>
                 </thead>
@@ -242,7 +250,7 @@ export default function WagesPage() {
                         {formatDate(stub.periodStart)} - {formatDate(stub.periodEnd)}
                       </td>
                       <td className="px-6 py-4 text-sm text-dark-900">
-                        {stub.totalMiles.toLocaleString()}
+                        {formatKilometers(stub.totalMiles)}
                       </td>
                       <td className="px-6 py-4 text-sm font-semibold text-dark-900">
                         {formatCurrency(stub.totalAmount)}
@@ -292,20 +300,20 @@ export default function WagesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <h3 className="text-xl font-semibold text-gray-900 mb-4">
-              Generate Pay Stub
+              Generiši obračun
             </h3>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Driver
+                  Vozač
                 </label>
                 <select
                   value={selectedDriver}
                   onChange={(e) => setSelectedDriver(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 >
-                  <option value="">Select driver...</option>
+                  <option value="">Odaberite vozača...</option>
                   {drivers.map((driver) => (
                     <option key={driver.id} value={driver.id}>
                       {driver.user.firstName} {driver.user.lastName}
@@ -316,7 +324,7 @@ export default function WagesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Period Start
+                  Početak perioda
                 </label>
                 <input
                   type="date"
@@ -328,7 +336,7 @@ export default function WagesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Period End
+                  Kraj perioda
                 </label>
                 <input
                   type="date"
@@ -345,14 +353,14 @@ export default function WagesPage() {
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 disabled={generating}
               >
-                Cancel
+                Otkaži
               </button>
               <button
                 onClick={handleGenerate}
                 disabled={generating}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
               >
-                {generating ? 'Generating...' : 'Generate'}
+                {generating ? 'Generišem...' : 'Generiši'}
               </button>
             </div>
           </div>

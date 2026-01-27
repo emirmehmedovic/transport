@@ -112,7 +112,7 @@ export async function POST(
       await prisma.driver.update({
         where: { id: params.id },
         data: {
-          status: type === "VACATION" ? "ON_VACATION" : "INACTIVE",
+          status: type === "VACATION" ? "VACATION" : "INACTIVE",
         },
       });
     }
@@ -120,9 +120,16 @@ export async function POST(
     // Kreiranje audit log-a
     await prisma.auditLog.create({
       data: {
-        action: "ADD_VACATION",
+        action: "CREATE",
         userId: decoded.userId,
-        details: `Dodan period: ${type} za ${driver.user.firstName} ${driver.user.lastName} (${start.toLocaleDateString()} - ${end.toLocaleDateString()})`,
+        entity: "DRIVER",
+        entityId: params.id,
+        changes: {
+          type,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          notes,
+        },
       },
     });
 

@@ -137,7 +137,6 @@ export default function AlertsPage() {
             onClick={fetchAlerts}
             disabled={loading}
             className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-5 py-2.5 text-dark-50 hover:bg-white/10"
-            variant="ghost"
           >
             <RefreshCcw className="w-4 h-4" />
             Osvježi

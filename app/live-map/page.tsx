@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, RefreshCw, Package, Truck, Navigation, Map } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
+import { PageHeader } from "@/components/dashboard/PageHeader";
 
 // Dynamic import for LiveMap (client-side only)
 const LiveMap = dynamic(() => import("@/components/maps/LiveMap"), {
@@ -87,79 +88,79 @@ export default function LiveMapFullScreenPage() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-dark-900">
-      {/* Top Bar */}
-      <div className="bg-dark-800 border-b border-dark-700 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-700 hover:bg-dark-600 text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="font-medium">Nazad</span>
-          </button>
-          
+      {/* Top Bar – compact inline strip */}
+      <div className="px-3 py-1.5 border-b border-white/10 bg-dark-900">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Map className="w-6 h-6 text-white" />
-            <div>
-              <h1 className="text-xl font-bold text-white">Live Mapa</h1>
-              <p className="text-xs text-gray-400">
-                {mounted && lastUpdate ? (
-                  <>Zadnje ažuriranje: {lastUpdate.toLocaleTimeString("bs-BA")}</>
-                ) : (
-                  <>Učitavanje...</>
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <Package className="w-5 h-5 text-blue-400" />
-            <div>
-              <p className="text-xs text-blue-300">Aktivni loadovi</p>
-              <p className="text-lg font-bold text-blue-400">{activeLoadsCount}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
-            <Truck className="w-5 h-5 text-green-400" />
-            <div>
-              <p className="text-xs text-green-300">Vozači</p>
-              <p className="text-lg font-bold text-green-400">{driversOnRoadCount}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-            <Navigation className="w-5 h-5 text-purple-400" />
-            <div>
-              <p className="text-xs text-purple-300">U transportu</p>
-              <p className="text-lg font-bold text-purple-400">{inTransitCount}</p>
+            <button
+              onClick={() => router.push("/")}
+              className="h-9 flex items-center gap-2 rounded-full px-3 border border-white/15 bg-white/5 text-dark-50 font-semibold text-xs hover:bg-white/10 hover:border-white/25 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Nazad
+            </button>
+            <div className="flex items-center gap-2">
+              <Map className="w-5 h-5 text-white" />
+              <div className="leading-tight">
+                <p className="text-sm font-bold text-white">Live mapa</p>
+                <p className="text-[10px] text-dark-200">
+                  {mounted && lastUpdate
+                    ? `Zadnje ažuriranje: ${lastUpdate.toLocaleTimeString("bs-BA")}`
+                    : "Učitavanje..."}
+                </p>
+              </div>
             </div>
           </div>
 
-          <button
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-              autoRefresh
-                ? "bg-green-500/20 border border-green-500/30 text-green-400"
-                : "bg-dark-700 border border-dark-600 text-gray-400"
-            }`}
-          >
-            <RefreshCw className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`} />
-            <span className="text-sm font-medium">
+          <div className="flex items-center gap-2 flex-wrap">
+            {[{
+              label: "Aktivni loadovi",
+              value: activeLoadsCount,
+              icon: Package,
+              bg: "bg-blue-500/20",
+              text: "text-blue-200",
+            }, {
+              label: "Vozači",
+              value: driversOnRoadCount,
+              icon: Truck,
+              bg: "bg-green-500/20",
+              text: "text-green-200",
+            }, {
+              label: "U transportu",
+              value: inTransitCount,
+              icon: Navigation,
+              bg: "bg-purple-500/20",
+              text: "text-purple-200",
+            }].map((item) => (
+              <div key={item.label} className="h-10 min-w-[180px] flex items-center gap-3 px-4 rounded-lg bg-white/5 border border-white/10">
+                <div className={`w-7 h-7 rounded-md ${item.bg} ${item.text} flex items-center justify-center`}>
+                  <item.icon className="w-4 h-4" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px] text-dark-200 uppercase tracking-wide">{item.label}</p>
+                  <p className="text-sm font-bold text-white">{item.value}</p>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`h-9 flex items-center gap-2 rounded-full px-3 border font-semibold text-xs transition-colors ${
+                autoRefresh
+                  ? "border-green-400/40 bg-green-500/10 text-green-100 hover:bg-green-500/20"
+                  : "border-white/15 bg-white/5 text-dark-50 hover:bg-white/10"
+              }`}
+            >
+              <RefreshCw className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`} />
               {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
-            </span>
-          </button>
-
-          <button
-            onClick={fetchLoads}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span className="font-medium">Osvježi</span>
-          </button>
+            </button>
+            <button
+              onClick={fetchLoads}
+              className="h-9 flex items-center gap-2 rounded-full px-3 border border-primary-400/50 bg-primary-500 text-white font-semibold text-xs hover:bg-primary-600 transition-colors shadow-primary"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Osvježi
+            </button>
+          </div>
         </div>
       </div>
 

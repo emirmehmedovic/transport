@@ -149,7 +149,7 @@ export async function saveFile(
   const sanitizedFilename = sanitizeFilename(originalFilename);
 
   // Odredi folder path
-  let folderPath = DOCUMENT_FOLDERS[documentType];
+  let folderPath: string = DOCUMENT_FOLDERS[documentType];
 
   // Ako postoji entityId, kreiraj subfolder
   if (entityId) {

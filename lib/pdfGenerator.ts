@@ -225,7 +225,7 @@ export async function generatePayStubPDF(
 
   // Wait for stream to finish
   await new Promise((resolve, reject) => {
-    stream.on('finish', resolve);
+    stream.on('finish', () => resolve(undefined));
     stream.on('error', reject);
   });
 

@@ -49,7 +49,7 @@ export default function AlertsPanel() {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to fetch alerts");
+        throw new Error("Neuspjelo učitavanje alarma");
       }
 
       const json = await res.json();
@@ -163,19 +163,19 @@ export default function AlertsPanel() {
             {data.breakdown.urgent > 0 && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
                 <AlertTriangle className="w-4 h-4" />
-                {data.breakdown.urgent} Urgent
+                {data.breakdown.urgent} Hitno
               </div>
             )}
             {data.breakdown.warning > 0 && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-semibold">
                 <AlertCircle className="w-4 h-4" />
-                {data.breakdown.warning} Warning
+                {data.breakdown.warning} Upozorenje
               </div>
             )}
             {data.breakdown.info > 0 && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
                 <Info className="w-4 h-4" />
-                {data.breakdown.info} Info
+                {data.breakdown.info} Informacija
               </div>
             )}
           </div>
