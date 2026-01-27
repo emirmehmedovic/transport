@@ -92,7 +92,7 @@ export default function LoginPage() {
                   <Input
                     label="Email"
                     type="email"
-                    placeholder="admin@transport.com"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -124,13 +124,11 @@ export default function LoginPage() {
 
                 <div className="mt-6 p-4 bg-dark-50 rounded-2xl">
                   <p className="text-xs text-dark-600 font-semibold mb-2">
-                    Demo pristupni podaci
+                    Koristite vaše pristupne podatke
                   </p>
-                  <div className="space-y-1 text-xs text-dark-500">
-                    <p>Admin: admin@transport.com / admin123</p>
-                    <p>Dispečer: dispatcher@transport.com / dispatcher123</p>
-                    <p>Vozač: driver@transport.com / driver123</p>
-                  </div>
+                  <p className="text-xs text-dark-500">
+                    Ako ste zaboravili lozinku, kontaktirajte administratora.
+                  </p>
                 </div>
               </CardContent>
             </Card>
