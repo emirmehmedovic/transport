@@ -7,9 +7,8 @@ const rateLimit = new Map<string, { count: number; resetTime: number }>();
 // CORS Configuration
 const ALLOWED_ORIGINS = [
   process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-  // Dodaj production domain ovdje kad deploy-uješ
-  // "https://yourdomain.com"
-];
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+].filter(Boolean);
 
 // Rate limit config
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
