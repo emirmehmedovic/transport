@@ -1,10 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Truck, Package, Navigation } from "lucide-react";
+
+// Component to control map view
+function MapController({ selectedDriverId, driverLocations }: { selectedDriverId: string | null, driverLocations: DriverLocation[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (selectedDriverId) {
+      const driver = driverLocations.find(d => d.driverId === selectedDriverId);
+      if (driver) {
+        map.setView([driver.latitude, driver.longitude], 12, {
+          animate: true,
+          duration: 1,
+        });
+      }
+    }
+  }, [selectedDriverId, driverLocations, map]);
+
+  return null;
+}
 
 // Fix for default marker icons in Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -34,8 +53,8 @@ const deliveryIcon = new L.Icon({
 });
 
 // Custom truck icon for drivers using SVG
-const createDriverIcon = (driverName: string, hasLoad: boolean) => {
-  const iconColor = hasLoad ? '#10B981' : '#3B82F6'; // Green if has load, blue if available
+const createDriverIcon = (driverName: string, hasLoad: boolean, isSelected: boolean = false) => {
+  const iconColor = isSelected ? '#EF4444' : (hasLoad ? '#10B981' : '#3B82F6'); // Red if selected, Green if has load, blue if available
   
   return L.divIcon({
     html: `
@@ -146,7 +165,11 @@ interface DriverLocation {
   loads: LoadInfo[];
 }
 
-export default function LiveMap() {
+interface LiveMapProps {
+  selectedDriverId?: string | null;
+}
+
+export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedDriverId: null }) {
   const [loads, setLoads] = useState<LoadData[]>([]);
   const [driverLocations, setDriverLocations] = useState<DriverLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -425,6 +448,7 @@ export default function LiveMap() {
         zoom={7}
         style={{ height: "100%", width: "100%" }}
       >
+          <MapController selectedDriverId={selectedDriverId || null} driverLocations={driverLocations} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -554,27 +578,30 @@ export default function LiveMap() {
           })}
 
           {/* Render driver locations */}
-          {driverLocations.map((driver) => (
-            <Marker
-              key={driver.driverId}
-              position={[driver.latitude, driver.longitude]}
-              icon={createDriverIcon(driver.driverName, driver.loads.length > 0)}
-              eventHandlers={{
-                click: async () => {
-                  if (driver.driverId === selectedDriverId) {
-                    // Deselect
-                    setSelectedDriverId(null);
-                  } else {
-                    // Select and calculate route
-                    setSelectedDriverId(driver.driverId);
-                    if (!driverRoutes[driver.driverId]) {
-                      await calculateDriverRoute(driver);
+          {driverLocations.map((driver) => {
+            const isSelected = selectedDriverId === driver.driverId;
+            return (
+              <Marker
+                key={driver.driverId}
+                position={[driver.latitude, driver.longitude]}
+                icon={createDriverIcon(driver.driverName, driver.loads.length > 0, isSelected)}
+                eventHandlers={{
+                  click: async () => {
+                    if (driver.driverId === selectedDriverId) {
+                      // Deselect
+                      setSelectedDriverId(null);
+                    } else {
+                      // Select and calculate route
+                      setSelectedDriverId(driver.driverId);
+                      if (!driverRoutes[driver.driverId]) {
+                        await calculateDriverRoute(driver);
+                      }
                     }
-                  }
-                },
-              }}
-            />
-          ))}
+                  },
+                }}
+              />
+            );
+          })}
       </MapContainer>
 
       {/* Floating Driver Info Panel - Bottom Left */}
