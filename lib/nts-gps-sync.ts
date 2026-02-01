@@ -93,7 +93,7 @@ export async function syncNTSGPSData(): Promise<SyncResult> {
             ntsDeviceId: vehicle.id.toString(),
           },
           include: {
-            currentDriver: true,
+            primaryDriver: true,
           },
         });
 
@@ -102,7 +102,7 @@ export async function syncNTSGPSData(): Promise<SyncResult> {
           continue;
         }
 
-        if (!truck.currentDriver) {
+        if (!truck.primaryDriver) {
           console.warn(`[NTS Sync] Truck ${truck.truckNumber} has no assigned driver`);
           continue;
         }
@@ -113,7 +113,7 @@ export async function syncNTSGPSData(): Promise<SyncResult> {
         // Save position to database
         await prisma.position.create({
           data: {
-            driverId: truck.currentDriver.id,
+            driverId: truck.primaryDriver.id,
             deviceId: vehicle.id.toString(),
             latitude: vehicle.gpsLat,
             longitude: vehicle.gpsLon,
@@ -127,7 +127,7 @@ export async function syncNTSGPSData(): Promise<SyncResult> {
 
         // Update driver's last known location
         await prisma.driver.update({
-          where: { id: truck.currentDriver.id },
+          where: { id: truck.primaryDriver.id },
           data: {
             lastKnownLatitude: vehicle.gpsLat,
             lastKnownLongitude: vehicle.gpsLon,
