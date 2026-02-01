@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "postinstall": "prisma generate",
     "seed": "npx tsx prisma/seed.ts",
     "recurring:run-today": "npx tsx scripts/recurring-runner.ts"
   },
