@@ -52,12 +52,41 @@ const deliveryIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+// Helper function to check GPS status
+function getGPSStatus(lastLocationUpdate: Date | null): 'active' | 'warning' | 'offline' {
+  if (!lastLocationUpdate) return 'offline';
+
+  const now = new Date().getTime();
+  const lastUpdate = new Date(lastLocationUpdate).getTime();
+  const minutesSinceUpdate = (now - lastUpdate) / 1000 / 60;
+
+  if (minutesSinceUpdate < 18) return 'active';
+  if (minutesSinceUpdate < 60) return 'warning'; // 18-60 minutes
+  return 'offline'; // 60+ minutes
+}
+
 // Custom truck icon for drivers using SVG
-const createDriverIcon = (driverName: string, hasLoad: boolean, isSelected: boolean = false) => {
+const createDriverIcon = (
+  driverName: string,
+  hasLoad: boolean,
+  isSelected: boolean = false,
+  lastLocationUpdate: Date | null = null
+) => {
   const iconColor = isSelected ? '#EF4444' : (hasLoad ? '#10B981' : '#3B82F6'); // Red if selected, Green if has load, blue if available
-  
+
+  // Get GPS status
+  const gpsStatus = getGPSStatus(lastLocationUpdate);
+  const gpsStatusColor = gpsStatus === 'active' ? '#10B981' : gpsStatus === 'warning' ? '#F59E0B' : '#EF4444';
+  const gpsStatusPulse = gpsStatus === 'active' ? 'animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;' : '';
+
   return L.divIcon({
     html: `
+      <style>
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      </style>
       <div style="position: relative; text-align: center;">
         <div style="
           position: absolute;
@@ -95,6 +124,19 @@ const createDriverIcon = (driverName: string, hasLoad: boolean, isSelected: bool
             <circle cx="7" cy="18" r="2"></circle>
           </svg>
         </div>
+        <!-- GPS Status Indicator -->
+        <div style="
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          width: 14px;
+          height: 14px;
+          background: ${gpsStatusColor};
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          ${gpsStatusPulse}
+        "></div>
       </div>
     `,
     className: 'custom-driver-icon',
@@ -599,11 +641,12 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
           {/* Render driver locations */}
           {driverLocations.map((driver) => {
             const isSelected = selectedDriverId === driver.driverId || focusedDriverId === driver.driverId;
+            const lastLocationUpdate = driver.lastUpdate ? new Date(driver.lastUpdate) : null;
             return (
               <Marker
                 key={driver.driverId}
                 position={[driver.latitude, driver.longitude]}
-                icon={createDriverIcon(driver.driverName, driver.loads.length > 0, isSelected)}
+                icon={createDriverIcon(driver.driverName, driver.loads.length > 0, isSelected, lastLocationUpdate)}
                 eventHandlers={{
                   click: async () => {
                     if (driver.driverId === selectedDriverId) {

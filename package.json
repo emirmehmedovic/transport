@@ -12,7 +12,11 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "seed": "npx tsx prisma/seed.ts",
-    "recurring:run-today": "npx tsx scripts/recurring-runner.ts"
+    "recurring:run-today": "npx tsx scripts/recurring-runner.ts",
+    "monitor:salko": "node scripts/monitor-salko-gps.js",
+    "check:salko": "node scripts/check-salko-positions.js",
+    "check:positions": "node scripts/check-all-positions.js",
+    "watch:gps": "./scripts/watch-gps-logs.sh"
   },
   "keywords": [],
   "author": "",

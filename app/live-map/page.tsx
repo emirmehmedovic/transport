@@ -33,6 +33,7 @@ interface Driver {
   id: string;
   status: string;
   traccarDeviceId: string | null;
+  lastLocationUpdate: Date | null;
   user: {
     firstName: string;
     lastName: string;
@@ -58,6 +59,19 @@ interface TruckData {
       lastName: string;
     };
   } | null;
+}
+
+// Helper function to check GPS status
+function getGPSStatus(lastLocationUpdate: Date | null): 'active' | 'warning' | 'offline' {
+  if (!lastLocationUpdate) return 'offline';
+
+  const now = new Date().getTime();
+  const lastUpdate = new Date(lastLocationUpdate).getTime();
+  const minutesSinceUpdate = (now - lastUpdate) / 1000 / 60;
+
+  if (minutesSinceUpdate < 18) return 'active';
+  if (minutesSinceUpdate < 60) return 'warning'; // 18-60 minutes
+  return 'offline'; // 60+ minutes
 }
 
 export default function LiveMapFullScreenPage() {
@@ -428,7 +442,7 @@ export default function LiveMapFullScreenPage() {
                       Nedavne Pozicije ({driverHistory.positions.length})
                     </h4>
                     <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {driverHistory.positions.slice(0, 10).map((pos: any, idx: number) => (
+                      {[...driverHistory.positions].reverse().slice(0, 20).map((pos: any, idx: number) => (
                         <div
                           key={pos.id}
                           className="p-2 bg-dark-50 rounded-lg border border-dark-200"
@@ -604,12 +618,31 @@ export default function LiveMapFullScreenPage() {
                               ? "Na odmoru"
                               : "Neaktivan"}
                           </span>
-                          {driver.traccarDeviceId && (
-                            <p className="text-[10px] text-green-600 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                              GPS
-                            </p>
-                          )}
+                          {driver.traccarDeviceId && (() => {
+                            const gpsStatus = getGPSStatus(driver.lastLocationUpdate);
+                            return (
+                              <p
+                                className={`text-[10px] flex items-center gap-1 ${
+                                  gpsStatus === 'active'
+                                    ? 'text-green-600'
+                                    : gpsStatus === 'warning'
+                                    ? 'text-orange-600'
+                                    : 'text-red-600'
+                                }`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    gpsStatus === 'active'
+                                      ? 'bg-green-500 animate-pulse'
+                                      : gpsStatus === 'warning'
+                                      ? 'bg-orange-500'
+                                      : 'bg-red-500'
+                                  }`}
+                                ></span>
+                                {gpsStatus === 'active' ? 'GPS' : gpsStatus === 'warning' ? 'GPS slabo' : 'GPS offline'}
+                              </p>
+                            );
+                          })()}
                         </div>
                       </div>
                       <div className="flex gap-2 mt-2">

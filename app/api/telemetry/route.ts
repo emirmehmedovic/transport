@@ -27,6 +27,12 @@ export async function GET(request: NextRequest) {
 
 async function handleTelemetry(request: NextRequest) {
   try {
+    // LOG: Request received
+    console.log('[Telemetry] ═══════════════════════════════════════════════════════');
+    console.log('[Telemetry] Request received:', new Date().toISOString());
+    console.log('[Telemetry] Method:', request.method);
+    console.log('[Telemetry] URL:', request.url);
+
     // Extract parameters from query string or POST body
     let params: any;
 
@@ -47,9 +53,12 @@ async function handleTelemetry(request: NextRequest) {
         accuracy: searchParams.get('accuracy'),
         timestamp: searchParams.get('timestamp'),
       };
+      console.log('[Telemetry] Query params:', JSON.stringify(params, null, 2));
     } else {
       // Parse from POST body
       const body = await request.json().catch(() => ({}));
+      console.log('[Telemetry] POST body:', JSON.stringify(body, null, 2));
+
       const location = body.location ?? body;
       const coords = location?.coords ?? {};
 
@@ -57,6 +66,7 @@ async function handleTelemetry(request: NextRequest) {
       if (typeof location?._ === 'string' && location._) {
         const raw = location._.replace(/^[?&]/, '');
         templateParams = new URLSearchParams(raw);
+        console.log('[Telemetry] Template params:', Object.fromEntries(templateParams.entries()));
       }
 
       params = {
@@ -100,8 +110,9 @@ async function handleTelemetry(request: NextRequest) {
           location?.battery?.level ||
           coords?.battery?.level,
         accuracy: body.accuracy || location?.accuracy || coords?.accuracy,
-        timestamp: body.timestamp || location?.timestamp,
+        timestamp: body.timestamp || location?.timestamp || coords?.timestamp,
       };
+      console.log('[Telemetry] Parsed params:', JSON.stringify(params, null, 2));
     }
 
     // Validate required fields
@@ -154,24 +165,45 @@ async function handleTelemetry(request: NextRequest) {
 
     // Parse timestamp (Unix timestamp or ISO string)
     let recordedAt = new Date();
+    console.log('[Telemetry] ─────────────────────────────────────────────────────');
+    console.log('[Telemetry] Timestamp parsing:');
+    console.log('[Telemetry]   Raw timestamp:', params.timestamp);
+    console.log('[Telemetry]   Type:', typeof params.timestamp);
+
     if (params.timestamp) {
       const tsNum = Number(params.timestamp);
+      console.log('[Telemetry]   As number:', tsNum);
+      console.log('[Telemetry]   Is NaN:', Number.isNaN(tsNum));
+
       if (!Number.isNaN(tsNum)) {
         // Heuristic: if it's in milliseconds (13 digits), use as-is
-        const parsedDate = tsNum > 1_000_000_000_000 ? new Date(tsNum) : new Date(tsNum * 1000);
+        const isMilliseconds = tsNum > 1_000_000_000_000;
+        const parsedDate = isMilliseconds ? new Date(tsNum) : new Date(tsNum * 1000);
+
+        console.log('[Telemetry]   Format detected:', isMilliseconds ? 'milliseconds' : 'seconds');
+        console.log('[Telemetry]   Parsed date:', parsedDate.toISOString());
 
         // Validate: date must be reasonable (between 2020 and now + 1 day)
         const minDate = new Date('2020-01-01').getTime();
         const maxDate = Date.now() + 86400000; // now + 1 day
 
+        console.log('[Telemetry]   Min allowed:', new Date(minDate).toISOString());
+        console.log('[Telemetry]   Max allowed:', new Date(maxDate).toISOString());
+        console.log('[Telemetry]   Is valid:', parsedDate.getTime() >= minDate && parsedDate.getTime() <= maxDate);
+
         if (parsedDate.getTime() >= minDate && parsedDate.getTime() <= maxDate) {
           recordedAt = parsedDate;
+          console.log('[Telemetry]   ✅ Using parsed timestamp:', recordedAt.toISOString());
         } else {
-          console.warn(`[Telemetry] Invalid timestamp ${params.timestamp} - using current time`);
+          console.warn(`[Telemetry]   ❌ Invalid timestamp ${params.timestamp} (${parsedDate.toISOString()}) - using current time`);
+          recordedAt = new Date();
+          console.log('[Telemetry]   Using current time:', recordedAt.toISOString());
         }
       } else {
         // Try ISO string
         const isoDate = new Date(params.timestamp);
+        console.log('[Telemetry]   Trying ISO parse:', isoDate.toISOString());
+
         if (!isNaN(isoDate.getTime())) {
           // Validate date range
           const minDate = new Date('2020-01-01').getTime();
@@ -179,14 +211,28 @@ async function handleTelemetry(request: NextRequest) {
 
           if (isoDate.getTime() >= minDate && isoDate.getTime() <= maxDate) {
             recordedAt = isoDate;
+            console.log('[Telemetry]   ✅ Using ISO timestamp:', recordedAt.toISOString());
           } else {
-            console.warn(`[Telemetry] Invalid date ${params.timestamp} - using current time`);
+            console.warn(`[Telemetry]   ❌ Invalid date ${params.timestamp} - using current time`);
+            recordedAt = new Date();
+            console.log('[Telemetry]   Using current time:', recordedAt.toISOString());
           }
         }
       }
+    } else {
+      console.log('[Telemetry]   ⚠️  No timestamp provided - using current time:', recordedAt.toISOString());
     }
 
     // Insert position into database
+    const receivedAt = new Date();
+    console.log('[Telemetry] ─────────────────────────────────────────────────────');
+    console.log('[Telemetry] Saving position:');
+    console.log('[Telemetry]   Device:', deviceId);
+    console.log('[Telemetry]   Location:', `(${latitude}, ${longitude})`);
+    console.log('[Telemetry]   Speed:', speed, 'km/h');
+    console.log('[Telemetry]   recordedAt:', recordedAt.toISOString());
+    console.log('[Telemetry]   receivedAt:', receivedAt.toISOString());
+
     await prisma.position.create({
       data: {
         driverId: driver.id,
@@ -199,7 +245,7 @@ async function handleTelemetry(request: NextRequest) {
         battery,
         accuracy,
         recordedAt,
-        receivedAt: new Date(),
+        receivedAt,
       },
     });
 
@@ -213,7 +259,8 @@ async function handleTelemetry(request: NextRequest) {
       },
     });
 
-    console.log(`[Telemetry] Position saved for device ${deviceId} at (${latitude}, ${longitude})`);
+    console.log(`[Telemetry] ✅ Position saved for device ${deviceId} at (${latitude}, ${longitude})`);
+    console.log('[Telemetry] ═══════════════════════════════════════════════════════');
 
     // Check geofence zones (non-blocking)
     checkGeofences(driver.id, latitude, longitude, speed).catch((error) => {

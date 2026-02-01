@@ -88,10 +88,11 @@ export async function syncNTSGPSData(): Promise<SyncResult> {
     for (const vehicle of vehicles) {
       try {
         // Find truck by NTS device ID
+        // Note: ntsDeviceId field needs to be added to schema when NTS integration is activated
         const truck = await prisma.truck.findFirst({
           where: {
             ntsDeviceId: vehicle.id.toString(),
-          },
+          } as any,
           include: {
             primaryDriver: true,
           },
