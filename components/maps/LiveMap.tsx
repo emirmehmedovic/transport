@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Truck, Package, Navigation } from "lucide-react";
+import { Truck, Package, Navigation, ChevronDown, ChevronUp } from "lucide-react";
 
 // Component to control map view
-function MapController({ selectedDriverId, driverLocations }: { selectedDriverId: string | null, driverLocations: DriverLocation[] }) {
+function MapController({ focusedDriverId, driverLocations }: { focusedDriverId: string | null, driverLocations: DriverLocation[] }) {
   const map = useMap();
 
   useEffect(() => {
-    if (selectedDriverId) {
-      const driver = driverLocations.find(d => d.driverId === selectedDriverId);
+    if (focusedDriverId) {
+      const driver = driverLocations.find(d => d.driverId === focusedDriverId);
       if (driver) {
         map.setView([driver.latitude, driver.longitude], 12, {
           animate: true,
@@ -20,7 +20,7 @@ function MapController({ selectedDriverId, driverLocations }: { selectedDriverId
         });
       }
     }
-  }, [selectedDriverId, driverLocations, map]);
+  }, [focusedDriverId, driverLocations, map]);
 
   return null;
 }
@@ -166,10 +166,10 @@ interface DriverLocation {
 }
 
 interface LiveMapProps {
-  selectedDriverId?: string | null;
+  focusedDriverId?: string | null;
 }
 
-export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedDriverId: null }) {
+export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDriverId: null }) {
   const [loads, setLoads] = useState<LoadData[]>([]);
   const [driverLocations, setDriverLocations] = useState<DriverLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,16 +183,21 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
   const [loadRoutes, setLoadRoutes] = useState<Record<string, [number, number][]>>({});
   const [availableLoads, setAvailableLoads] = useState<LoadData[]>([]);
   const [assigning, setAssigning] = useState(false);
+  const [legendMinimized, setLegendMinimized] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchData();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000);
+    // Refresh every 5 seconds for real-time updates
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
     try {
+      setRefreshing(true);
+
       // Fetch active loads
       const loadsRes = await fetch("/api/loads?status=ASSIGNED,PICKED_UP,IN_TRANSIT");
       const loadsData = await loadsRes.json();
@@ -234,8 +239,8 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
         setLoads(loadsWithGPS);
       }
 
-      // Fetch driver locations
-      const driversRes = await fetch("/api/drivers/location");
+      // Fetch driver locations (with cache busting)
+      const driversRes = await fetch(`/api/drivers/location?t=${Date.now()}`);
       const driversData = await driversRes.json();
       
       if (driversRes.ok && driversData.drivers) {
@@ -261,11 +266,14 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
       if (availableLoadsRes.ok && availableLoadsData.loads) {
         setAvailableLoads(availableLoadsData.loads);
       }
-      
+
       setLoading(false);
+      setLastRefresh(new Date());
     } catch (error) {
       console.error("Error fetching map data:", error);
       setLoading(false);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -412,6 +420,17 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
     return colors[status] || "#6B7280";
   };
 
+  const getTimeAgo = (date: string | Date) => {
+    const now = new Date().getTime();
+    const then = new Date(date).getTime();
+    const diff = Math.floor((now - then) / 1000); // seconds
+
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+
   // Calculate center of all markers
   const calculateCenter = (): [number, number] => {
     if (loads.length === 0) return [44.8176, 17.3384]; // Bosnia center as default
@@ -448,7 +467,7 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
         zoom={7}
         style={{ height: "100%", width: "100%" }}
       >
-          <MapController selectedDriverId={selectedDriverId || null} driverLocations={driverLocations} />
+          <MapController focusedDriverId={focusedDriverId || null} driverLocations={driverLocations} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -579,7 +598,7 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
 
           {/* Render driver locations */}
           {driverLocations.map((driver) => {
-            const isSelected = selectedDriverId === driver.driverId;
+            const isSelected = selectedDriverId === driver.driverId || focusedDriverId === driver.driverId;
             return (
               <Marker
                 key={driver.driverId}
@@ -696,8 +715,12 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
                     <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">
                       {driver.loads.length === 0 ? "Dodijeli load" : "Dodaj dodatni load"}
                     </p>
-                    <span className="text-[10px] text-dark-300">
-                      Zadnja pozicija: {new Date(driver.lastUpdate).toLocaleTimeString("bs-BA")}
+                    <span
+                      className="text-[10px] text-dark-300 flex items-center gap-1"
+                      title={new Date(driver.lastUpdate).toLocaleString("bs-BA")}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                      {getTimeAgo(driver.lastUpdate)}
                     </span>
                   </div>
 
@@ -749,54 +772,79 @@ export default function LiveMap({ selectedDriverId }: LiveMapProps = { selectedD
         </div>
       )}
 
-      {/* Loading Indicator */}
-      {loading && (
+      {/* Loading/Refresh Indicator */}
+      {(loading || refreshing) && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-[1000]">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <span className="text-sm text-dark-700">Učitavanje podataka...</span>
+          <span className="text-sm text-dark-700">
+            {loading ? 'Učitavanje podataka...' : 'Osvježavanje...'}
+          </span>
+        </div>
+      )}
+
+      {/* Last Refresh Indicator */}
+      {!loading && lastRefresh && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-dark-900/90 text-white px-3 py-1 rounded-full text-xs z-[1000] flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${refreshing ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`}></div>
+          <span>Ažurirano: {getTimeAgo(lastRefresh)}</span>
         </div>
       )}
 
       {/* Legend - Bottom Right */}
       <div className="absolute bottom-4 right-4 z-[1000] max-w-xs">
-        <div className="rounded-3xl bg-dark-900/95 text-white border border-white/10 shadow-soft-xl backdrop-blur p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded-3xl bg-dark-900/95 text-white border border-white/10 shadow-soft-xl backdrop-blur overflow-hidden">
+          <div className="flex items-center justify-between p-4 pb-3">
             <p className="text-sm font-bold">Legenda</p>
-            <span className="text-[11px] text-dark-200">Map key</span>
+            <button
+              onClick={() => setLegendMinimized(!legendMinimized)}
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+              title={legendMinimized ? "Proširi legendu" : "Minimiziraj legendu"}
+            >
+              {legendMinimized ? (
+                <ChevronUp className="w-4 h-4 text-dark-200" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-dark-200" />
+              )}
+            </button>
           </div>
-          <div className="space-y-2 text-xs text-dark-100">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-green-400"></span>
-              <span>Pickup lokacija</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
-              <span>Delivery lokacija</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-blue-500/80 flex items-center justify-center text-white text-[10px] font-bold">D</div>
-              <span>Vozač (dostupan)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-emerald-500/80 flex items-center justify-center text-white text-[10px] font-bold">A</div>
-              <span>Vozač (aktivan load)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-0.5 bg-purple-400"></span>
-              <span>Ruta loada</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-0.5 bg-orange-400" style={{borderTop: '2px dashed #F59E0B'}}></span>
-              <span>Vozač → Pickup</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-0.5 bg-green-400"></span>
-              <span>Pickup → Delivery</span>
-            </div>
-          </div>
-          <div className="text-[11px] text-dark-300 mt-3 pt-3 border-t border-white/10">
-            💡 Klikni na vozača ili load marker da vidiš detalje
-          </div>
+
+          {!legendMinimized && (
+            <>
+              <div className="px-4 pb-4 space-y-2 text-xs text-dark-100">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-400"></span>
+                  <span>Pickup lokacija</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+                  <span>Delivery lokacija</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-blue-500/80 flex items-center justify-center text-white text-[10px] font-bold">D</div>
+                  <span>Vozač (dostupan)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/80 flex items-center justify-center text-white text-[10px] font-bold">A</div>
+                  <span>Vozač (aktivan load)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-0.5 bg-purple-400"></span>
+                  <span>Ruta loada</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-0.5 bg-orange-400" style={{borderTop: '2px dashed #F59E0B'}}></span>
+                  <span>Vozač → Pickup</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-0.5 bg-green-400"></span>
+                  <span>Pickup → Delivery</span>
+                </div>
+              </div>
+              <div className="text-[11px] text-dark-300 px-4 pb-4 pt-3 border-t border-white/10">
+                💡 Klikni na vozača ili load marker da vidiš detalje
+              </div>
+            </>
+          )}
         </div>
       </div>
 

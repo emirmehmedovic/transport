@@ -161,15 +161,22 @@ export default function LiveMapFullScreenPage() {
       const driverRes = await fetch(`/api/drivers/${driverId}`);
       const driverData = await driverRes.json();
 
+      console.log("Driver data:", driverData);
+
       // Fetch position history (last 7 days)
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 7);
 
-      const positionsRes = await fetch(
-        `/api/drivers/${driverId}/positions?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&limit=100`
-      );
+      console.log("Fetching positions from:", startDate, "to:", endDate);
+
+      const positionsUrl = `/api/drivers/${driverId}/positions?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&limit=100`;
+      console.log("Positions URL:", positionsUrl);
+
+      const positionsRes = await fetch(positionsUrl);
       const positionsData = await positionsRes.json();
+
+      console.log("Positions response:", positionsRes.status, positionsData);
 
       setDriverHistory({
         driver: driverData.driver,
@@ -689,7 +696,7 @@ export default function LiveMapFullScreenPage() {
           </div>
         )}
 
-        <LiveMap selectedDriverId={selectedDriverForMap} />
+        <LiveMap focusedDriverId={selectedDriverForMap} />
       </div>
     </div>
   );

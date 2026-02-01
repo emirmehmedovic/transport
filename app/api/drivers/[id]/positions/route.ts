@@ -64,6 +64,26 @@ export async function GET(
       return NextResponse.json({ error: 'Driver not found' }, { status: 404 });
     }
 
+    console.log(`[Positions] Fetching for driver: ${params.id}`);
+    console.log(`[Positions] Driver traccarDeviceId: ${driver.traccarDeviceId}`);
+    console.log(`[Positions] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    console.log(`[Positions] Limit: ${limit}`);
+
+    // Check total positions for this driver (for debugging)
+    const totalPositionsCount = await prisma.position.count({
+      where: { driverId: params.id },
+    });
+    console.log(`[Positions] Total positions in DB for this driver: ${totalPositionsCount}`);
+
+    // Get latest position for debugging
+    const latestPosition = await prisma.position.findFirst({
+      where: { driverId: params.id },
+      orderBy: { recordedAt: 'desc' },
+    });
+    if (latestPosition) {
+      console.log(`[Positions] Latest position recordedAt: ${latestPosition.recordedAt.toISOString()}`);
+    }
+
     // Fetch position history
     const positions = await prisma.position.findMany({
       where: {
@@ -91,6 +111,8 @@ export async function GET(
         receivedAt: true,
       },
     });
+
+    console.log(`[Positions] Found ${positions.length} positions`);
 
     // Calculate statistics
     const totalPositions = positions.length;

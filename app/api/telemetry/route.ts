@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { checkGeofences } from '@/lib/geofence';
+import { checkGeofences, checkLoadProximity } from '@/lib/geofence';
 
 /**
  * POST/GET /api/telemetry
@@ -155,15 +155,33 @@ async function handleTelemetry(request: NextRequest) {
     // Parse timestamp (Unix timestamp or ISO string)
     let recordedAt = new Date();
     if (params.timestamp) {
-      const ts = parseInt(params.timestamp);
-      if (!isNaN(ts)) {
-        // Unix timestamp (seconds)
-        recordedAt = new Date(ts * 1000);
+      const tsNum = Number(params.timestamp);
+      if (!Number.isNaN(tsNum)) {
+        // Heuristic: if it's in milliseconds (13 digits), use as-is
+        const parsedDate = tsNum > 1_000_000_000_000 ? new Date(tsNum) : new Date(tsNum * 1000);
+
+        // Validate: date must be reasonable (between 2020 and now + 1 day)
+        const minDate = new Date('2020-01-01').getTime();
+        const maxDate = Date.now() + 86400000; // now + 1 day
+
+        if (parsedDate.getTime() >= minDate && parsedDate.getTime() <= maxDate) {
+          recordedAt = parsedDate;
+        } else {
+          console.warn(`[Telemetry] Invalid timestamp ${params.timestamp} - using current time`);
+        }
       } else {
         // Try ISO string
         const isoDate = new Date(params.timestamp);
         if (!isNaN(isoDate.getTime())) {
-          recordedAt = isoDate;
+          // Validate date range
+          const minDate = new Date('2020-01-01').getTime();
+          const maxDate = Date.now() + 86400000;
+
+          if (isoDate.getTime() >= minDate && isoDate.getTime() <= maxDate) {
+            recordedAt = isoDate;
+          } else {
+            console.warn(`[Telemetry] Invalid date ${params.timestamp} - using current time`);
+          }
         }
       }
     }
@@ -200,6 +218,11 @@ async function handleTelemetry(request: NextRequest) {
     // Check geofence zones (non-blocking)
     checkGeofences(driver.id, latitude, longitude, speed).catch((error) => {
       console.error('[Telemetry] Geofence check failed:', error);
+    });
+
+    // Check proximity to assigned load locations (non-blocking)
+    checkLoadProximity(driver.id, latitude, longitude).catch((error) => {
+      console.error('[Telemetry] Load proximity check failed:', error);
     });
 
     // Return 200 OK (Traccar Client expects this)

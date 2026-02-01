@@ -106,6 +106,11 @@ export async function checkGeofences(
         console.log(
           `[Geofence] Driver ${driverId} ENTERED zone ${zone.name}`
         );
+
+        // Auto-update load status when entering zones
+        if (zone.loadId) {
+          await autoUpdateLoadStatus(zone.loadId, zone.type, driverId);
+        }
       }
 
       // Detect exit
@@ -146,6 +151,158 @@ export async function checkGeofences(
   } catch (error) {
     console.error('[Geofence] Error checking geofences:', error);
     return [];
+  }
+}
+
+/**
+ * Auto-update load status when driver enters pickup/delivery zones
+ */
+async function autoUpdateLoadStatus(
+  loadId: string,
+  zoneType: string | null,
+  driverId: string
+): Promise<void> {
+  try {
+    const load = await prisma.load.findUnique({
+      where: { id: loadId },
+      select: { id: true, status: true, driverId: true },
+    });
+
+    if (!load) {
+      return;
+    }
+
+    // Only auto-update if this driver is assigned to this load
+    if (load.driverId !== driverId) {
+      console.log(
+        `[Geofence] Ignoring - driver ${driverId} not assigned to load ${loadId}`
+      );
+      return;
+    }
+
+    // Pickup zone entry: ASSIGNED → PICKED_UP
+    if (zoneType === 'PICKUP' && load.status === 'ASSIGNED') {
+      await prisma.load.update({
+        where: { id: loadId },
+        data: {
+          status: 'PICKED_UP',
+          actualPickupDate: new Date(),
+        },
+      });
+
+      console.log(
+        `[Geofence] 🚛 Auto-updated load ${loadId}: ASSIGNED → PICKED_UP`
+      );
+    }
+
+    // Delivery zone entry: IN_TRANSIT → DELIVERED
+    if (zoneType === 'DELIVERY' && load.status === 'IN_TRANSIT') {
+      await prisma.load.update({
+        where: { id: loadId },
+        data: {
+          status: 'DELIVERED',
+          actualDeliveryDate: new Date(),
+        },
+      });
+
+      console.log(
+        `[Geofence] 📦 Auto-updated load ${loadId}: IN_TRANSIT → DELIVERED`
+      );
+    }
+  } catch (error) {
+    console.error('[Geofence] Error auto-updating load status:', error);
+  }
+}
+
+/**
+ * Check driver proximity to assigned load pickup/delivery locations
+ * Auto-updates load status if driver is within range (500m default)
+ */
+export async function checkLoadProximity(
+  driverId: string,
+  latitude: number,
+  longitude: number,
+  radiusMeters: number = 500
+): Promise<void> {
+  try {
+    // Get driver's active loads
+    const loads = await prisma.load.findMany({
+      where: {
+        driverId,
+        status: {
+          in: ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'],
+        },
+      },
+      select: {
+        id: true,
+        loadNumber: true,
+        status: true,
+        pickupLatitude: true,
+        pickupLongitude: true,
+        deliveryLatitude: true,
+        deliveryLongitude: true,
+      },
+    });
+
+    for (const load of loads) {
+      // Check pickup proximity: ASSIGNED → PICKED_UP
+      if (
+        load.status === 'ASSIGNED' &&
+        load.pickupLatitude &&
+        load.pickupLongitude
+      ) {
+        const distanceToPickup = calculateDistance(
+          latitude,
+          longitude,
+          load.pickupLatitude,
+          load.pickupLongitude
+        );
+
+        if (distanceToPickup <= radiusMeters) {
+          await prisma.load.update({
+            where: { id: load.id },
+            data: {
+              status: 'PICKED_UP',
+              actualPickupDate: new Date(),
+            },
+          });
+
+          console.log(
+            `[LoadProximity] 🚛 Auto-updated ${load.loadNumber}: ASSIGNED → PICKED_UP (${Math.round(distanceToPickup)}m from pickup)`
+          );
+        }
+      }
+
+      // Check delivery proximity: IN_TRANSIT → DELIVERED
+      if (
+        load.status === 'IN_TRANSIT' &&
+        load.deliveryLatitude &&
+        load.deliveryLongitude
+      ) {
+        const distanceToDelivery = calculateDistance(
+          latitude,
+          longitude,
+          load.deliveryLatitude,
+          load.deliveryLongitude
+        );
+
+        if (distanceToDelivery <= radiusMeters) {
+          await prisma.load.update({
+            where: { id: load.id },
+            data: {
+              status: 'DELIVERED',
+              actualDeliveryDate: new Date(),
+            },
+          });
+
+          console.log(
+            `[LoadProximity] 📦 Auto-updated ${load.loadNumber}: IN_TRANSIT → DELIVERED (${Math.round(distanceToDelivery)}m from delivery)`
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[LoadProximity] Error checking load proximity:', error);
   }
 }
 

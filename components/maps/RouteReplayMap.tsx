@@ -45,11 +45,30 @@ function FitBounds({ positions }: { positions: Position[] }) {
   return null;
 }
 
+// Custom component to follow current position during replay
+function FollowPosition({ position, isPlaying }: { position: Position; isPlaying: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (isPlaying) {
+      map.panTo([position.latitude, position.longitude], { animate: true, duration: 0.5 });
+    }
+  }, [position, isPlaying, map]);
+
+  return null;
+}
+
 export default function RouteReplayMap({ positions, driverName }: RouteReplayMapProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Reset currentIndex when positions change
+  useEffect(() => {
+    setCurrentIndex(0);
+    setIsPlaying(false);
+  }, [positions]);
 
   // Playback effect
   useEffect(() => {
@@ -110,7 +129,7 @@ export default function RouteReplayMap({ positions, driverName }: RouteReplayMap
   return (
     <div className="space-y-4">
       {/* Map */}
-      <div className="h-96 rounded-xl overflow-hidden border border-dark-200">
+      <div className="h-[700px] rounded-xl overflow-hidden border border-dark-200">
         <MapContainer
           center={[currentPosition.latitude, currentPosition.longitude]}
           zoom={13}
@@ -167,6 +186,7 @@ export default function RouteReplayMap({ positions, driverName }: RouteReplayMap
           )}
 
           <FitBounds positions={positions} />
+          <FollowPosition position={currentPosition} isPlaying={isPlaying} />
         </MapContainer>
       </div>
 

@@ -196,6 +196,9 @@ model Truck {
   // Status
   isActive Boolean @default(true)
 
+  // GPS Tracking (NTS International)
+  ntsDeviceId String? @unique // Device ID from NTS International GPS system
+
   // Driver Assignment
   primaryDriverId String? @unique
   primaryDriver   Driver? @relation("PrimaryDriver", fields: [primaryDriverId], references: [id])

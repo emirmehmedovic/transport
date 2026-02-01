@@ -15,6 +15,9 @@ import {
   Truck,
   Package,
   AlertCircle,
+  CheckCircle,
+  PlayCircle,
+  MapPin,
 } from "lucide-react";
 import { DriverPerformance } from "@/components/performance";
 
@@ -73,6 +76,7 @@ export default function DriverDetailPage() {
   const [error, setError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "performance">("overview");
+  const [updatingLoadId, setUpdatingLoadId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDriver();
@@ -92,6 +96,32 @@ export default function DriverDetailPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateLoadStatus = async (loadId: string, action: 'pickup' | 'start_transit' | 'deliver') => {
+    try {
+      setUpdatingLoadId(loadId);
+      const res = await fetch(`/api/loads/${loadId}/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Greška pri ažuriranju statusa');
+      }
+
+      // Refresh driver data to show updated load status
+      await fetchDriver();
+      alert(data.message || 'Status loada ažuriran!');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUpdatingLoadId(null);
     }
   };
 
@@ -467,11 +497,10 @@ export default function DriverDetailPage() {
                 {driver.loads.map((load) => (
                   <div
                     key={load.id}
-                    className="p-3 bg-dark-50 rounded-lg cursor-pointer hover:bg-dark-100"
-                    onClick={() => router.push(`/loads/${load.id}`)}
+                    className="p-3 bg-dark-50 rounded-lg border border-dark-200"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold text-dark-900">
+                      <p className="font-semibold text-dark-900 cursor-pointer hover:text-primary-600" onClick={() => router.push(`/loads/${load.id}`)}>
                         {load.loadNumber}
                       </p>
                       <span
@@ -482,7 +511,7 @@ export default function DriverDetailPage() {
                         {load.status}
                       </span>
                     </div>
-                    <div className="text-sm text-dark-600">
+                    <div className="text-sm text-dark-600 mb-3">
                       <p>
                         Pickup: {formatDate(load.scheduledPickup)}
                       </p>
@@ -493,6 +522,46 @@ export default function DriverDetailPage() {
                         <p className="text-primary-600 font-medium mt-1">
                           {load.totalMiles} milja • ${load.loadRate}
                         </p>
+                      )}
+                    </div>
+
+                    {/* Action buttons based on load status */}
+                    <div className="flex gap-2 flex-wrap">
+                      {load.status === 'ASSIGNED' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleUpdateLoadStatus(load.id, 'pickup')}
+                          disabled={updatingLoadId === load.id}
+                          className="flex items-center gap-1 text-xs"
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                          {updatingLoadId === load.id ? 'Ažuriram...' : 'Preuzeo sam teret'}
+                        </Button>
+                      )}
+                      {load.status === 'PICKED_UP' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleUpdateLoadStatus(load.id, 'start_transit')}
+                          disabled={updatingLoadId === load.id}
+                          className="flex items-center gap-1 text-xs"
+                        >
+                          <PlayCircle className="w-3 h-3" />
+                          {updatingLoadId === load.id ? 'Ažuriram...' : 'Započinjem vožnju'}
+                        </Button>
+                      )}
+                      {(load.status === 'IN_TRANSIT' || load.status === 'PICKED_UP') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleUpdateLoadStatus(load.id, 'deliver')}
+                          disabled={updatingLoadId === load.id}
+                          className="flex items-center gap-1 text-xs"
+                        >
+                          <MapPin className="w-3 h-3" />
+                          {updatingLoadId === load.id ? 'Ažuriram...' : 'Isporučeno'}
+                        </Button>
                       )}
                     </div>
                   </div>

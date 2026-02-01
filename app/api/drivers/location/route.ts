@@ -161,7 +161,14 @@ export async function GET(req: NextRequest) {
       loads: driver.loads, // Return all loads instead of just first one
     }));
 
-    return NextResponse.json({ drivers: formattedDrivers });
+    const response = NextResponse.json({ drivers: formattedDrivers });
+
+    // Prevent caching to ensure fresh data
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+
+    return response;
   } catch (error: any) {
     console.error("Error fetching driver locations:", error);
     return NextResponse.json(
