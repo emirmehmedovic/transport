@@ -71,6 +71,7 @@ export async function POST(
       longitude,
       contactName,
       contactPhone,
+      items,
       scheduledDate,
     } = body;
 
@@ -94,6 +95,7 @@ export async function POST(
         longitude: longitude !== undefined && longitude !== null ? parseFloat(longitude) : null,
         contactName: contactName || null,
         contactPhone: contactPhone || null,
+        items: items || null,
         scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
       },
     });

@@ -46,7 +46,7 @@ const navigation: { category?: string; items: NavItem[] }[] = [
       { name: "Kamioni", href: "/trucks", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Prikolice", href: "/trailers", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
       { name: "DVIR", href: "/driver/inspections", icon: Clipboard, roles: ["DRIVER"] },
-      { name: "Loadovi", href: "/loads", icon: Package },
+      { name: "Rute/Transporti", href: "/loads", icon: Package },
       { name: "Dokumenti", href: "/documents", icon: FileText },
       { name: "Korisnici", href: "/users", icon: Users, roles: ["ADMIN"] },
     ],

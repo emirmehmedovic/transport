@@ -25,6 +25,7 @@ interface Truck {
 interface LoadForEdit {
   id: string;
   loadNumber: string;
+  routeName?: string | null;
   status: string;
   pickupAddress: string;
   pickupCity: string;
@@ -64,6 +65,7 @@ interface LoadForEdit {
 }
 
 interface LoadFormState {
+  routeName: string;
   pickupAddress: string;
   pickupCity: string;
   pickupState: string;
@@ -111,6 +113,7 @@ export default function EditLoadPage() {
   const [assigning, setAssigning] = useState(false);
 
   const [form, setForm] = useState<LoadFormState>({
+    routeName: "",
     pickupAddress: "",
     pickupCity: "",
     pickupState: "",
@@ -168,6 +171,7 @@ export default function EditLoadPage() {
         };
 
         setForm({
+          routeName: load.routeName || "",
           pickupAddress: load.pickupAddress || "",
           pickupCity: load.pickupCity || "",
           pickupState: load.pickupState || "",
@@ -281,6 +285,7 @@ export default function EditLoadPage() {
   const validate = () => {
     const errors: Record<string, string> = {};
 
+    if (!form.routeName) errors.routeName = "Naziv rute je obavezan";
     if (!form.pickupAddress) errors.pickupAddress = "Pickup adresa je obavezna";
     if (!form.pickupCity) errors.pickupCity = "Pickup grad je obavezan";
     if (!form.pickupState) errors.pickupState = "Pickup država je obavezna";
@@ -319,6 +324,7 @@ export default function EditLoadPage() {
       setError("");
 
       const body = {
+        routeName: form.routeName,
         pickupAddress: form.pickupAddress,
         pickupCity: form.pickupCity,
         pickupState: form.pickupState,
@@ -506,6 +512,20 @@ export default function EditLoadPage() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-dark-700 mb-1">
+                Naziv rute
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                value={form.routeName}
+                onChange={(e) => updateField("routeName", e.target.value)}
+              />
+              {fieldErrors.routeName && (
+                <p className="text-xs text-red-600 mt-1">{fieldErrors.routeName}</p>
+              )}
+            </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1">
                 Planirani pickup datum/vrijeme

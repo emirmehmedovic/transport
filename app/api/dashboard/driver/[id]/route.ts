@@ -93,6 +93,7 @@ export async function GET(
         select: {
           id: true,
           loadNumber: true,
+          routeName: true,
           status: true,
           pickupCity: true,
           pickupState: true,
@@ -146,6 +147,7 @@ export async function GET(
         select: {
           id: true,
           loadNumber: true,
+          routeName: true,
           status: true,
           pickupCity: true,
           deliveryCity: true,
@@ -166,6 +168,7 @@ export async function GET(
         select: {
           id: true,
           loadNumber: true,
+          routeName: true,
           status: true,
           pickupCity: true,
           pickupState: true,

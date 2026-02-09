@@ -81,6 +81,7 @@ interface LoadVehicle {
   isOperable: boolean;
   damageNotes: string | null;
   actualDeliveryDate?: string | null;
+  pickupStopSequence?: number | null;
 }
 
 interface LoadStop {
@@ -97,11 +98,14 @@ interface LoadStop {
   contactPhone?: string | null;
   scheduledDate?: string | null;
   actualDate?: string | null;
+  items?: string | null;
 }
 
 interface LoadDetail {
   id: string;
   loadNumber: string;
+  routeName?: string | null;
+  cargoType?: "LABUDICA" | "CISTERNA" | "TERET";
   status: string;
   createdAt?: string;
   assignedAt?: string | null;
@@ -153,6 +157,18 @@ interface LoadDetail {
     model: string | null;
   } | null;
   vehicles: LoadVehicle[];
+  cargoItems?: {
+    id: string;
+    name?: string | null;
+    quantity?: number | null;
+    unit?: string | null;
+    weightKg?: number | null;
+    volumeLiters?: number | null;
+    volumeM3?: number | null;
+    pallets?: number | null;
+    notes?: string | null;
+    pickupStopSequence?: number | null;
+  }[];
   stops?: LoadStop[];
 }
 
@@ -502,6 +518,15 @@ export default function LoadDetailPage() {
       value: formatDateTime(load.scheduledDeliveryDate),
     },
     {
+      label: "Tip tereta",
+      value:
+        load.cargoType === "LABUDICA"
+          ? "Labudica (vozila)"
+          : load.cargoType === "CISTERNA"
+          ? "Cisterna (tekućine)"
+          : "Teret / palete",
+    },
+    {
       label: "Udaljenost",
       value: `${load.distance} km • Deadhead ${load.deadheadMiles} km`,
     },
@@ -525,8 +550,8 @@ export default function LoadDetailPage() {
       )}
       <PageHeader
         icon={Package}
-        title={load.loadNumber}
-        subtitle="Detalji loada"
+        title={load.routeName || load.loadNumber}
+        subtitle={load.routeName ? `Load #${load.loadNumber}` : "Detalji loada"}
         actions={
           <div className="flex flex-wrap items-center gap-2 justify-end">
             <LoadStatusBadge status={load.status} />
@@ -892,6 +917,53 @@ export default function LoadDetailPage() {
                         <br />
                         {stop.city}, {stop.state} {stop.zip}
                       </p>
+                      {load.cargoType === "LABUDICA" && (
+                        <>
+                          {load.vehicles.filter((v) => v.pickupStopSequence === stop.sequence).length > 0 && (
+                            <div className="mt-2 text-xs text-dark-700">
+                              <p className="font-semibold">Vozila na ovom stopu:</p>
+                              <ul className="mt-1 space-y-1">
+                                {load.vehicles
+                                  .filter((v) => v.pickupStopSequence === stop.sequence)
+                                  .map((v) => (
+                                    <li key={v.id}>
+                                      {v.make || "Vozilo"} {v.model || ""} {v.year || ""}
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {load.cargoType !== "LABUDICA" && load.cargoItems && (
+                        <>
+                          {load.cargoItems.filter((i) => i.pickupStopSequence === stop.sequence).length > 0 && (
+                            <div className="mt-2 text-xs text-dark-700">
+                              <p className="font-semibold">Teret na ovom stopu:</p>
+                              <ul className="mt-1 space-y-1">
+                                {load.cargoItems
+                                  .filter((i) => i.pickupStopSequence === stop.sequence)
+                                  .map((item) => (
+                                    <li key={item.id}>
+                                      {item.name || "Teret"}
+                                      {item.quantity ? ` • ${item.quantity}` : ""}
+                                      {item.unit ? ` ${item.unit}` : ""}
+                                      {item.volumeLiters ? ` • ${item.volumeLiters} L` : ""}
+                                      {item.volumeM3 ? ` • ${item.volumeM3} m3` : ""}
+                                      {item.weightKg ? ` • ${item.weightKg} kg` : ""}
+                                      {item.pallets ? ` • ${item.pallets} pal` : ""}
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {stop.items && (
+                        <p className="text-xs text-dark-600 mt-2">
+                          <span className="font-medium">Preuzimanje:</span> {stop.items}
+                        </p>
+                      )}
                       {(stop.contactName || stop.contactPhone) && (
                         <p className="text-xs text-dark-600 mt-2">
                           {stop.contactName || "Kontakt"} {stop.contactPhone ? `• ${stop.contactPhone}` : ""}

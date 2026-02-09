@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/authContext";
 interface Load {
   id: string;
   loadNumber: string;
+  routeName?: string | null;
   status: string;
   scheduledPickupDate: string | null;
   scheduledDeliveryDate: string | null;
@@ -257,22 +258,22 @@ export default function LoadsPage() {
 
       <PageHeader
         icon={Package}
-        title="Loadovi"
-        subtitle="Pregled svih loadova sa filtriranjem po statusu i paginacijom"
+        title="Rute/Transporti"
+        subtitle="Pregled svih ruta i transporta sa filtriranjem po statusu i paginacijom"
         actions={
           <button
             onClick={() => router.push("/loads/new")}
             className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
-            Kreiraj load
+            Kreiraj rutu
           </button>
         }
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10">
             <p className="text-[10px] md:text-xs font-semibold text-dark-200 uppercase tracking-wide">
-              Ukupno loadova
+              Ukupno ruta
             </p>
             <p className="text-xl md:text-2xl font-bold mt-1">{totalLoads}</p>
           </div>
@@ -333,7 +334,7 @@ export default function LoadsPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
           <input
             type="text"
-            placeholder="Pretraži po broju loada..."
+            placeholder="Pretraži po broju rute..."
             className="flex-1 sm:flex-none sm:w-64 rounded-lg md:rounded-xl border border-dark-200 bg-white px-3 py-2 text-xs md:text-sm text-dark-900 placeholder:text-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -358,14 +359,14 @@ export default function LoadsPage() {
       {/* Loads Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Svi loadovi ({loads.length})</CardTitle>
+          <CardTitle>Sve rute/transporti ({loads.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="md:hidden space-y-3">
             {loads.length === 0 ? (
               <div className="text-center py-10">
                 <Package className="w-12 h-12 text-dark-300 mx-auto mb-4" />
-                <p className="text-dark-500">Nema loadova u sistemu</p>
+                <p className="text-dark-500">Nema ruta u sistemu</p>
               </div>
             ) : (
               loads.map((load) => (
@@ -375,8 +376,13 @@ export default function LoadsPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-xs text-dark-400">Load</p>
-                      <p className="font-semibold text-dark-900 truncate">{load.loadNumber}</p>
+                      <p className="text-xs text-dark-400">Ruta/transport</p>
+                      <p className="font-semibold text-dark-900 truncate">
+                        {load.routeName || load.loadNumber}
+                      </p>
+                      {load.routeName && (
+                        <p className="text-[10px] text-dark-400">Broj #{load.loadNumber}</p>
+                      )}
                       <p className="text-xs text-dark-500 mt-1">
                         {formatDate(load.scheduledPickupDate)} → {formatDate(load.scheduledDeliveryDate)}
                       </p>
@@ -436,13 +442,13 @@ export default function LoadsPage() {
               emptyState={
                 <div>
                   <Package className="w-12 h-12 text-dark-300 mx-auto mb-4" />
-                  <p className="text-dark-500">Nema loadova u sistemu</p>
+                  <p className="text-dark-500">Nema ruta u sistemu</p>
                 </div>
               }
               columns={[
                 {
                   key: "load",
-                  header: "Load",
+                  header: "Ruta/transport",
                   className: "min-w-[180px]",
                   render: (load) => (
                     <div className="flex items-center gap-2 md:gap-3">
@@ -451,8 +457,13 @@ export default function LoadsPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium text-dark-900 text-xs md:text-sm truncate">
-                          {load.loadNumber}
+                          {load.routeName || load.loadNumber}
                         </p>
+                        {load.routeName && (
+                          <p className="text-[10px] md:text-xs text-dark-400 truncate">
+                            Broj #{load.loadNumber}
+                          </p>
+                        )}
                         {load.isRecurring && load.recurringGroupId && (
                           <div className="mt-1 flex items-center gap-2 text-[10px] md:text-xs text-primary-700">
                             <span className="inline-flex items-center rounded-full bg-primary-50 px-1.5 md:px-2 py-0.5 border border-primary-200">

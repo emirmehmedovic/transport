@@ -38,6 +38,12 @@ enum LoadStopType {
   INTERMEDIATE
 }
 
+enum LoadCargoType {
+  LABUDICA
+  CISTERNA
+  TERET
+}
+
 enum VehicleSize {
   SMALL // sedan, hatchback
   MEDIUM // mid-size SUV
@@ -498,6 +504,8 @@ model TollPermit {
 model Load {
   id         String @id @default(cuid())
   loadNumber String @unique
+  routeName  String?
+  cargoType  LoadCargoType @default(TERET)
 
   // Assignment
   driverId String?
@@ -558,6 +566,7 @@ model Load {
 
   // Relations
   vehicles  Vehicle[]
+  cargoItems LoadCargoItem[]
   documents Document[]
   stops     LoadStop[]
   incidents Incident[]
@@ -587,6 +596,7 @@ model LoadStop {
 
   contactName  String?
   contactPhone String?
+  items        String? @db.Text
 
   scheduledDate DateTime?
   actualDate    DateTime?
@@ -597,6 +607,29 @@ model LoadStop {
   @@index([loadId])
   @@index([type])
   @@index([sequence])
+}
+
+model LoadCargoItem {
+  id     String @id @default(cuid())
+  loadId String
+  load   Load   @relation(fields: [loadId], references: [id], onDelete: Cascade)
+
+  pickupStopSequence Int?
+
+  name        String? @db.Text
+  quantity    Float?
+  unit        String?
+  weightKg    Float?
+  volumeLiters Float?
+  volumeM3    Float?
+  pallets     Int?
+  notes       String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([loadId])
+  @@index([pickupStopSequence])
 }
 
 model SchengenDay {
@@ -620,6 +653,7 @@ model Vehicle {
   id     String @id @default(cuid())
   loadId String
   load   Load   @relation(fields: [loadId], references: [id], onDelete: Cascade)
+  pickupStopSequence Int?
 
   // Vehicle Info
   vin   String
@@ -637,6 +671,7 @@ model Vehicle {
   updatedAt DateTime @updatedAt
 
   @@index([loadId])
+  @@index([pickupStopSequence])
 }
 
 model Document {

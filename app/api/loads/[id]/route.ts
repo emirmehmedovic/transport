@@ -50,6 +50,9 @@ export async function GET(
           },
         },
         vehicles: true,
+        cargoItems: {
+          orderBy: { pickupStopSequence: "asc" },
+        },
         stops: {
           orderBy: { sequence: "asc" },
         },
@@ -143,6 +146,9 @@ export async function PUT(
       estimatedDurationHours,
       notes,
       specialInstructions,
+      routeName,
+      cargoType,
+      cargoItems,
       driverId,
       truckId,
       status,
@@ -206,6 +212,8 @@ export async function PUT(
           : null,
         notes,
         specialInstructions,
+        routeName: routeName !== undefined ? (routeName ? routeName.trim() : null) : existing.routeName,
+        cargoType: cargoType || existing.cargoType,
         driverId: driverId || null,
         truckId: truckId || null,
         status: status || existing.status,
@@ -229,8 +237,25 @@ export async function PUT(
                     : null,
                 contactName: stop.contactName || null,
                 contactPhone: stop.contactPhone || null,
+                items: stop.items || null,
                 scheduledDate: stop.scheduledDate ? new Date(stop.scheduledDate) : null,
                 actualDate: stop.actualDate ? new Date(stop.actualDate) : null,
+              })),
+            }
+          : undefined,
+        cargoItems: Array.isArray(cargoItems)
+          ? {
+              deleteMany: {},
+              create: cargoItems.map((item: any) => ({
+                name: item.name || null,
+                quantity: item.quantity ? parseFloat(item.quantity) : null,
+                unit: item.unit || null,
+                weightKg: item.weightKg ? parseFloat(item.weightKg) : null,
+                volumeLiters: item.volumeLiters ? parseFloat(item.volumeLiters) : null,
+                volumeM3: item.volumeM3 ? parseFloat(item.volumeM3) : null,
+                pallets: item.pallets ? parseInt(item.pallets) : null,
+                notes: item.notes || null,
+                pickupStopSequence: item.pickupStopSequence ?? null,
               })),
             }
           : undefined,

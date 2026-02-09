@@ -207,6 +207,9 @@ export async function POST(req: NextRequest) {
       estimatedDurationHours,
       notes,
       specialInstructions,
+      routeName,
+      cargoType,
+      cargoItems,
       driverId,
       truckId,
       vehicles,
@@ -230,7 +233,9 @@ export async function POST(req: NextRequest) {
       !deliveryContactPhone ||
       !scheduledDeliveryDate ||
       !distance ||
-      !loadRate
+      !loadRate ||
+      !routeName ||
+      !cargoType
     ) {
       return NextResponse.json(
         { error: "Sva obavezna polja moraju biti popunjena" },
@@ -324,6 +329,8 @@ export async function POST(req: NextRequest) {
           : null,
         notes,
         specialInstructions,
+        routeName: routeName ? routeName.trim() : null,
+        cargoType,
         driverId: driverId || null,
         truckId: truckId || null,
         status: driverId && truckId ? "ASSIGNED" : "AVAILABLE",
@@ -339,6 +346,22 @@ export async function POST(req: NextRequest) {
                 size: v.size,
                 isOperable: v.isOperable !== undefined ? v.isOperable : true,
                 damageNotes: v.damageNotes || null,
+                pickupStopSequence: v.pickupStopSequence ?? null,
+              })),
+            }
+          : undefined,
+        cargoItems: Array.isArray(cargoItems) && cargoItems.length > 0
+          ? {
+              create: cargoItems.map((item: any) => ({
+                name: item.name || null,
+                quantity: item.quantity ? parseFloat(item.quantity) : null,
+                unit: item.unit || null,
+                weightKg: item.weightKg ? parseFloat(item.weightKg) : null,
+                volumeLiters: item.volumeLiters ? parseFloat(item.volumeLiters) : null,
+                volumeM3: item.volumeM3 ? parseFloat(item.volumeM3) : null,
+                pallets: item.pallets ? parseInt(item.pallets) : null,
+                notes: item.notes || null,
+                pickupStopSequence: item.pickupStopSequence ?? null,
               })),
             }
           : undefined,
@@ -360,6 +383,7 @@ export async function POST(req: NextRequest) {
                 : null,
             contactName: stop.contactName || null,
             contactPhone: stop.contactPhone || null,
+            items: stop.items || null,
             scheduledDate: stop.scheduledDate ? new Date(stop.scheduledDate) : null,
           })),
         },

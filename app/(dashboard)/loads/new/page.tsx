@@ -52,6 +52,8 @@ const RouteMap = dynamic(
 );
 
 interface LoadFormState {
+  cargoType: "LABUDICA" | "CISTERNA" | "TERET";
+  routeName: string;
   scheduledPickupDate: string;
   scheduledDeliveryDate: string;
   pickupAddress: string;
@@ -116,6 +118,7 @@ interface VehicleForm {
   size: "SMALL" | "MEDIUM" | "LARGE" | "OVERSIZED";
   isOperable: boolean;
   damageNotes: string;
+  pickupStopSequence?: number | null;
 }
 
 interface StopForm {
@@ -129,8 +132,29 @@ interface StopForm {
   contactName: string;
   contactPhone: string;
   scheduledDate: string;
+  items: string;
 }
 
+interface LiquidCargoItem {
+  id: string;
+  name: string;
+  volumeLiters: string;
+  weightKg: string;
+  notes: string;
+  pickupStopSequence?: number | null;
+}
+
+interface StandardCargoItem {
+  id: string;
+  name: string;
+  quantity: string;
+  unit: string;
+  weightKg: string;
+  volumeM3: string;
+  pallets: string;
+  notes: string;
+  pickupStopSequence?: number | null;
+}
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const stepsConfig: {
@@ -143,31 +167,31 @@ const stepsConfig: {
     id: 1,
     badge: "Osnovno",
     headline: "Korak 1: Osnovne informacije",
-    description: "Planirajte termine pickup i delivery događaja te unesite bazne podatke.",
+    description: "Odaberite tip tereta, unesite naziv rute i planirajte termine.",
   },
   {
     id: 2,
-    badge: "Pickup",
-    headline: "Korak 2: Pickup detalji",
-    description: "Precizno definišite lokaciju preuzimanja i ključne kontakt informacije.",
+    badge: "Teret",
+    headline: "Korak 2: Teret / vozila",
+    description: "Dodajte vozila ili teretne stavke u skladu sa tipom loada.",
   },
   {
     id: 3,
-    badge: "Delivery",
-    headline: "Korak 3: Delivery detalji",
-    description: "Unesite destinaciju isporuke i osobe zadužene za prijem.",
+    badge: "Pickup",
+    headline: "Korak 3: Pickup detalji",
+    description: "Precizno definišite lokacije preuzimanja i ključne kontakt informacije.",
   },
   {
     id: 4,
-    badge: "Finansije",
-    headline: "Korak 4: Finansije i napomene",
-    description: "Izračunajte udaljenost, definirajte iznose i dodajte interne napomene.",
+    badge: "Delivery",
+    headline: "Korak 4: Delivery detalji i stopovi",
+    description: "Unesite destinaciju isporuke, dodatne stopove i dodjele tereta po lokaciji.",
   },
   {
     id: 5,
-    badge: "Vozila",
-    headline: "Korak 5: Vozila",
-    description: "Dodajte sva vozila koja se transportuju na ovom loadu.",
+    badge: "Finansije",
+    headline: "Korak 5: Finansije i napomene",
+    description: "Izračunajte udaljenost, definirajte iznose i dodajte interne napomene.",
   },
   {
     id: 6,
@@ -255,6 +279,8 @@ export default function CreateLoadPage() {
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
 
   const [form, setForm] = useState<LoadFormState>({
+    cargoType: "TERET",
+    routeName: "",
     scheduledPickupDate: "",
     scheduledDeliveryDate: "",
     pickupAddress: "",
@@ -283,6 +309,8 @@ export default function CreateLoadPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [vehicles, setVehicles] = useState<VehicleForm[]>([]);
+  const [liquidItems, setLiquidItems] = useState<LiquidCargoItem[]>([]);
+  const [cargoItems, setCargoItems] = useState<StandardCargoItem[]>([]);
   const [vehicleForm, setVehicleForm] = useState<VehicleForm>({
     id: "",
     vin: "",
@@ -297,6 +325,7 @@ export default function CreateLoadPage() {
   const [vehicleErrors, setVehicleErrors] = useState<Record<string, string>>({});
 
   const [intermediateStops, setIntermediateStops] = useState<StopForm[]>([]);
+  const [assignAllToFirstPickup, setAssignAllToFirstPickup] = useState(true);
 
   const [drivers, setDrivers] = useState<DriverOption[]>([]);
   const [trucks, setTrucks] = useState<TruckOption[]>([]);
@@ -400,15 +429,18 @@ export default function CreateLoadPage() {
     const errors: Record<string, string> = {};
 
     if (currentStep === 1) {
-      if (!form.scheduledPickupDate) {
-        errors.scheduledPickupDate = "Planirani pickup datum/vrijeme je obavezan";
-      }
+    if (!form.routeName) {
+      errors.routeName = "Naziv rute je obavezan";
+    }
+    if (!form.scheduledPickupDate) {
+      errors.scheduledPickupDate = "Planirani pickup datum/vrijeme je obavezan";
+    }
       if (!form.scheduledDeliveryDate) {
         errors.scheduledDeliveryDate = "Planirani delivery datum/vrijeme je obavezan";
       }
     }
 
-    if (currentStep === 2) {
+    if (currentStep === 3) {
       if (!form.pickupAddress) errors.pickupAddress = "Pickup adresa je obavezna";
       if (!form.pickupCity) errors.pickupCity = "Pickup grad je obavezan";
       if (!form.pickupState) errors.pickupState = "Pickup država je obavezna";
@@ -419,7 +451,7 @@ export default function CreateLoadPage() {
         errors.pickupContactPhone = "Telefon kontakt osobe za pickup je obavezan";
     }
 
-    if (currentStep === 3) {
+    if (currentStep === 4) {
       if (!form.deliveryAddress) errors.deliveryAddress = "Delivery adresa je obavezna";
       if (!form.deliveryCity) errors.deliveryCity = "Delivery grad je obavezan";
       if (!form.deliveryState) errors.deliveryState = "Delivery država je obavezna";
@@ -443,14 +475,27 @@ export default function CreateLoadPage() {
           errors.intermediateStops = "Svi dodatni stopovi moraju imati punu lokaciju";
         }
       }
+
+      if (!assignAllToFirstPickup) {
+        const missingAssignments =
+          (form.cargoType === "LABUDICA" &&
+            vehicles.some((v) => !v.pickupStopSequence)) ||
+          (form.cargoType === "CISTERNA" &&
+            liquidItems.some((i) => !i.pickupStopSequence)) ||
+          (form.cargoType === "TERET" &&
+            cargoItems.some((i) => !i.pickupStopSequence));
+        if (missingAssignments) {
+          errors.stopAssignments = "Dodijelite teret na pickup stopove.";
+        }
+      }
     }
 
-    if (currentStep === 4) {
+    if (currentStep === 5) {
       if (!form.distance) errors.distance = "Udaljenost je obavezna";
       if (!form.loadRate) errors.loadRate = "Iznos loada je obavezan";
     }
 
-    if (currentStep === 6 && selectedTruckId && vehicles.length > 0) {
+    if (currentStep === 6 && selectedTruckId && vehicles.length > 0 && form.cargoType === "LABUDICA") {
       const truck = trucks.find((t) => t.id === selectedTruckId);
       if (truck) {
         const counts = getVehicleSizeCounts(vehicles);
@@ -500,6 +545,28 @@ export default function CreateLoadPage() {
       setSubmitting(true);
       setError("");
 
+      const cargoPayload =
+        form.cargoType === "CISTERNA"
+          ? liquidItems.map((item) => ({
+              name: item.name,
+              volumeLiters: item.volumeLiters,
+              weightKg: item.weightKg,
+              notes: item.notes,
+              pickupStopSequence: item.pickupStopSequence,
+            }))
+          : form.cargoType === "TERET"
+          ? cargoItems.map((item) => ({
+              name: item.name,
+              quantity: item.quantity,
+              unit: item.unit,
+              weightKg: item.weightKg,
+              volumeM3: item.volumeM3,
+              pallets: item.pallets,
+              notes: item.notes,
+              pickupStopSequence: item.pickupStopSequence,
+            }))
+          : [];
+
       const res = await fetch("/api/loads", {
         method: "POST",
         headers: {
@@ -510,16 +577,21 @@ export default function CreateLoadPage() {
           estimatedDurationHours: form.estimatedDurationHours,
           driverId: selectedDriverId || null,
           truckId: selectedTruckId || null,
-          vehicles: vehicles.map((v) => ({
-            vin: v.vin,
-            make: v.make,
-            model: v.model,
-            year: v.year,
-            color: v.color,
-            size: v.size,
-            isOperable: v.isOperable,
-            damageNotes: v.damageNotes,
-          })),
+          vehicles:
+            form.cargoType === "LABUDICA"
+              ? vehicles.map((v) => ({
+                  vin: v.vin,
+                  make: v.make,
+                  model: v.model,
+                  year: v.year,
+                  color: v.color,
+                  size: v.size,
+                  isOperable: v.isOperable,
+                  damageNotes: v.damageNotes,
+                  pickupStopSequence: v.pickupStopSequence,
+                }))
+              : [],
+          cargoItems: cargoPayload,
           stops: [
             {
               type: "PICKUP",
@@ -533,6 +605,7 @@ export default function CreateLoadPage() {
               contactName: form.pickupContactName,
               contactPhone: form.pickupContactPhone,
               scheduledDate: form.scheduledPickupDate,
+              items: null,
             },
             ...intermediateStops.map((s, idx) => ({
               type: "INTERMEDIATE",
@@ -546,6 +619,7 @@ export default function CreateLoadPage() {
               contactName: s.contactName || null,
               contactPhone: s.contactPhone || null,
               scheduledDate: s.scheduledDate || null,
+              items: s.items || null,
             })),
             {
               type: "DELIVERY",
@@ -559,6 +633,7 @@ export default function CreateLoadPage() {
               contactName: form.deliveryContactName,
               contactPhone: form.deliveryContactPhone,
               scheduledDate: form.scheduledDeliveryDate,
+              items: null,
             },
           ],
         }),
@@ -604,6 +679,7 @@ export default function CreateLoadPage() {
       {
         ...vehicleForm,
         id: `${Date.now()}-${prev.length + 1}`,
+        pickupStopSequence: assignAllToFirstPickup ? 1 : null,
       },
     ]);
     setVehicleForm({
@@ -624,22 +700,80 @@ export default function CreateLoadPage() {
     setVehicles((prev) => prev.filter((v) => v.id !== id));
   };
 
-  const addIntermediateStop = () => {
-    setIntermediateStops((prev) => [
+  const updateVehicleField = (id: string, field: keyof VehicleForm, value: string | number | boolean | null) => {
+    setVehicles((prev) =>
+      prev.map((v) => (v.id === id ? { ...v, [field]: value } : v))
+    );
+  };
+
+  const addLiquidItem = () => {
+    setLiquidItems((prev) => [
       ...prev,
       {
         id: `${Date.now()}-${prev.length + 1}`,
-        address: "",
-        city: "",
-        state: "",
-        zip: "",
-        latitude: undefined,
-        longitude: undefined,
-        contactName: "",
-        contactPhone: "",
-        scheduledDate: "",
+        name: "",
+        volumeLiters: "",
+        weightKg: "",
+        notes: "",
+        pickupStopSequence: assignAllToFirstPickup ? 1 : null,
       },
     ]);
+  };
+
+  const updateLiquidItem = (id: string, field: keyof LiquidCargoItem, value: string | number | null) => {
+    setLiquidItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const removeLiquidItem = (id: string) => {
+    setLiquidItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const addCargoItem = () => {
+    setCargoItems((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${prev.length + 1}`,
+        name: "",
+        quantity: "",
+        unit: "",
+        weightKg: "",
+        volumeM3: "",
+        pallets: "",
+        notes: "",
+        pickupStopSequence: assignAllToFirstPickup ? 1 : null,
+      },
+    ]);
+  };
+
+  const updateCargoItem = (id: string, field: keyof StandardCargoItem, value: string | number | null) => {
+    setCargoItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const removeCargoItem = (id: string) => {
+    setCargoItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const addIntermediateStop = () => {
+      setIntermediateStops((prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-${prev.length + 1}`,
+          address: "",
+          city: "",
+          state: "",
+          zip: "",
+          latitude: undefined,
+          longitude: undefined,
+          contactName: "",
+          contactPhone: "",
+          scheduledDate: "",
+          items: "",
+        },
+      ]);
   };
 
   const removeIntermediateStop = (id: string) => {
@@ -673,6 +807,31 @@ export default function CreateLoadPage() {
     );
   };
 
+  useEffect(() => {
+    if (!assignAllToFirstPickup) return;
+    setVehicles((prev) => prev.map((v) => ({ ...v, pickupStopSequence: 1 })));
+    setLiquidItems((prev) => prev.map((i) => ({ ...i, pickupStopSequence: 1 })));
+    setCargoItems((prev) => prev.map((i) => ({ ...i, pickupStopSequence: 1 })));
+  }, [assignAllToFirstPickup]);
+
+  useEffect(() => {
+    if (form.cargoType === "LABUDICA") {
+      setLiquidItems([]);
+      setCargoItems([]);
+      setAssignAllToFirstPickup(true);
+      return;
+    }
+    if (form.cargoType === "CISTERNA") {
+      setVehicles([]);
+      setCargoItems([]);
+      setAssignAllToFirstPickup(true);
+      return;
+    }
+    setVehicles([]);
+    setLiquidItems([]);
+    setAssignAllToFirstPickup(true);
+  }, [form.cargoType]);
+
   const renderStep = () => {
     if (step === 1) {
       return (
@@ -680,7 +839,49 @@ export default function CreateLoadPage() {
           <p className="text-sm text-dark-600">
             Broj loada će biti automatski generisan (LOAD-YYYY-####) nakon spremanja.
           </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-dark-700 mb-1">
+                Naziv rute <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="npr. Tuzla → Hamburg (Auto-dijelovi)"
+                value={form.routeName}
+                onChange={(e) => updateField("routeName", e.target.value)}
+              />
+              {fieldErrors.routeName && (
+                <p className="text-xs text-red-600 mt-1">
+                  {fieldErrors.routeName}
+                </p>
+              )}
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-dark-700 mb-2">
+                Tip tereta <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { value: "LABUDICA", label: "Labudica (vozila)" },
+                  { value: "CISTERNA", label: "Cisterna (tekućine)" },
+                  { value: "TERET", label: "Teret / palete" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateField("cargoType", option.value)}
+                    className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+                      form.cargoType === option.value
+                        ? "border-primary-600 bg-primary-50 text-primary-700"
+                        : "border-dark-200 bg-white text-dark-700 hover:border-dark-400"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1">
                 Planirani pickup datum/vrijeme
@@ -721,8 +922,325 @@ export default function CreateLoadPage() {
     if (step === 2) {
       return (
         <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-dark-900">Teret / vozila</h2>
+          {form.cargoType === "LABUDICA" && (
+            <>
+              <p className="text-sm text-dark-600">
+                Dodajte vozila koja se prevoze na ovom loadu.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">VIN</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={vehicleForm.vin}
+                    onChange={(e) => setVehicleForm((prev) => ({ ...prev, vin: e.target.value }))}
+                  />
+                  {vehicleErrors.vin && (
+                    <p className="text-xs text-red-600 mt-1">{vehicleErrors.vin}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">
+                    Proizvođač (make)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={vehicleForm.make}
+                    onChange={(e) => setVehicleForm((prev) => ({ ...prev, make: e.target.value }))}
+                  />
+                  {vehicleErrors.make && (
+                    <p className="text-xs text-red-600 mt-1">{vehicleErrors.make}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">Model</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={vehicleForm.model}
+                    onChange={(e) => setVehicleForm((prev) => ({ ...prev, model: e.target.value }))}
+                  />
+                  {vehicleErrors.model && (
+                    <p className="text-xs text-red-600 mt-1">{vehicleErrors.model}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">Godina</label>
+                  <input
+                    type="number"
+                    className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={vehicleForm.year}
+                    onChange={(e) => setVehicleForm((prev) => ({ ...prev, year: e.target.value }))}
+                  />
+                  {vehicleErrors.year && (
+                    <p className="text-xs text-red-600 mt-1">{vehicleErrors.year}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">Boja</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={vehicleForm.color}
+                    onChange={(e) => setVehicleForm((prev) => ({ ...prev, color: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">Veličina</label>
+                  <select
+                    className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    value={vehicleForm.size}
+                    onChange={(e) =>
+                      setVehicleForm((prev) => ({ ...prev, size: e.target.value as VehicleForm["size"] }))
+                    }
+                  >
+                    <option value="SMALL">Malo vozilo</option>
+                    <option value="MEDIUM">Srednje vozilo</option>
+                    <option value="LARGE">Veliko vozilo</option>
+                    <option value="OVERSIZED">Preveliko vozilo</option>
+                  </select>
+                  {vehicleErrors.size && (
+                    <p className="text-xs text-red-600 mt-1">{vehicleErrors.size}</p>
+                  )}
+                </div>
+                <div className="md:col-span-2 flex items-center gap-2 mt-2">
+                  <input
+                    id="isOperable"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500"
+                    checked={vehicleForm.isOperable}
+                    onChange={(e) =>
+                      setVehicleForm((prev) => ({ ...prev, isOperable: e.target.checked }))
+                    }
+                  />
+                  <label htmlFor="isOperable" className="text-sm text-dark-800">
+                    Vozilo je operativno
+                  </label>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-dark-700 mb-1">
+                    Napomene o oštećenjima (opcionalno)
+                  </label>
+                  <textarea
+                    className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    rows={2}
+                    value={vehicleForm.damageNotes}
+                    onChange={(e) =>
+                      setVehicleForm((prev) => ({ ...prev, damageNotes: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-4">
+                <Button type="button" variant="outline" onClick={addVehicle}>
+                  Dodaj vozilo na listu
+                </Button>
+                <div className="w-64">
+                  <CapacityIndicator
+                    current={vehicles.length}
+                    max={8}
+                    label={`Broj vozila na loadu`}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6">
+                {vehicles.length === 0 ? (
+                  <p className="text-sm text-dark-500">
+                    Niste dodali nijedno vozilo. Možete dodati vozila sada ili kasnije iz
+                    detalja loada.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-dark-800">Dodana vozila</h3>
+                    <div className="space-y-2">
+                      {vehicles.map((v) => (
+                        <div
+                          key={v.id}
+                          className="flex items-center justify-between rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium text-dark-900">
+                              {v.make} {v.model} ({v.year})
+                            </p>
+                            <p className="text-xs text-dark-500">
+                              VIN: {v.vin} • {v.size} • {v.isOperable ? "Operativno" : "Neoperativno"}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeVehicle(v.id)}
+                          >
+                            Obriši
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {vehicles.length >= 7 && (
+                <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-yellow-800">
+                  Dodali ste veliki broj vozila na ovaj load. Provjerite da li odabrani kamion u
+                  sljedećem koraku ima dovoljan kapacitet.
+                </div>
+              )}
+            </>
+          )}
+
+          {form.cargoType === "CISTERNA" && (
+            <>
+              <p className="text-sm text-dark-600">
+                Dodajte tekućine koje se prevoze (polja su opcionalna).
+              </p>
+              <div className="space-y-3">
+                {liquidItems.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-dark-200 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-dark-900">Tekućina</p>
+                      <button
+                        type="button"
+                        className="text-xs text-red-600 hover:text-red-700"
+                        onClick={() => removeLiquidItem(item.id)}
+                      >
+                        Ukloni
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        placeholder="Vrsta tekućine"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.name}
+                        onChange={(e) => updateLiquidItem(item.id, "name", e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Volumen (L)"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.volumeLiters}
+                        onChange={(e) => updateLiquidItem(item.id, "volumeLiters", e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Masa (kg)"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.weightKg}
+                        onChange={(e) => updateLiquidItem(item.id, "weightKg", e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Napomena"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.notes}
+                        onChange={(e) => updateLiquidItem(item.id, "notes", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3">
+                <Button type="button" variant="outline" onClick={addLiquidItem}>
+                  + Dodaj tekućinu
+                </Button>
+              </div>
+            </>
+          )}
+
+          {form.cargoType === "TERET" && (
+            <>
+              <p className="text-sm text-dark-600">
+                Dodajte teretne stavke (palete, roba). Polja su opcionalna.
+              </p>
+              <div className="space-y-3">
+                {cargoItems.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-dark-200 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-dark-900">Teret</p>
+                      <button
+                        type="button"
+                        className="text-xs text-red-600 hover:text-red-700"
+                        onClick={() => removeCargoItem(item.id)}
+                      >
+                        Ukloni
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        placeholder="Naziv / opis robe"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.name}
+                        onChange={(e) => updateCargoItem(item.id, "name", e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Količina"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.quantity}
+                        onChange={(e) => updateCargoItem(item.id, "quantity", e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Jedinica (npr. kom, paleta)"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.unit}
+                        onChange={(e) => updateCargoItem(item.id, "unit", e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Masa (kg)"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.weightKg}
+                        onChange={(e) => updateCargoItem(item.id, "weightKg", e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Volumen (m3)"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.volumeM3}
+                        onChange={(e) => updateCargoItem(item.id, "volumeM3", e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Broj paleta"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.pallets}
+                        onChange={(e) => updateCargoItem(item.id, "pallets", e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Napomena"
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={item.notes}
+                        onChange={(e) => updateCargoItem(item.id, "notes", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3">
+                <Button type="button" variant="outline" onClick={addCargoItem}>
+                  + Dodaj teret
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    if (step === 3) {
+      return (
+        <div className="space-y-4">
           <h2 className="text-lg font-semibold text-dark-900">Pickup detalji</h2>
-          
+
           <LocationPicker
             label="Pickup lokacija"
             initialLocation={
@@ -738,7 +1256,6 @@ export default function CreateLoadPage() {
                 : undefined
             }
             onChange={(location) => {
-              console.log("✅ Pickup location onChange called with:", location);
               setForm((prev) => ({
                 ...prev,
                 pickupAddress: location.address,
@@ -750,7 +1267,7 @@ export default function CreateLoadPage() {
               }));
             }}
           />
-          
+
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-sm font-semibold text-blue-900 mb-3">
               📞 Kontakt informacije za pickup
@@ -796,11 +1313,19 @@ export default function CreateLoadPage() {
       );
     }
 
-    if (step === 3) {
+    if (step === 4) {
+      const pickupStops = [
+        { sequence: 1, label: `Pickup - ${form.pickupCity || "Pickup"}` },
+        ...intermediateStops.map((stop, idx) => ({
+          sequence: idx + 2,
+          label: `Stop ${idx + 1} - ${stop.city || stop.address || "Stop"}`,
+        })),
+      ];
+
       return (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold text-dark-900">Delivery detalji</h2>
-          
+
           <LocationPicker
             label="Delivery lokacija"
             initialLocation={
@@ -827,7 +1352,7 @@ export default function CreateLoadPage() {
               }));
             }}
           />
-          
+
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-sm font-semibold text-blue-900 mb-3">
               📞 Kontakt informacije za delivery
@@ -962,11 +1487,114 @@ export default function CreateLoadPage() {
               </div>
             ))}
           </div>
+
+          <div className="mt-6 rounded-2xl border border-dark-100 bg-dark-50 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-dark-900">Dodjela tereta po pickup stopovima</p>
+                <p className="text-xs text-dark-500">Odaberite na kojem stopu se preuzima teret.</p>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-dark-700">
+                <input
+                  type="checkbox"
+                  checked={assignAllToFirstPickup}
+                  onChange={(e) => setAssignAllToFirstPickup(e.target.checked)}
+                />
+                Sve preuzmi na prvom stopu
+              </label>
+            </div>
+            {fieldErrors.stopAssignments && (
+              <p className="text-xs text-red-600">{fieldErrors.stopAssignments}</p>
+            )}
+
+            {!assignAllToFirstPickup && pickupStops.length > 0 && (
+              <div className="space-y-4">
+                {pickupStops.map((stop) => (
+                  <div key={stop.sequence} className="rounded-xl border border-dark-200 bg-white p-4">
+                    <p className="text-sm font-semibold text-dark-900 mb-3">{stop.label}</p>
+                    {form.cargoType === "LABUDICA" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {vehicles.map((vehicle) => (
+                          <label key={vehicle.id} className="flex items-center gap-2 text-xs text-dark-700">
+                            <input
+                              type="checkbox"
+                              checked={vehicle.pickupStopSequence === stop.sequence}
+                              onChange={(e) =>
+                                updateVehicleField(
+                                  vehicle.id,
+                                  "pickupStopSequence",
+                                  e.target.checked ? stop.sequence : null
+                                )
+                              }
+                            />
+                            <span>
+                              {vehicle.make} {vehicle.model} ({vehicle.year})
+                            </span>
+                          </label>
+                        ))}
+                        {vehicles.length === 0 && (
+                          <p className="text-xs text-dark-500">Nema dodanih vozila.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {form.cargoType === "CISTERNA" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {liquidItems.map((item) => (
+                          <label key={item.id} className="flex items-center gap-2 text-xs text-dark-700">
+                            <input
+                              type="checkbox"
+                              checked={item.pickupStopSequence === stop.sequence}
+                              onChange={(e) =>
+                                updateLiquidItem(
+                                  item.id,
+                                  "pickupStopSequence",
+                                  e.target.checked ? stop.sequence : null
+                                )
+                              }
+                            />
+                            <span>{item.name || "Tekućina"}</span>
+                          </label>
+                        ))}
+                        {liquidItems.length === 0 && (
+                          <p className="text-xs text-dark-500">Nema dodanih tekućina.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {form.cargoType === "TERET" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {cargoItems.map((item) => (
+                          <label key={item.id} className="flex items-center gap-2 text-xs text-dark-700">
+                            <input
+                              type="checkbox"
+                              checked={item.pickupStopSequence === stop.sequence}
+                              onChange={(e) =>
+                                updateCargoItem(
+                                  item.id,
+                                  "pickupStopSequence",
+                                  e.target.checked ? stop.sequence : null
+                                )
+                              }
+                            />
+                            <span>{item.name || "Teret"}</span>
+                          </label>
+                        ))}
+                        {cargoItems.length === 0 && (
+                          <p className="text-xs text-dark-500">Nema dodanih stavki tereta.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       );
     }
 
-    if (step === 4) {
+    if (step === 5) {
       return (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold text-dark-900">Finansije i detalji loada</h2>
@@ -1000,7 +1628,6 @@ export default function CreateLoadPage() {
               </p>
             </div>
 
-            {/* Route Map - Show after calculation */}
             {routeCalculated && routeOptions.length > 0 && form.pickupLatitude && form.pickupLongitude && form.deliveryLatitude && form.deliveryLongitude && (
               <div className="md:col-span-2">
                 <h3 className="text-sm font-semibold text-dark-900 mb-3">🗺️ Predložene rute</h3>
@@ -1129,182 +1756,6 @@ export default function CreateLoadPage() {
       );
     }
 
-    if (step === 5) {
-      return (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-dark-900">Vozila na loadu</h2>
-        <p className="text-sm text-dark-600">
-          Dodajte vozila koja se prevoze na ovom loadu. Kapacitet je orijentaciono
-          prikazan ispod.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-dark-700 mb-1">VIN</label>
-            <input
-              type="text"
-              className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={vehicleForm.vin}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, vin: e.target.value }))}
-            />
-            {vehicleErrors.vin && (
-              <p className="text-xs text-red-600 mt-1">{vehicleErrors.vin}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-700 mb-1">
-              Proizvođač (make)
-            </label>
-            <input
-              type="text"
-              className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={vehicleForm.make}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, make: e.target.value }))}
-            />
-            {vehicleErrors.make && (
-              <p className="text-xs text-red-600 mt-1">{vehicleErrors.make}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-700 mb-1">Model</label>
-            <input
-              type="text"
-              className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={vehicleForm.model}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, model: e.target.value }))}
-            />
-            {vehicleErrors.model && (
-              <p className="text-xs text-red-600 mt-1">{vehicleErrors.model}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-700 mb-1">Godina</label>
-            <input
-              type="number"
-              className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={vehicleForm.year}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, year: e.target.value }))}
-            />
-            {vehicleErrors.year && (
-              <p className="text-xs text-red-600 mt-1">{vehicleErrors.year}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-700 mb-1">Boja</label>
-            <input
-              type="text"
-              className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={vehicleForm.color}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, color: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-700 mb-1">Veličina</label>
-            <select
-              className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={vehicleForm.size}
-              onChange={(e) =>
-                setVehicleForm((prev) => ({ ...prev, size: e.target.value as VehicleForm["size"] }))
-              }
-            >
-              <option value="SMALL">Malo vozilo</option>
-              <option value="MEDIUM">Srednje vozilo</option>
-              <option value="LARGE">Veliko vozilo</option>
-              <option value="OVERSIZED">Preveliko vozilo</option>
-            </select>
-            {vehicleErrors.size && (
-              <p className="text-xs text-red-600 mt-1">{vehicleErrors.size}</p>
-            )}
-          </div>
-          <div className="md:col-span-2 flex items-center gap-2 mt-2">
-            <input
-              id="isOperable"
-              type="checkbox"
-              className="h-4 w-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500"
-              checked={vehicleForm.isOperable}
-              onChange={(e) =>
-                setVehicleForm((prev) => ({ ...prev, isOperable: e.target.checked }))
-              }
-            />
-            <label htmlFor="isOperable" className="text-sm text-dark-800">
-              Vozilo je operativno
-            </label>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-dark-700 mb-1">
-              Napomene o oštećenjima (opcionalno)
-            </label>
-            <textarea
-              className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              rows={2}
-              value={vehicleForm.damageNotes}
-              onChange={(e) =>
-                setVehicleForm((prev) => ({ ...prev, damageNotes: e.target.value }))
-              }
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-4">
-          <Button type="button" variant="outline" onClick={addVehicle}>
-            Dodaj vozilo na listu
-          </Button>
-          <div className="w-64">
-            <CapacityIndicator
-              current={vehicles.length}
-              max={8}
-              label={`Broj vozila na loadu`}
-            />
-          </div>
-        </div>
-
-        <div className="mt-6">
-          {vehicles.length === 0 ? (
-            <p className="text-sm text-dark-500">
-              Niste dodali nijedno vozilo. Možete dodati vozila sada ili kasnije iz
-              detalja loada.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-dark-800">Dodana vozila</h3>
-              <div className="space-y-2">
-                {vehicles.map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-center justify-between rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm"
-                  >
-                    <div>
-                      <p className="font-medium text-dark-900">
-                        {v.make} {v.model} ({v.year})
-                      </p>
-                      <p className="text-xs text-dark-500">
-                        VIN: {v.vin} • {v.size} • {v.isOperable ? "Operativno" : "Neoperativno"}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeVehicle(v.id)}
-                    >
-                      Obriši
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        {vehicles.length >= 7 && (
-          <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-yellow-800">
-            Dodali ste veliki broj vozila na ovaj load. Provjerite da li odabrani kamion u
-            sljedećem koraku ima dovoljan kapacitet.
-          </div>
-        )}
-      </div>
-      );
-    }
-
     // Step 6: Assignment (optional)
     if (step === 6) {
       const availableTrucks = selectedDriverId
@@ -1316,8 +1767,8 @@ export default function CreateLoadPage() {
         : trucks;
 
       // Simple capacity warning based on number of vehicles
-      const isNearCapacity = vehicles.length >= 7;
-      const hasVehicles = vehicles.length > 0;
+      const isNearCapacity = form.cargoType === "LABUDICA" && vehicles.length >= 7;
+      const hasVehicles = form.cargoType === "LABUDICA" && vehicles.length > 0;
 
       const warningMessage =
         hasVehicles && isNearCapacity && selectedTruckId
@@ -1388,7 +1839,7 @@ export default function CreateLoadPage() {
             </div>
           )}
 
-          {!hasVehicles && (
+          {form.cargoType === "LABUDICA" && !hasVehicles && (
             <p className="text-xs text-dark-500">
               Niste dodali vozila u prethodnom koraku. Možete ih dodati kasnije iz
               detalja loada.
@@ -1416,6 +1867,17 @@ export default function CreateLoadPage() {
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-dark-800">Osnovne informacije</h3>
             <p className="text-sm text-dark-700">
+              <span className="font-medium">Naziv rute:</span> {form.routeName || "-"}
+            </p>
+            <p className="text-sm text-dark-700">
+              <span className="font-medium">Tip tereta:</span>{" "}
+              {form.cargoType === "LABUDICA"
+                ? "Labudica (vozila)"
+                : form.cargoType === "CISTERNA"
+                ? "Cisterna (tekućine)"
+                : "Teret / palete"}
+            </p>
+            <p className="text-sm text-dark-700">
               <span className="font-medium">Planirani pickup:</span>{" "}
               {form.scheduledPickupDate || "Nije uneseno"}
             </p>
@@ -1426,6 +1888,14 @@ export default function CreateLoadPage() {
             <p className="text-sm text-dark-700">
               <span className="font-medium">Dodatni stopovi:</span>{" "}
               {intermediateStops.length}
+            </p>
+            <p className="text-sm text-dark-700">
+              <span className="font-medium">Stavke tereta:</span>{" "}
+              {form.cargoType === "LABUDICA"
+                ? vehicles.length
+                : form.cargoType === "CISTERNA"
+                ? liquidItems.length
+                : cargoItems.length}
             </p>
           </div>
 
@@ -1488,29 +1958,83 @@ export default function CreateLoadPage() {
         </div>
 
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-dark-800">Vozila ({vehicles.length})</h3>
-          {vehicles.length === 0 ? (
-            <p className="text-sm text-dark-500">
-              Niste dodali vozila. Možete ih dodati kasnije iz detalja loada.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {vehicles.map((v) => (
-                <div
-                  key={v.id}
-                  className="flex items-center justify-between rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm"
-                >
-                  <div>
-                    <p className="font-medium text-dark-900">
-                      {v.make} {v.model} ({v.year})
-                    </p>
-                    <p className="text-xs text-dark-500">
-                      VIN: {v.vin} • {v.size} • {v.isOperable ? "Operativno" : "Neoperativno"}
-                    </p>
-                  </div>
+          {form.cargoType === "LABUDICA" && (
+            <>
+              <h3 className="text-sm font-semibold text-dark-800">Vozila ({vehicles.length})</h3>
+              {vehicles.length === 0 ? (
+                <p className="text-sm text-dark-500">
+                  Niste dodali vozila. Možete ih dodati kasnije iz detalja loada.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {vehicles.map((v) => (
+                    <div
+                      key={v.id}
+                      className="flex items-center justify-between rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm"
+                    >
+                      <div>
+                        <p className="font-medium text-dark-900">
+                          {v.make} {v.model} ({v.year})
+                        </p>
+                        <p className="text-xs text-dark-500">
+                          VIN: {v.vin} • {v.size} • {v.isOperable ? "Operativno" : "Neoperativno"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
+          )}
+
+          {form.cargoType === "CISTERNA" && (
+            <>
+              <h3 className="text-sm font-semibold text-dark-800">Tekućine ({liquidItems.length})</h3>
+              {liquidItems.length === 0 ? (
+                <p className="text-sm text-dark-500">Niste dodali tekućine.</p>
+              ) : (
+                <div className="space-y-2">
+                  {liquidItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm"
+                    >
+                      <p className="font-medium text-dark-900">{item.name || "Tekućina"}</p>
+                      <p className="text-xs text-dark-500">
+                        {item.volumeLiters ? `${item.volumeLiters} L` : "-"} •{" "}
+                        {item.weightKg ? `${item.weightKg} kg` : "-"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {form.cargoType === "TERET" && (
+            <>
+              <h3 className="text-sm font-semibold text-dark-800">Teret ({cargoItems.length})</h3>
+              {cargoItems.length === 0 ? (
+                <p className="text-sm text-dark-500">Niste dodali teretne stavke.</p>
+              ) : (
+                <div className="space-y-2">
+                  {cargoItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm"
+                    >
+                      <p className="font-medium text-dark-900">{item.name || "Teret"}</p>
+                      <p className="text-xs text-dark-500">
+                        {item.quantity ? `${item.quantity}` : "-"}{" "}
+                        {item.unit ? item.unit : ""}{" "}
+                        {item.pallets ? `• ${item.pallets} pal` : ""}{" "}
+                        {item.weightKg ? `• ${item.weightKg} kg` : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -1613,6 +2137,15 @@ export default function CreateLoadPage() {
         if (parsed.intermediateStops && Array.isArray(parsed.intermediateStops)) {
           setIntermediateStops(parsed.intermediateStops as StopForm[]);
         }
+        if (parsed.liquidItems && Array.isArray(parsed.liquidItems)) {
+          setLiquidItems(parsed.liquidItems as LiquidCargoItem[]);
+        }
+        if (parsed.cargoItems && Array.isArray(parsed.cargoItems)) {
+          setCargoItems(parsed.cargoItems as StandardCargoItem[]);
+        }
+        if (typeof parsed.assignAllToFirstPickup === "boolean") {
+          setAssignAllToFirstPickup(parsed.assignAllToFirstPickup);
+        }
         if (parsed.step && parsed.step >= 1 && parsed.step <= 7) {
           setStep(parsed.step as 1 | 2 | 3 | 4 | 5 | 6 | 7);
         }
@@ -1629,6 +2162,9 @@ export default function CreateLoadPage() {
       form,
       vehicles,
       intermediateStops,
+      liquidItems,
+      cargoItems,
+      assignAllToFirstPickup,
       selectedDriverId,
       selectedTruckId,
       step,
@@ -1638,7 +2174,7 @@ export default function CreateLoadPage() {
     } catch {
       // ignore storage errors
     }
-  }, [form, vehicles, intermediateStops, selectedDriverId, selectedTruckId, step]);
+  }, [form, vehicles, intermediateStops, liquidItems, cargoItems, assignAllToFirstPickup, selectedDriverId, selectedTruckId, step]);
 
   const totalSteps = stepsConfig.length;
   const currentStepMeta = stepsConfig.find((config) => config.id === step) ?? stepsConfig[0];

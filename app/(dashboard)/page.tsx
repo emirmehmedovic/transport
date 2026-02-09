@@ -106,6 +106,7 @@ type AdminDashboardResponse = {
 type DriverLoad = {
   id: string;
   loadNumber: string;
+  routeName?: string | null;
   status: string;
   pickupCity: string | null;
   pickupState: string | null;
@@ -162,6 +163,7 @@ type DriverDashboardResponse = {
   recentLoads: {
     id: string;
     loadNumber: string;
+    routeName?: string | null;
     status: string;
     pickupCity: string | null;
     deliveryCity: string | null;
@@ -623,7 +625,9 @@ function AdminDashboard({ user }: { user: AuthUser }) {
               ) : (
                  data?.activeLoads.map((load) => (
                     <tr key={load.id} className="hover:bg-dark-50/50 transition-colors">
-                       <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-dark-900 whitespace-nowrap">{load.loadNumber}</td>
+                      <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-dark-900 whitespace-nowrap">
+                        {load.routeName || load.loadNumber}
+                      </td>
                        <td className="px-3 md:px-6 py-3 md:py-4">
                           <div className="flex flex-col min-w-[150px]">
                             <span className="font-medium text-dark-900 text-[11px] md:text-sm">{load.pickupCity}, {load.pickupState}</span>
@@ -991,6 +995,12 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
   const allowedStatusOptions = data.currentLoad
     ? DRIVER_STATUS_FLOW[data.currentLoad.status] || []
     : [];
+  const primaryRoute = data.currentLoad ?? data.nextLoad;
+  const primaryRouteLabel = data.currentLoad
+    ? "Trenutna ruta"
+    : data.nextLoad
+    ? "Zadnja dodijeljena"
+    : null;
 
   return (
     <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
@@ -1064,6 +1074,11 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                 {data.currentLoad && (
                   <p className="text-dark-300 mt-1 text-sm md:text-base">
                     Load #{data.currentLoad.loadNumber}
+                    {data.currentLoad.routeName && (
+                      <span className="ml-2 text-dark-200">
+                        • {data.currentLoad.routeName}
+                      </span>
+                    )}
                   </p>
                 )}
               </div>
@@ -1133,6 +1148,11 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                   <p className="font-bold text-xl">
                     {data.nextLoad.pickupCity} → {data.nextLoad.deliveryCity}
                   </p>
+                  {data.nextLoad.routeName && (
+                    <p className="text-dark-200 text-sm mt-1">
+                      {data.nextLoad.routeName}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1166,6 +1186,25 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
 
         {/* Quick Actions & Status Panel */}
         <div className="xl:col-span-1 flex flex-col gap-4 md:gap-6">
+          {primaryRoute && primaryRouteLabel && (
+            <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-5 shadow-soft border border-dark-100">
+              <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-dark-500">
+                {primaryRouteLabel}
+              </p>
+              <p className="mt-1 text-sm md:text-base font-bold text-dark-900 truncate">
+                {primaryRoute.routeName || `Load #${primaryRoute.loadNumber}`}
+              </p>
+              <p className="text-xs text-dark-500 mt-1">
+                {primaryRoute.pickupCity} → {primaryRoute.deliveryCity}
+              </p>
+              <button
+                onClick={() => router.push(`/loads/${primaryRoute.id}`)}
+                className="mt-3 w-full rounded-xl border border-dark-200 bg-dark-900 text-white text-xs md:text-sm font-bold py-2 hover:bg-primary-600 transition-colors"
+              >
+                Otvori detalje rute
+              </button>
+            </div>
+          )}
           {data.currentLoad && (
             <button
               onClick={() => router.push(`/loads/${data.currentLoad!.id}?tab=documents`)}
