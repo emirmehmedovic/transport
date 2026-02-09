@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           loadNumber: true,
+          routeName: true,
           status: true,
           pickupCity: true,
           pickupState: true,

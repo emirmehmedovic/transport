@@ -89,6 +89,7 @@ type AdminDashboardResponse = {
   activeLoads: {
     id: string;
     loadNumber: string;
+    routeName?: string | null;
     status: string;
     pickupCity: string | null;
     pickupState: string | null;
