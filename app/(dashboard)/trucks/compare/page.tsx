@@ -123,12 +123,12 @@ export default function TrucksComparePage() {
       "Truck Number",
       "Truck Name",
       "Status",
-      "Total Miles",
+      "Total km",
       "Revenue Generated",
       "Loads Completed",
-      "Cost per Mile",
-      "Fuel Cost per Mile",
-      "Maintenance Cost per Mile",
+      "Trošak/km",
+      "Gorivo/km",
+      "Održavanje/km",
       "Uptime %",
       "Active Days",
     ];
@@ -160,9 +160,9 @@ export default function TrucksComparePage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("bs-BA", {
       style: "currency",
-      currency: "USD",
+      currency: "BAM",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
@@ -175,10 +175,10 @@ export default function TrucksComparePage() {
   // Prepare chart data
   const chartData = comparisons.map((c) => ({
     name: c.truckNumber,
-    "Total Miles": c.performance.totalMiles,
+    "Total km": c.performance.totalMiles,
     Revenue: c.performance.revenueGenerated,
     Loads: c.performance.loadsCompleted,
-    "Cost/Mile": c.performance.totalCostPerMile,
+    "Trošak/km": c.performance.totalCostPerMile,
     "Uptime %": c.performance.uptimePercentage,
   }));
 
@@ -316,19 +316,19 @@ export default function TrucksComparePage() {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-4 text-sm font-semibold text-dark-700">
-                        Truck
+                        Kamion
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
-                        Total Miles
+                        Ukupno km
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
-                        Revenue
+                        Prihod
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
                         Loads
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
-                        Cost/Mile
+                        Trošak/km
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
                         Uptime %
@@ -402,12 +402,12 @@ export default function TrucksComparePage() {
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Miles Chart */}
+            {/* KM Chart */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="w-5 h-5" />
-                  Total Miles
+                  Total km
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -417,7 +417,7 @@ export default function TrucksComparePage() {
                     <XAxis dataKey="name" stroke="#64748b" />
                     <YAxis stroke="#64748b" />
                     <Tooltip />
-                    <Bar dataKey="Total Miles" fill="#0ea5e9" />
+                    <Bar dataKey="Total km" fill="#0ea5e9" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

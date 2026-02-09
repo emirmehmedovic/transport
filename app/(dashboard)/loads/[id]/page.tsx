@@ -37,6 +37,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { LoadTimeline } from "@/components/loads/load-timeline";
+import { LoadStatusBadge } from "@/components/loads/LoadStatusBadge";
 
 // Dynamic import for DriverLoadMap (client-side only)
 const DriverLoadMap = dynamic(
@@ -67,11 +68,30 @@ interface LoadVehicle {
   actualDeliveryDate?: string | null;
 }
 
+interface LoadStop {
+  id: string;
+  type: string;
+  sequence: number;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  scheduledDate?: string | null;
+  actualDate?: string | null;
+}
+
 interface LoadDetail {
   id: string;
   loadNumber: string;
   status: string;
   createdAt?: string;
+  assignedAt?: string | null;
+  inTransitAt?: string | null;
+  completedAt?: string | null;
   pickupAddress: string;
   pickupCity: string;
   pickupState: string;
@@ -118,6 +138,7 @@ interface LoadDetail {
     model: string | null;
   } | null;
   vehicles: LoadVehicle[];
+  stops?: LoadStop[];
 }
 
 export default function LoadDetailPage() {
@@ -303,19 +324,6 @@ export default function LoadDetailPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const badges: Record<string, string> = {
-      AVAILABLE: "bg-gray-100 text-gray-700",
-      ASSIGNED: "bg-blue-100 text-blue-700",
-      PICKED_UP: "bg-yellow-100 text-yellow-700",
-      IN_TRANSIT: "bg-purple-100 text-purple-700",
-      DELIVERED: "bg-green-100 text-green-700",
-      COMPLETED: "bg-gray-200 text-gray-800",
-      CANCELLED: "bg-red-100 text-red-700",
-    };
-    return badges[status] || "bg-gray-100 text-gray-700";
-  };
-
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "AVAILABLE":
@@ -348,7 +356,12 @@ export default function LoadDetailPage() {
   };
 
   const formatCurrency = (value: number) => {
-    return `$${value.toFixed(2)}`;
+    return new Intl.NumberFormat("bs-BA", {
+      style: "currency",
+      currency: "BAM",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
   };
 
   // Map document types to Bosnian names
@@ -362,6 +375,8 @@ export default function LoadDetailPage() {
       FUEL_RECEIPT: "Račun za gorivo",
       CDL_LICENSE: "CDL licenca",
       MEDICAL_CARD: "Medicinska kartica",
+      INSPECTION_PHOTO: "Inspekcijska fotografija",
+      INCIDENT_PHOTO: "Incident fotografija",
       INSURANCE: "Osiguranje",
       REGISTRATION: "Registracija",
       OTHER: "Ostalo",
@@ -449,7 +464,7 @@ export default function LoadDetailPage() {
     },
     {
       label: "Udaljenost",
-      value: `${load.distance} mi • Deadhead ${load.deadheadMiles} mi`,
+      value: `${load.distance} km • Deadhead ${load.deadheadMiles} km`,
     },
     {
       label: "Ukupna isplata",
@@ -458,7 +473,7 @@ export default function LoadDetailPage() {
   ];
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
       {updated === "1" && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           Load je uspješno ažuriran.
@@ -475,13 +490,7 @@ export default function LoadDetailPage() {
         subtitle="Detalji loada"
         actions={
           <div className="flex flex-wrap items-center gap-2 justify-end">
-            <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadge(
-                load.status
-              )}`}
-            >
-              {getStatusLabel(load.status)}
-            </span>
+            <LoadStatusBadge status={load.status} />
             {statusError && (
               <p className="text-xs text-red-200 max-w-xs">{statusError}</p>
             )}
@@ -659,11 +668,11 @@ export default function LoadDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-dark-500 mb-1">Udaljenost</p>
-                    <p className="font-medium text-dark-900">{load.distance} milja</p>
+                    <p className="font-medium text-dark-900">{load.distance} km</p>
                   </div>
                   <div>
-                    <p className="text-sm text-dark-500 mb-1">Deadhead milje</p>
-                    <p className="font-medium text-dark-900">{load.deadheadMiles} milja</p>
+                    <p className="text-sm text-dark-500 mb-1">Deadhead km</p>
+                    <p className="font-medium text-dark-900">{load.deadheadMiles} km</p>
                   </div>
                   <div>
                     <p className="text-sm text-dark-500 mb-1">Osnovni iznos loada</p>
@@ -675,9 +684,9 @@ export default function LoadDetailPage() {
                   </div>
                   {load.customRatePerMile && (
                     <div>
-                      <p className="text-sm text-dark-500 mb-1">Custom rate per mile</p>
+                      <p className="text-sm text-dark-500 mb-1">Custom rate po km</p>
                       <p className="font-medium text-dark-900">
-                        {formatCurrency(load.customRatePerMile)} / milja
+                        {formatCurrency(load.customRatePerMile)} / km
                       </p>
                     </div>
                   )}
@@ -787,6 +796,46 @@ export default function LoadDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Load Stops */}
+          {load.stops && load.stops.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Stopovi ({load.stops.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {load.stops.map((stop) => (
+                    <div
+                      key={stop.id}
+                      className="rounded-xl border border-dark-200 bg-white px-4 py-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-dark-900">
+                          {stop.sequence}. {stop.type}
+                        </p>
+                        {stop.scheduledDate && (
+                          <p className="text-xs text-dark-500">
+                            {formatDateTime(stop.scheduledDate)}
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-sm text-dark-700 mt-2">
+                        {stop.address}
+                        <br />
+                        {stop.city}, {stop.state} {stop.zip}
+                      </p>
+                      {(stop.contactName || stop.contactPhone) && (
+                        <p className="text-xs text-dark-600 mt-2">
+                          {stop.contactName || "Kontakt"} {stop.contactPhone ? `• ${stop.contactPhone}` : ""}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Vehicles */}
           <Card>
@@ -933,6 +982,9 @@ export default function LoadDetailPage() {
               <LoadTimeline
                 status={load.status}
                 createdAt={(load as any).createdAt}
+                assignedAt={(load as any).assignedAt}
+                inTransitAt={(load as any).inTransitAt}
+                completedAt={(load as any).completedAt}
                 scheduledPickupDate={load.scheduledPickupDate}
                 actualPickupDate={(load as any).actualPickupDate}
                 scheduledDeliveryDate={load.scheduledDeliveryDate}

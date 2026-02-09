@@ -33,19 +33,19 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
   // Format date for display
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('bs-BA', { month: 'short', day: 'numeric' });
   };
 
   // Format currency
   const formatCurrency = (value: number) => {
-    return `$${(value / 1000).toFixed(1)}k`;
+    return `${(value / 1000).toFixed(1)}k KM`;
   };
 
   return (
     <div className="space-y-8">
-      {/* Miles Over Time */}
+      {/* Kilometri Over Time */}
       <div className="bg-white rounded-xl p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Miles Over Time</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Kilometri kroz vrijeme</h3>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={timeSeriesData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -72,15 +72,15 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
               strokeWidth={2}
               dot={{ fill: '#0ea5e9', r: 4 }}
               activeDot={{ r: 6 }}
-              name="Miles"
+              name="km"
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Revenue Over Time */}
+      {/* Prihod Over Time */}
       <div className="bg-white rounded-xl p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Over Time</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Prihod kroz vrijeme</h3>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={timeSeriesData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -101,7 +101,12 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
                 border: '1px solid #e2e8f0',
                 borderRadius: '8px',
               }}
-              formatter={(value: number) => `$${value.toLocaleString()}`}
+              formatter={(value: number) =>
+                new Intl.NumberFormat('bs-BA', {
+                  style: 'currency',
+                  currency: 'BAM',
+                }).format(value)
+              }
             />
             <Legend />
             <Line
@@ -111,7 +116,7 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
               strokeWidth={2}
               dot={{ fill: '#10b981', r: 4 }}
               activeDot={{ r: 6 }}
-              name="Revenue"
+              name="Prihod"
             />
           </LineChart>
         </ResponsiveContainer>
@@ -120,7 +125,7 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
       {/* Loads Per Week (Driver only) */}
       {type === 'driver' && (
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Loads Per Week</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Loadovi po sedmici</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={timeSeriesData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -139,7 +144,7 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
                 }}
               />
               <Legend />
-              <Bar dataKey="loads" fill="#0ea5e9" name="Loads" />
+              <Bar dataKey="loads" fill="#0ea5e9" name="Loadovi" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -149,7 +154,7 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
       {type === 'truck' && (
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Revenue vs Costs
+            Prihod vs troškovi
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={timeSeriesData}>
@@ -171,11 +176,16 @@ export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsPro
                   border: '1px solid #e2e8f0',
                   borderRadius: '8px',
                 }}
-                formatter={(value: number) => `$${value.toLocaleString()}`}
+                formatter={(value: number) =>
+                  new Intl.NumberFormat('bs-BA', {
+                    style: 'currency',
+                    currency: 'BAM',
+                  }).format(value)
+                }
               />
               <Legend />
-              <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
-              <Bar dataKey="costs" fill="#ef4444" name="Costs" />
+              <Bar dataKey="revenue" fill="#10b981" name="Prihod" />
+              <Bar dataKey="costs" fill="#ef4444" name="Troškovi" />
             </BarChart>
           </ResponsiveContainer>
         </div>

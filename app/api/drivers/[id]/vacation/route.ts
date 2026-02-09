@@ -112,7 +112,7 @@ export async function POST(
       await prisma.driver.update({
         where: { id: params.id },
         data: {
-          status: type === "VACATION" ? "VACATION" : "INACTIVE",
+          status: type === "VACATION" ? "VACATION" : "SICK_LEAVE",
         },
       });
     }

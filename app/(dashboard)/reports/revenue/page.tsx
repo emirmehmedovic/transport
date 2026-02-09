@@ -129,7 +129,7 @@ export default function RevenueReportPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-4 md:space-y-6 px-4 md:px-0-6 pb-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-3">
@@ -259,7 +259,7 @@ export default function RevenueReportPage() {
               <CardContent className="pt-6">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Prosjek / Milja</p>
+                    <p className="text-sm font-medium text-gray-500">Prosjek / km</p>
                     <h3 className="text-2xl font-bold text-gray-900 mt-2">
                       {formatCurrency(data.summary.avgRevenuePerMile)}
                     </h3>
@@ -323,7 +323,7 @@ export default function RevenueReportPage() {
                         type="monotone"
                         dataKey="miles"
                         stroke="#F59E0B"
-                        name="Milje"
+                        name="km"
                         strokeWidth={2}
                       />
                     </LineChart>

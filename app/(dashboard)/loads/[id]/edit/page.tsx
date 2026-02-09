@@ -265,6 +265,10 @@ export default function EditLoadPage() {
         throw new Error(data.error || "Greška pri dodjeli loada");
       }
 
+      if (data.warning) {
+        alert(data.warning);
+      }
+
       // Refresh page to show updated assignment
       router.push(`/loads/${loadId}?assigned=1`);
     } catch (err: any) {
@@ -723,7 +727,7 @@ export default function EditLoadPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1">
-                Udaljenost (milje)
+                Udaljenost (km)
               </label>
               <input
                 type="number"
@@ -737,7 +741,7 @@ export default function EditLoadPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1">
-                Deadhead milje (opcionalno)
+                Deadhead km (opcionalno)
               </label>
               <input
                 type="number"
@@ -748,7 +752,7 @@ export default function EditLoadPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1">
-                Iznos loada (USD)
+                Iznos loada (BAM)
               </label>
               <input
                 type="number"
@@ -762,7 +766,7 @@ export default function EditLoadPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1">
-                Custom rate per mile (opcionalno)
+                Custom rate po km (opcionalno)
               </label>
               <input
                 type="number"
@@ -784,7 +788,7 @@ export default function EditLoadPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1">
-                Detention pay (USD, opcionalno)
+                Detention pay (BAM, opcionalno)
               </label>
               <input
                 type="number"

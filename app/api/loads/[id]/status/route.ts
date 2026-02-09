@@ -92,11 +92,20 @@ export async function PATCH(
       );
     }
 
+    const updateData: any = { status };
+    if (status === "ASSIGNED" && !load.assignedAt) {
+      updateData.assignedAt = new Date();
+    }
+    if (status === "IN_TRANSIT") {
+      updateData.inTransitAt = new Date();
+    }
+    if (status === "COMPLETED") {
+      updateData.completedAt = new Date();
+    }
+
     const updated = await prisma.load.update({
       where: { id: params.id },
-      data: {
-        status,
-      },
+      data: updateData,
     });
 
     await prisma.auditLog.create({

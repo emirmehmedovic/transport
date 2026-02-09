@@ -32,9 +32,9 @@ export function TruckPerformance({ truckId }: TruckPerformanceProps) {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('bs-BA', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BAM',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
@@ -75,28 +75,28 @@ export function TruckPerformance({ truckId }: TruckPerformanceProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           icon={<TrendingUp className="w-6 h-6" />}
-          label="Total Miles"
+          label="Ukupno km"
           value={formatNumber(performance.totalMiles)}
           subValue={`${performance.activeDays} active days`}
           color="blue"
         />
         <KPICard
           icon={<Package className="w-6 h-6" />}
-          label="Loads Completed"
+          label="Završeni loadovi"
           value={formatNumber(performance.loadsCompleted)}
           subValue={`${performance.uptimePercentage.toFixed(1)}% uptime`}
           color="purple"
         />
         <KPICard
           icon={<DollarSign className="w-6 h-6" />}
-          label="Revenue Generated"
+          label="Generisani prihod"
           value={formatCurrency(performance.revenueGenerated)}
-          subValue={`${(performance.revenueGenerated / performance.totalMiles).toFixed(2)}/mile`}
+          subValue={`${formatCurrency(performance.revenueGenerated / performance.totalMiles)}/km`}
           color="green"
         />
         <KPICard
           icon={<Wrench className="w-6 h-6" />}
-          label="Cost per Mile"
+          label="Trošak po km"
           value={formatCurrency(performance.totalCostPerMile)}
           subValue={`Total costs: ${formatCurrency(performance.totalFuelCost + performance.totalMaintenanceCost)}`}
           color="orange"
@@ -106,15 +106,15 @@ export function TruckPerformance({ truckId }: TruckPerformanceProps) {
       {/* Cost Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StatCard
-          label="Fuel Costs"
+          label="Troškovi goriva"
           value={formatCurrency(performance.totalFuelCost)}
-          subValue={`${formatCurrency(performance.fuelCostPerMile)} per mile`}
+          subValue={`${formatCurrency(performance.fuelCostPerMile)} po km`}
           color="yellow"
         />
         <StatCard
-          label="Maintenance Costs"
+          label="Troškovi održavanja"
           value={formatCurrency(performance.totalMaintenanceCost)}
-          subValue={`${formatCurrency(performance.maintenanceCostPerMile)} per mile`}
+          subValue={`${formatCurrency(performance.maintenanceCostPerMile)} po km`}
           color="red"
         />
       </div>

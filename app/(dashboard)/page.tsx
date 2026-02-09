@@ -218,6 +218,8 @@ function AdminDashboard({ user }: { user: AuthUser }) {
   const [data, setData] = useState<AdminDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tollAlerts, setTollAlerts] = useState<any[]>([]);
+  const [documentAlerts, setDocumentAlerts] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -244,7 +246,31 @@ function AdminDashboard({ user }: { user: AuthUser }) {
     };
 
     fetchData();
+    fetchTollAlerts();
+    fetchDocumentAlerts();
   }, []);
+
+  const fetchTollAlerts = async () => {
+    try {
+      const res = await fetch("/api/toll-permits/alerts?days=30");
+      const data = await res.json();
+      if (!res.ok) return;
+      setTollAlerts(data.items || []);
+    } catch {
+      // ignore
+    }
+  };
+
+    const fetchDocumentAlerts = async () => {
+      try {
+      const res = await fetch("/api/alerts/documents?days=30&onlyCompliance=1");
+      const data = await res.json();
+      if (!res.ok) return;
+      setDocumentAlerts(data.items || []);
+    } catch {
+      // ignore
+    }
+  };
 
   const formattedTrend = useMemo(() => {
     if (!data) return [];
@@ -269,15 +295,15 @@ function AdminDashboard({ user }: { user: AuthUser }) {
     }).format(value || 0);
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
       {/* Error Alert */}
       {error && (
-        <div className="bg-red-50 border border-red-100 rounded-3xl p-4 flex items-center gap-3 text-red-700 shadow-soft">
-          <AlertTriangle className="w-5 h-5" />
-          <span className="text-sm font-medium">{error}</span>
+        <div className="bg-red-50 border border-red-100 rounded-2xl md:rounded-3xl p-3 md:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 text-red-700 shadow-soft">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+          <span className="text-sm font-medium flex-1">{error}</span>
           <button
             onClick={() => window.location.reload()}
-            className="ml-auto inline-flex items-center gap-2 text-xs font-bold bg-white px-3 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all text-red-600"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-xs font-bold bg-white px-3 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all text-red-600"
           >
             <RefreshCcw className="w-3 h-3" /> Osvježi
           </button>
@@ -285,28 +311,28 @@ function AdminDashboard({ user }: { user: AuthUser }) {
       )}
 
       {/* Top Section: Financial Overview & KPI Cards */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
         {/* Main Financial Card (Left Side - Large) */}
-        <div className="xl:col-span-1 bg-gradient-to-br from-dark-900 to-dark-800 rounded-3xl p-8 text-white shadow-soft-xl relative overflow-hidden flex flex-col justify-between h-[340px]">
+        <div className="xl:col-span-1 bg-gradient-to-br from-dark-900 to-dark-800 rounded-2xl md:rounded-3xl p-5 md:p-8 text-white shadow-soft-xl relative overflow-hidden flex flex-col justify-between min-h-[280px] md:h-[340px]">
           {/* Decorative Elements */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -mr-16 -mt-16"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary-500 opacity-10 rounded-full blur-3xl -ml-12 -mb-12"></div>
 
           <div className="relative z-10">
-            <div className="flex justify-between items-start mb-8">
+            <div className="flex justify-between items-start mb-4 md:mb-8">
               <div>
-                <p className="text-dark-300 text-sm font-medium mb-1">Ukupni prihod</p>
-                <h3 className="text-3xl font-bold tracking-tight">
+                <p className="text-dark-300 text-xs md:text-sm font-medium mb-1">Ukupni prihod</p>
+                <h3 className="text-2xl md:text-3xl font-bold tracking-tight">
                   {loading ? "..." : formatCurrency(data?.KPIs.revenue.thisMonth || 0)}
                 </h3>
               </div>
-              <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md">
-                <DollarSign className="w-6 h-6 text-white" />
+              <div className="p-2 md:p-3 bg-white/10 rounded-xl md:rounded-2xl backdrop-blur-md">
+                <DollarSign className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </div>
             </div>
-            
-            <div className="space-y-4">
-               <div className="flex items-center justify-between text-sm">
+
+            <div className="space-y-3 md:space-y-4">
+               <div className="flex items-center justify-between text-xs md:text-sm">
                   <span className="text-dark-300">Ove sedmice</span>
                   <span className="font-semibold">{loading ? "..." : formatCurrency(data?.KPIs.revenue.thisWeek || 0)}</span>
                </div>
@@ -320,14 +346,14 @@ function AdminDashboard({ user }: { user: AuthUser }) {
           </div>
 
           <div className="relative z-10 mt-auto">
-             <button className="w-full py-3 bg-white text-dark-900 rounded-2xl text-sm font-bold hover:bg-dark-50 transition-colors shadow-lg">
+             <button className="w-full py-2.5 md:py-3 bg-white text-dark-900 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold hover:bg-dark-50 transition-colors shadow-lg">
                 Pregledaj finansijski izvještaj
              </button>
           </div>
         </div>
 
         {/* KPI Grid (Right Side) */}
-        <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="xl:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
           {[
             {
               title: "Aktivni loadovi",
@@ -362,23 +388,23 @@ function AdminDashboard({ user }: { user: AuthUser }) {
               bgColor: "bg-orange-50",
             },
           ].map((item) => (
-            <div key={item.title} className="bg-dark-50 rounded-3xl p-6 shadow-soft hover:shadow-soft-lg transition-all group cursor-pointer flex flex-col justify-between h-[160px] relative overflow-hidden border-[6px] border-white">
+            <div key={item.title} className="bg-dark-50 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft hover:shadow-soft-lg transition-all group cursor-pointer flex flex-col justify-between min-h-[140px] md:h-[160px] relative overflow-hidden border-4 md:border-[6px] border-white">
               <div className="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-primary-100 rounded-full blur-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary-50 rounded-full blur-3xl -mb-12 -ml-12"></div>
 
               <div className="flex justify-between items-start relative z-10">
-                <div className={`p-3.5 rounded-2xl ${item.bgColor} group-hover:scale-110 transition-transform`}>
-                  <item.icon className={`w-6 h-6 ${item.color}`} />
+                <div className={`p-2.5 md:p-3.5 rounded-xl md:rounded-2xl ${item.bgColor} group-hover:scale-110 transition-transform`}>
+                  <item.icon className={`w-5 h-5 md:w-6 md:h-6 ${item.color}`} />
                 </div>
-                <span className="px-3 py-1 bg-dark-50 rounded-full text-[10px] font-bold text-dark-500 uppercase tracking-wide">
+                <span className="px-2 md:px-3 py-0.5 md:py-1 bg-dark-50 rounded-full text-[9px] md:text-[10px] font-bold text-dark-500 uppercase tracking-wide">
                    Sedmično
                 </span>
               </div>
               <div className="relative z-10">
-                 <h4 className="text-3xl font-bold text-dark-900 mb-1">{loading ? "..." : item.value}</h4>
-                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-dark-500">{item.title}</span>
-                    <span className="text-xs font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full ml-auto">{item.trend}</span>
+                 <h4 className="text-2xl md:text-3xl font-bold text-dark-900 mb-1">{loading ? "..." : item.value}</h4>
+                 <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs md:text-sm font-medium text-dark-500">{item.title}</span>
+                    <span className="text-[10px] md:text-xs font-medium text-primary-600 bg-primary-50 px-1.5 md:px-2 py-0.5 rounded-full ml-auto">{item.trend}</span>
                  </div>
               </div>
             </div>
@@ -387,21 +413,21 @@ function AdminDashboard({ user }: { user: AuthUser }) {
       </section>
 
       {/* Middle Section: Charts & Activity */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
         {/* Chart */}
-        <div className="xl:col-span-2 bg-white rounded-3xl p-8 shadow-soft">
-          <div className="flex items-center justify-between mb-8">
+        <div className="xl:col-span-2 bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 lg:p-8 shadow-soft">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 md:mb-6 lg:mb-8 gap-3">
             <div>
-               <h3 className="text-lg font-bold text-dark-900">Analitika prihoda</h3>
-               <p className="text-sm text-dark-500">Mjesečni učinak prihoda</p>
+               <h3 className="text-base md:text-lg font-bold text-dark-900">Analitika prihoda</h3>
+               <p className="text-xs md:text-sm text-dark-500">Mjesečni učinak prihoda</p>
             </div>
-            <div className="flex gap-2">
-               <button className="px-4 py-2 rounded-xl text-sm font-medium bg-dark-50 text-dark-600 hover:bg-dark-100 transition-colors">2023</button>
-               <button className="px-4 py-2 rounded-xl text-sm font-medium bg-dark-900 text-white shadow-md">2024</button>
+            <div className="flex gap-2 w-full sm:w-auto">
+               <button className="flex-1 sm:flex-none px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-xs md:text-sm font-medium bg-dark-50 text-dark-600 hover:bg-dark-100 transition-colors">2023</button>
+               <button className="flex-1 sm:flex-none px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-xs md:text-sm font-medium bg-dark-900 text-white shadow-md">2024</button>
             </div>
           </div>
-          
-          <div className="h-[300px] w-full">
+
+          <div className="h-[250px] md:h-[300px] w-full">
             {loading ? (
                 <div className="h-full w-full flex items-center justify-center">
                   <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
@@ -452,24 +478,114 @@ function AdminDashboard({ user }: { user: AuthUser }) {
         </div>
 
         {/* Activity Manager / Alerts */}
-        <div className="xl:col-span-1 flex flex-col gap-6">
+        <div className="xl:col-span-1 flex flex-col gap-4 md:gap-6">
            <AlertsPanel />
-           
+           <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft">
+             <div className="flex items-center justify-between mb-3">
+               <h3 className="text-base md:text-lg font-bold text-dark-900">Toll/Permit alerti</h3>
+               <button
+                 onClick={() => window.location.assign("/alerts?toll=1")}
+                 className="text-xs font-semibold text-primary-600 hover:text-primary-700 whitespace-nowrap"
+               >
+                 Vidi sve
+               </button>
+             </div>
+             {tollAlerts.length === 0 ? (
+               <p className="text-xs md:text-sm text-dark-500">Nema ističućih dozvola u narednih 30 dana.</p>
+             ) : (
+               <div className="space-y-2 md:space-y-3">
+                 {tollAlerts.slice(0, 6).map((item) => (
+                   <div
+                     key={item.id}
+                     className={`rounded-xl md:rounded-2xl border px-3 md:px-4 py-2.5 md:py-3 ${
+                       item.urgency === "urgent"
+                         ? "border-red-200 bg-red-50"
+                         : item.urgency === "warning"
+                         ? "border-amber-200 bg-amber-50"
+                         : "border-emerald-200 bg-emerald-50"
+                     }`}
+                   >
+                     <div className="flex items-center justify-between gap-2 flex-wrap">
+                       <p
+                         className={`text-xs md:text-sm font-semibold ${
+                           item.urgency === "urgent"
+                             ? "text-red-900"
+                             : item.urgency === "warning"
+                             ? "text-amber-900"
+                             : "text-emerald-900"
+                         }`}
+                       >
+                         {item.truck?.truckNumber || "Kamion"} • {item.countryCode}
+                       </p>
+                       <span
+                         className={`text-[10px] md:text-xs ${
+                           item.urgency === "urgent"
+                             ? "text-red-700"
+                             : item.urgency === "warning"
+                             ? "text-amber-700"
+                             : "text-emerald-700"
+                         }`}
+                       >
+                         ističe {new Date(item.validTo).toLocaleDateString("bs-BA")}
+                       </span>
+                     </div>
+                     <p
+                       className={`text-[10px] md:text-xs mt-1 ${
+                         item.urgency === "urgent"
+                           ? "text-red-800"
+                           : item.urgency === "warning"
+                           ? "text-amber-800"
+                           : "text-emerald-800"
+                       }`}
+                     >
+                       {item.type} {item.referenceNo ? `• ${item.referenceNo}` : ""}
+                     </p>
+                   </div>
+                 ))}
+               </div>
+             )}
+           </div>
+
+           <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft">
+             <h3 className="text-base md:text-lg font-bold text-dark-900 mb-3">Compliance dokumenti koji ističu</h3>
+             {documentAlerts.length === 0 ? (
+               <p className="text-xs md:text-sm text-dark-500">Nema dokumenata koji ističu u narednih 30 dana.</p>
+             ) : (
+               <div className="space-y-2 md:space-y-3">
+                 {documentAlerts.slice(0, 6).map((doc) => (
+                   <div key={doc.id} className="rounded-xl md:rounded-2xl border border-red-100 bg-red-50 px-3 md:px-4 py-2.5 md:py-3">
+                     <div className="flex items-center justify-between gap-2 flex-wrap">
+                       <p className="text-xs md:text-sm font-semibold text-red-900">
+                         {doc.type} • {doc.driver?.user?.firstName || ""} {doc.driver?.user?.lastName || ""}
+                       </p>
+                       <span className="text-[10px] md:text-xs text-red-700 whitespace-nowrap">
+                         ističe {new Date(doc.expiryDate).toLocaleDateString("bs-BA")}
+                       </span>
+                     </div>
+                     {doc.load?.loadNumber && (
+                       <p className="text-[10px] md:text-xs text-red-800 mt-1">Load: {doc.load.loadNumber}</p>
+                     )}
+                   </div>
+                 ))}
+               </div>
+             )}
+           </div>
+
            {/* Quick Actions Mini Panel */}
-           <div className="bg-white rounded-3xl p-6 shadow-soft flex-1">
-              <h3 className="text-lg font-bold text-dark-900 mb-4">Brze radnje</h3>
-              <div className="grid grid-cols-2 gap-3">
-                  <button className="p-3 rounded-2xl border border-dark-100 hover:border-primary-200 hover:bg-primary-50 transition-all text-center flex flex-col items-center gap-2">
-                     <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
-                        <Package className="w-4 h-4" />
+           <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft flex-1">
+              <h3 className="text-base md:text-lg font-bold text-dark-900 mb-3 md:mb-4">Brze radnje</h3>
+              <div className="grid grid-cols-2 gap-2 md:gap-3">
+                  <button className="p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-dark-100 hover:border-primary-200 hover:bg-primary-50 transition-all text-center flex flex-col items-center gap-1.5 md:gap-2">
+                     <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600">
+                        <Package className="w-3.5 h-3.5 md:w-4 md:h-4" />
                      </div>
-                     <span className="text-xs font-bold text-dark-700">Novi load</span>
+                     <span className="text-[10px] md:text-xs font-bold text-dark-700">Novi load</span>
                   </button>
-                  <button className="p-3 rounded-2xl border border-dark-100 hover:border-primary-200 hover:bg-primary-50 transition-all text-center flex flex-col items-center gap-2">
-                     <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                        <Users className="w-4 h-4" />
+                  <button className="p-2.5 md:p-3 rounded-xl md:rounded-2xl border border-dark-100 hover:border-primary-200 hover:bg-primary-50 transition-all text-center flex flex-col items-center gap-1.5 md:gap-2">
+                     <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                        <Users className="w-3.5 h-3.5 md:w-4 md:h-4" />
                      </div>
-                     <span className="text-xs font-bold text-dark-700">Dodaj vozača</span>
+                     <span className="text-[10px] md:text-xs font-bold text-dark-700">Dodaj vozača</span>
                   </button>
               </div>
            </div>
@@ -477,60 +593,60 @@ function AdminDashboard({ user }: { user: AuthUser }) {
       </section>
 
       {/* Bottom Section: Active Loads Table */}
-      <section className="bg-white rounded-3xl shadow-soft overflow-hidden">
-        <div className="p-6 border-b border-dark-50 flex items-center justify-between">
+      <section className="bg-white rounded-2xl md:rounded-3xl shadow-soft overflow-hidden">
+        <div className="p-4 md:p-6 border-b border-dark-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
            <div>
-              <h3 className="text-lg font-bold text-dark-900">Aktivni loadovi</h3>
-              <p className="text-sm text-dark-500">Pregled trenutno aktivnih pošiljki</p>
+              <h3 className="text-base md:text-lg font-bold text-dark-900">Aktivni loadovi</h3>
+              <p className="text-xs md:text-sm text-dark-500">Pregled trenutno aktivnih pošiljki</p>
            </div>
-           <button className="px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
+           <button className="w-full sm:w-auto px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-medium text-primary-600 bg-primary-50 rounded-lg md:rounded-xl hover:bg-primary-100 transition-colors">
               Prikaži sve
            </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-xs md:text-sm text-left">
             <thead className="bg-dark-50 text-dark-500 font-medium">
               <tr>
-                <th className="px-6 py-4 rounded-tl-3xl">Load ID</th>
-                <th className="px-6 py-4">Ruta</th>
-                <th className="px-6 py-4">Vozač</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 rounded-tr-3xl">Kamion</th>
+                <th className="px-3 md:px-6 py-3 md:py-4 rounded-tl-2xl md:rounded-tl-3xl whitespace-nowrap">Load ID</th>
+                <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Ruta</th>
+                <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Vozač</th>
+                <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Status</th>
+                <th className="px-3 md:px-6 py-3 md:py-4 rounded-tr-2xl md:rounded-tr-3xl whitespace-nowrap">Kamion</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-dark-50">
               {loading ? (
-                 <tr><td colSpan={5} className="px-6 py-8 text-center">Učitavanje...</td></tr>
+                 <tr><td colSpan={5} className="px-3 md:px-6 py-6 md:py-8 text-center">Učitavanje...</td></tr>
               ) : data?.activeLoads.length === 0 ? (
-                 <tr><td colSpan={5} className="px-6 py-8 text-center text-dark-400">Nema aktivnih loadova.</td></tr>
+                 <tr><td colSpan={5} className="px-3 md:px-6 py-6 md:py-8 text-center text-dark-400">Nema aktivnih loadova.</td></tr>
               ) : (
                  data?.activeLoads.map((load) => (
                     <tr key={load.id} className="hover:bg-dark-50/50 transition-colors">
-                       <td className="px-6 py-4 font-bold text-dark-900">{load.loadNumber}</td>
-                       <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-dark-900">{load.pickupCity}, {load.pickupState}</span>
-                             <span className="text-xs text-dark-400">do {load.deliveryCity}, {load.deliveryState}</span>
+                       <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-dark-900 whitespace-nowrap">{load.loadNumber}</td>
+                       <td className="px-3 md:px-6 py-3 md:py-4">
+                          <div className="flex flex-col min-w-[150px]">
+                            <span className="font-medium text-dark-900 text-[11px] md:text-sm">{load.pickupCity}, {load.pickupState}</span>
+                             <span className="text-[10px] md:text-xs text-dark-400">do {load.deliveryCity}, {load.deliveryState}</span>
                           </div>
                        </td>
-                       <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                             <div className="w-6 h-6 rounded-full bg-dark-100 flex items-center justify-center text-xs font-bold text-dark-600">
+                       <td className="px-3 md:px-6 py-3 md:py-4">
+                          <div className="flex items-center gap-1.5 md:gap-2">
+                             <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-dark-100 flex items-center justify-center text-[10px] md:text-xs font-bold text-dark-600 flex-shrink-0">
                                 {load.driver?.user?.firstName?.[0] || "?"}
                              </div>
-                             <span className="text-dark-700">{load.driver?.user?.firstName} {load.driver?.user?.lastName}</span>
+                             <span className="text-dark-700 whitespace-nowrap text-[11px] md:text-sm">{load.driver?.user?.firstName} {load.driver?.user?.lastName}</span>
                           </div>
                        </td>
-                       <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
-                             ${load.status === 'IN_TRANSIT' ? 'bg-blue-100 text-blue-700' : 
+                       <td className="px-3 md:px-6 py-3 md:py-4">
+                          <span className={`inline-flex items-center px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-medium whitespace-nowrap
+                             ${load.status === 'IN_TRANSIT' ? 'bg-blue-100 text-blue-700' :
                                load.status === 'PICKED_UP' ? 'bg-purple-100 text-purple-700' :
                                load.status === 'DELIVERED' ? 'bg-green-100 text-green-700' : 'bg-dark-100 text-dark-700'
                              }`}>
                              {STATUS_LABELS[load.status] || load.status}
                           </span>
                        </td>
-                       <td className="px-6 py-4 text-dark-500 font-mono">{load.truck?.truckNumber}</td>
+                       <td className="px-3 md:px-6 py-3 md:py-4 text-dark-500 font-mono text-[11px] md:text-sm whitespace-nowrap">{load.truck?.truckNumber}</td>
                     </tr>
                  ))
               )}
@@ -538,16 +654,16 @@ function AdminDashboard({ user }: { user: AuthUser }) {
           </table>
         </div>
       </section>
-      
+
       {/* Map Section */}
-      <section className="bg-white rounded-3xl shadow-soft p-6 h-[500px] relative overflow-hidden">
-         <div className="absolute top-6 left-6 z-10 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-sm">
-            <h3 className="font-bold text-dark-900">Mapa uživo</h3>
-            <p className="text-xs text-dark-500">{data?.activeLoads.length ?? 0} aktivnih ruta</p>
+      <section className="bg-white rounded-2xl md:rounded-3xl shadow-soft p-4 md:p-6 h-[350px] md:h-[450px] lg:h-[500px] relative overflow-hidden">
+         <div className="absolute top-3 left-3 md:top-6 md:left-6 z-10 bg-white/90 backdrop-blur p-2.5 md:p-4 rounded-xl md:rounded-2xl shadow-sm">
+            <h3 className="font-bold text-dark-900 text-sm md:text-base">Mapa uživo</h3>
+            <p className="text-[10px] md:text-xs text-dark-500">{data?.activeLoads.length ?? 0} aktivnih ruta</p>
          </div>
-         <div className="h-full w-full rounded-2xl overflow-hidden bg-dark-50">
+         <div className="h-full w-full rounded-xl md:rounded-2xl overflow-hidden bg-dark-50">
             {loading ? (
-               <div className="h-full w-full flex items-center justify-center"><Loader2 className="animate-spin text-dark-400" /></div>
+               <div className="h-full w-full flex items-center justify-center"><Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-dark-400" /></div>
             ) : (
                <ActiveLoadsMap loads={data?.activeLoads ?? []} />
             )}
@@ -628,7 +744,7 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("bs-BA", {
       style: "currency",
-      currency: "USD",
+      currency: "BAM",
       maximumFractionDigits: 0,
     }).format(value || 0);
 
@@ -845,77 +961,77 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
     : [];
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-dark-900">
+        <h1 className="text-2xl md:text-3xl font-bold text-dark-900">
           Ruta za danas, {user.firstName}.
         </h1>
-        <p className="text-dark-500">
+        <p className="text-sm md:text-base text-dark-500">
           Pratite trenutni load, brzo učitajte POD i ostanite u toku sa rezultatima za ovaj mjesec.
         </p>
       </div>
 
       {/* Top Section: Current Load & Quick Actions */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
         {/* Current Load Card (Left Side - Large) */}
-        <div className="xl:col-span-2 bg-gradient-to-br from-dark-900 to-dark-800 rounded-3xl p-8 text-white shadow-soft-xl relative overflow-hidden flex flex-col justify-between min-h-[400px]">
+        <div className="xl:col-span-2 bg-gradient-to-br from-dark-900 to-dark-800 rounded-2xl md:rounded-3xl p-5 md:p-8 text-white shadow-soft-xl relative overflow-hidden flex flex-col justify-between min-h-[320px] md:min-h-[400px]">
           {/* Decorative Elements */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -mr-16 -mt-16"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary-500 opacity-10 rounded-full blur-3xl -ml-12 -mb-12"></div>
 
           <div className="relative z-10">
-            <div className="flex justify-between items-start mb-8">
-              <div>
-                <p className="text-dark-300 text-sm font-medium mb-1">
+            <div className="flex justify-between items-start mb-4 md:mb-8 gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-dark-300 text-xs md:text-sm font-medium mb-1">
                   {data.currentLoad ? "TRENUTNI LOAD" : "STATUS RUTIRANJA"}
                 </p>
-                <h3 className="text-3xl font-bold tracking-tight">
+                <h3 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight break-words">
                   {data.currentLoad
                     ? `${data.currentLoad.pickupCity} → ${data.currentLoad.deliveryCity}`
                     : "Nema aktivne rute"}
                 </h3>
                 {data.currentLoad && (
-                  <p className="text-dark-300 mt-1">
+                  <p className="text-dark-300 mt-1 text-sm md:text-base">
                     Load #{data.currentLoad.loadNumber}
                   </p>
                 )}
               </div>
-              <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md">
-                <Navigation className="w-6 h-6 text-white" />
+              <div className="p-2 md:p-3 bg-white/10 rounded-xl md:rounded-2xl backdrop-blur-md flex-shrink-0">
+                <Navigation className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </div>
             </div>
 
             {data.currentLoad ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white/10 rounded-2xl p-4 backdrop-blur-sm">
-                    <p className="text-dark-300 text-xs uppercase tracking-wider mb-1">
+              <div className="space-y-4 md:space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-6">
+                  <div className="bg-white/10 rounded-xl md:rounded-2xl p-3 md:p-4 backdrop-blur-sm">
+                    <p className="text-dark-300 text-[10px] md:text-xs uppercase tracking-wider mb-1">
                       Pickup
                     </p>
-                    <p className="font-bold text-lg">
+                    <p className="font-bold text-base md:text-lg">
                       {data.currentLoad.pickupCity}, {data.currentLoad.pickupState}
                     </p>
-                    <p className="text-sm text-dark-300">
+                    <p className="text-xs md:text-sm text-dark-300">
                       {formatDateTime(data.currentLoad.scheduledPickupDate)}
                     </p>
                   </div>
-                  <div className="bg-white/10 rounded-2xl p-4 backdrop-blur-sm">
-                    <p className="text-dark-300 text-xs uppercase tracking-wider mb-1">
+                  <div className="bg-white/10 rounded-xl md:rounded-2xl p-3 md:p-4 backdrop-blur-sm">
+                    <p className="text-dark-300 text-[10px] md:text-xs uppercase tracking-wider mb-1">
                       Delivery
                     </p>
-                    <p className="font-bold text-lg">
+                    <p className="font-bold text-base md:text-lg">
                       {data.currentLoad.deliveryCity},{" "}
                       {data.currentLoad.deliveryState}
                     </p>
-                    <p className="text-sm text-dark-300">
+                    <p className="text-xs md:text-sm text-dark-300">
                       {formatDateTime(data.currentLoad.scheduledDeliveryDate)}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 md:gap-4 flex-wrap">
                   <span
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    className={`inline-flex items-center px-2.5 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase tracking-wider ${
                       data.currentLoad.status === "IN_TRANSIT"
                         ? "bg-blue-500/20 text-blue-200"
                         : "bg-white/10 text-white"
@@ -925,7 +1041,7 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                       data.currentLoad.status}
                   </span>
                   {data.currentLoad.notes && (
-                    <span className="text-xs text-dark-300 italic truncate max-w-[300px]">
+                    <span className="text-[10px] md:text-xs text-dark-300 italic truncate max-w-[200px] md:max-w-[300px]">
                       Note: {data.currentLoad.notes}
                     </span>
                   )}
@@ -956,20 +1072,20 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
           </div>
 
           {data.currentLoad && (
-            <div className="relative z-10 mt-8 pt-6 border-t border-white/10 grid grid-cols-2 gap-4">
+            <div className="relative z-10 mt-4 md:mt-8 pt-4 md:pt-6 border-t border-white/10 grid grid-cols-2 gap-3 md:gap-4">
               <div>
-                <p className="text-dark-400 text-xs uppercase tracking-wider mb-1">
+                <p className="text-dark-400 text-[10px] md:text-xs uppercase tracking-wider mb-1">
                   Truck
                 </p>
-                <p className="font-bold">
+                <p className="font-bold text-sm md:text-base">
                   {data.currentLoad.truck?.truckNumber || "N/A"}
                 </p>
               </div>
               <div>
-                <p className="text-dark-400 text-xs uppercase tracking-wider mb-1">
+                <p className="text-dark-400 text-[10px] md:text-xs uppercase tracking-wider mb-1">
                   Vehicles
                 </p>
-                <p className="font-bold">
+                <p className="font-bold text-sm md:text-base">
                   {data.currentLoad.vehicles?.length || 0} units
                 </p>
               </div>
@@ -978,22 +1094,22 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
         </div>
 
         {/* Quick Actions & Status Panel */}
-        <div className="xl:col-span-1 flex flex-col gap-6">
+        <div className="xl:col-span-1 flex flex-col gap-4 md:gap-6">
           {/* Status Update Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-soft flex-1 flex flex-col">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-2xl bg-primary-100 flex items-center justify-center text-primary-600">
-                <CheckCircle2 className="w-5 h-5" />
+          <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft flex-1 flex flex-col">
+            <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl md:rounded-2xl bg-primary-100 flex items-center justify-center text-primary-600 flex-shrink-0">
+                <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5" />
               </div>
-              <div>
-                <h3 className="font-bold text-dark-900">Ažuriraj Status</h3>
-                <p className="text-xs text-dark-500">Promijenite fazu rute</p>
+              <div className="min-w-0">
+                <h3 className="font-bold text-dark-900 text-sm md:text-base">Ažuriraj Status</h3>
+                <p className="text-[10px] md:text-xs text-dark-500">Promijenite fazu rute</p>
               </div>
             </div>
 
-            <div className="space-y-4 flex-1">
+            <div className="space-y-3 md:space-y-4 flex-1">
               <select
-                className="w-full rounded-xl border-none bg-dark-50 px-4 py-3 text-sm font-medium text-dark-900 focus:ring-2 focus:ring-primary-500 transition-all"
+                className="w-full rounded-lg md:rounded-xl border-none bg-dark-50 px-3 md:px-4 py-2.5 md:py-3 text-xs md:text-sm font-medium text-dark-900 focus:ring-2 focus:ring-primary-500 transition-all"
                 value={statusSelection ?? ""}
                 onChange={(e) => setStatusSelection(e.target.value)}
                 disabled={
@@ -1017,14 +1133,14 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
               <button
                 onClick={handleStatusUpdate}
                 disabled={!statusSelection || statusUpdating}
-                className="w-full py-3 bg-dark-900 text-white rounded-xl text-sm font-bold hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-dark-900 transition-all shadow-lg flex items-center justify-center gap-2"
+                className="w-full py-2.5 md:py-3 bg-dark-900 text-white rounded-lg md:rounded-xl text-xs md:text-sm font-bold hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-dark-900 transition-all shadow-lg flex items-center justify-center gap-2"
               >
-                {statusUpdating && <Loader2 className="w-4 h-4 animate-spin" />}
+                {statusUpdating && <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" />}
                 Potvrdi Promjenu
               </button>
 
               {statusMessage && (
-                <p className="text-center text-xs font-medium text-green-600 bg-green-50 py-2 rounded-lg">
+                <p className="text-center text-[10px] md:text-xs font-medium text-green-600 bg-green-50 py-1.5 md:py-2 rounded-lg">
                   {statusMessage}
                 </p>
               )}
@@ -1032,34 +1148,34 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
           </div>
 
           {/* Quick Buttons Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
             <button
               onClick={() => setShowUpload(!showUpload)}
               disabled={!data.currentLoad}
-              className={`p-4 rounded-3xl border transition-all text-center flex flex-col items-center justify-center gap-3 ${
+              className={`p-3 md:p-4 rounded-2xl md:rounded-3xl border transition-all text-center flex flex-col items-center justify-center gap-2 md:gap-3 ${
                 showUpload
                   ? "border-primary-500 bg-primary-50 text-primary-700"
                   : "border-dark-100 bg-white hover:border-primary-200 hover:bg-dark-50 text-dark-600"
               }`}
             >
-              <FileUp className="w-6 h-6" />
-              <span className="text-xs font-bold">Upload POD</span>
+              <FileUp className="w-5 h-5 md:w-6 md:h-6" />
+              <span className="text-[10px] md:text-xs font-bold">Upload POD</span>
             </button>
 
             <button
               onClick={toggleAutoTracking}
-              className={`p-4 rounded-3xl border transition-all text-center flex flex-col items-center justify-center gap-3 shadow-soft-lg ${
+              className={`p-3 md:p-4 rounded-2xl md:rounded-3xl border transition-all text-center flex flex-col items-center justify-center gap-2 md:gap-3 shadow-soft-lg ${
                 autoTracking
                   ? "border-dark-900 bg-gradient-to-r from-dark-900 via-dark-800 to-dark-900 text-white"
                   : "border-dark-100 bg-white text-dark-600 hover:border-dark-900 hover:bg-gradient-to-r hover:from-dark-900 hover:via-dark-800 hover:to-dark-900 hover:text-white"
               }`}
             >
               <MapPin
-                className={`w-6 h-6 ${
+                className={`w-5 h-5 md:w-6 md:h-6 ${
                   autoTracking ? "text-white animate-bounce" : "text-dark-500"
                 }`}
               />
-              <span className="text-xs font-bold">
+              <span className="text-[10px] md:text-xs font-bold">
                 {autoTracking ? "Praćenje ON" : "Start GPS"}
               </span>
             </button>
@@ -1069,12 +1185,12 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
 
       {/* Upload Area (Conditional) */}
       {showUpload && data.currentLoad && (
-        <section className="bg-white rounded-3xl p-6 shadow-soft border-2 border-dashed border-primary-100 animate-in fade-in slide-in-from-top-4">
+        <section className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft border-2 border-dashed border-primary-100 animate-in fade-in slide-in-from-top-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-dark-900">Upload Dokumenata</h3>
-            <button 
+            <h3 className="font-bold text-dark-900 text-sm md:text-base">Upload Dokumenata</h3>
+            <button
               onClick={() => setShowUpload(false)}
-              className="text-sm text-dark-500 hover:text-dark-900 underline"
+              className="text-xs md:text-sm text-dark-500 hover:text-dark-900 underline"
             >
               Zatvori
             </button>
@@ -1089,10 +1205,10 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
       )}
 
       {/* KPI Stats */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {[
           {
-            title: "Ukupno Milja",
+            title: "Ukupno km",
             value: data.stats.totalMiles.toLocaleString(),
             sub: "Ovaj mjesec",
             icon: Navigation,
@@ -1110,7 +1226,7 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
           {
             title: "Procijenjena Zarada",
             value: formatCurrency(data.stats.totalEarnings),
-            sub: `$${data.stats.avgRatePerMile}/mi prosjek`,
+            sub: `${data.stats.avgRatePerMile} KM/km prosjek`,
             icon: DollarSign,
             color: "text-purple-600",
             bgColor: "bg-purple-50",
@@ -1118,66 +1234,66 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
         ].map((item) => (
           <div
             key={item.title}
-            className="bg-white rounded-3xl p-6 shadow-soft hover:shadow-soft-lg transition-all flex items-start justify-between"
+            className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft hover:shadow-soft-lg transition-all flex items-start justify-between"
           >
-            <div>
-              <p className="text-dark-500 text-sm font-medium mb-1">{item.title}</p>
-              <h4 className="text-3xl font-bold text-dark-900 mb-1">{item.value}</h4>
-              <p className="text-xs text-dark-400">{item.sub}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-dark-500 text-xs md:text-sm font-medium mb-1">{item.title}</p>
+              <h4 className="text-2xl md:text-3xl font-bold text-dark-900 mb-1 truncate">{item.value}</h4>
+              <p className="text-[10px] md:text-xs text-dark-400">{item.sub}</p>
             </div>
-            <div className={`p-3 rounded-2xl ${item.bgColor}`}>
-              <item.icon className={`w-6 h-6 ${item.color}`} />
+            <div className={`p-2.5 md:p-3 rounded-xl md:rounded-2xl ${item.bgColor} flex-shrink-0`}>
+              <item.icon className={`w-5 h-5 md:w-6 md:h-6 ${item.color}`} />
             </div>
           </div>
         ))}
       </section>
 
       {/* Recent Activity & Info Grid */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
         {/* Recent Loads Table */}
-        <div className="xl:col-span-2 bg-white rounded-3xl shadow-soft overflow-hidden">
-          <div className="p-6 border-b border-dark-50 flex items-center justify-between">
+        <div className="xl:col-span-2 bg-white rounded-2xl md:rounded-3xl shadow-soft overflow-hidden">
+          <div className="p-4 md:p-6 border-b border-dark-50">
             <div>
-              <h3 className="text-lg font-bold text-dark-900">Nedavna Aktivnost</h3>
-              <p className="text-sm text-dark-500">Pregled zadnjih ruta i statusa</p>
+              <h3 className="text-base md:text-lg font-bold text-dark-900">Nedavna Aktivnost</h3>
+              <p className="text-xs md:text-sm text-dark-500">Pregled zadnjih ruta i statusa</p>
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+            <table className="w-full text-xs md:text-sm text-left">
               <thead className="bg-dark-50 text-dark-500 font-medium">
                 <tr>
-                  <th className="px-6 py-4">Load #</th>
-                  <th className="px-6 py-4">Ruta</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Zarada</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Load #</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Ruta</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Status</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-right whitespace-nowrap">Zarada</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark-50">
                 {data.recentLoads.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-dark-400">
+                    <td colSpan={4} className="px-3 md:px-6 py-6 md:py-8 text-center text-dark-400">
                       Nema nedavnih aktivnosti.
                     </td>
                   </tr>
                 ) : (
                   data.recentLoads.map((load) => (
                     <tr key={load.id} className="hover:bg-dark-50/50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-dark-900">
+                      <td className="px-3 md:px-6 py-3 md:py-4 font-bold text-dark-900 whitespace-nowrap">
                         {load.loadNumber}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-dark-900">
+                      <td className="px-3 md:px-6 py-3 md:py-4">
+                        <div className="flex flex-col min-w-[120px]">
+                          <span className="font-medium text-dark-900 text-[11px] md:text-sm">
                             {load.pickupCity} → {load.deliveryCity}
                           </span>
-                          <span className="text-xs text-dark-400">
+                          <span className="text-[10px] md:text-xs text-dark-400">
                             {formatDate(load.actualPickupDate)}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 md:px-6 py-3 md:py-4">
                         <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                          className={`inline-flex items-center px-2 md:px-2.5 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-medium whitespace-nowrap ${
                             load.status === "COMPLETED"
                               ? "bg-green-100 text-green-700"
                               : "bg-dark-100 text-dark-700"
@@ -1186,7 +1302,7 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                           {STATUS_LABELS[load.status] || load.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right font-mono font-medium text-dark-900">
+                      <td className="px-3 md:px-6 py-3 md:py-4 text-right font-mono font-medium text-dark-900 text-[11px] md:text-sm whitespace-nowrap">
                         {load.loadRate ? formatCurrency(load.loadRate) : "-"}
                       </td>
                     </tr>
@@ -1198,51 +1314,51 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
         </div>
 
         {/* Profile & Truck Info */}
-        <div className="flex flex-col gap-6">
-          <div className="bg-white rounded-3xl p-6 shadow-soft">
-             <h3 className="text-lg font-bold text-dark-900 mb-4">Moj Profil</h3>
-             <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-dark-50 rounded-2xl">
-                   <div className="w-12 h-12 rounded-full bg-primary-600 flex items-center justify-center text-white text-xl font-bold">
+        <div className="flex flex-col gap-4 md:gap-6">
+          <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft">
+             <h3 className="text-base md:text-lg font-bold text-dark-900 mb-3 md:mb-4">Moj Profil</h3>
+             <div className="space-y-3 md:space-y-4">
+                <div className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-dark-50 rounded-xl md:rounded-2xl">
+                   <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary-600 flex items-center justify-center text-white text-lg md:text-xl font-bold flex-shrink-0">
                       {user.firstName[0]}
                    </div>
-                   <div>
-                      <p className="font-bold text-dark-900">{data.driver.user.firstName} {data.driver.user.lastName}</p>
-                      <p className="text-xs text-dark-500 uppercase">{data.driver.status}</p>
+                   <div className="min-w-0">
+                      <p className="font-bold text-dark-900 text-sm md:text-base truncate">{data.driver.user.firstName} {data.driver.user.lastName}</p>
+                      <p className="text-[10px] md:text-xs text-dark-500 uppercase">{data.driver.status}</p>
                    </div>
                 </div>
-                <div className="space-y-2 text-sm">
-                   <div className="flex justify-between py-2 border-b border-dark-50">
+                <div className="space-y-2 text-xs md:text-sm">
+                   <div className="flex justify-between py-2 border-b border-dark-50 gap-2">
                       <span className="text-dark-500">Email</span>
-                      <span className="font-medium">{data.driver.user.email}</span>
+                      <span className="font-medium truncate">{data.driver.user.email}</span>
                    </div>
-                   <div className="flex justify-between py-2 border-b border-dark-50">
+                   <div className="flex justify-between py-2 border-b border-dark-50 gap-2">
                       <span className="text-dark-500">Telefon</span>
                       <span className="font-medium">{data.driver.user.phone || "-"}</span>
                    </div>
-                   <div className="flex justify-between py-2">
+                   <div className="flex justify-between py-2 gap-2">
                       <span className="text-dark-500">Rate</span>
-                      <span className="font-medium text-green-600">${data.driver.ratePerMile}/mi</span>
+                      <span className="font-medium text-green-600">{data.driver.ratePerMile} KM/km</span>
                    </div>
                 </div>
              </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-soft flex-1">
-             <h3 className="text-lg font-bold text-dark-900 mb-4">Vozilo</h3>
+          <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft flex-1">
+             <h3 className="text-base md:text-lg font-bold text-dark-900 mb-3 md:mb-4">Vozilo</h3>
              {data.driver.primaryTruck ? (
-                <div className="text-center p-4">
-                   <div className="w-16 h-16 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-3 text-dark-400">
-                      <Truck className="w-8 h-8" />
+                <div className="text-center p-3 md:p-4">
+                   <div className="w-14 h-14 md:w-16 md:h-16 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-3 text-dark-400">
+                      <Truck className="w-7 h-7 md:w-8 md:h-8" />
                    </div>
-                   <h4 className="text-xl font-bold text-dark-900">{data.driver.primaryTruck.truckNumber}</h4>
-                   <p className="text-dark-500">{data.driver.primaryTruck.make} {data.driver.primaryTruck.model}</p>
-                   <div className="mt-4 inline-block bg-dark-100 px-3 py-1 rounded-lg text-xs font-mono text-dark-600">
+                   <h4 className="text-lg md:text-xl font-bold text-dark-900">{data.driver.primaryTruck.truckNumber}</h4>
+                   <p className="text-dark-500 text-sm md:text-base">{data.driver.primaryTruck.make} {data.driver.primaryTruck.model}</p>
+                   <div className="mt-3 md:mt-4 inline-block bg-dark-100 px-2.5 md:px-3 py-1 rounded-lg text-[10px] md:text-xs font-mono text-dark-600">
                       {data.driver.primaryTruck.licensePlate || "NO PLATE"}
                    </div>
                 </div>
              ) : (
-                <div className="text-center py-8 text-dark-400">
+                <div className="text-center py-6 md:py-8 text-dark-400 text-sm md:text-base">
                    <p>Nema dodijeljenog kamiona</p>
                 </div>
              )}

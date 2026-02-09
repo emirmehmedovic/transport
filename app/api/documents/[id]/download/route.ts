@@ -27,6 +27,10 @@ export async function GET(
     // Dohvati dokument
     const document = await prisma.document.findUnique({
       where: { id: params.id },
+      include: {
+        inspection: { select: { id: true, driverId: true } },
+        incident: { select: { id: true, driverId: true } },
+      },
     });
 
     if (!document) {
@@ -57,6 +61,10 @@ export async function GET(
         if (load && load.driverId === driver?.id) {
           hasAccess = true;
         }
+      } else if (document.inspection && document.inspection.driverId === driver?.id) {
+        hasAccess = true;
+      } else if (document.incident && document.incident.driverId === driver?.id) {
+        hasAccess = true;
       }
 
       if (!hasAccess) {

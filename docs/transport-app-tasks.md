@@ -180,7 +180,7 @@
 - [x] Dodaj endorsements multi-select
 - [x] Dodaj medical card expiry field
 - [x] Dodaj emergency contact fields
-- [x] Dodaj rate per mile input
+- [x] Dodaj rate per km input
 - [x] Implementiraj form validation
 - [x] Implementiraj submit handler
 
@@ -261,7 +261,7 @@
 - [x] Dodaj license plate field
 - [x] Dodaj registration expiry picker
 - [x] Dodaj insurance fields (expiry, provider, policy number)
-- [x] Dodaj current mileage input
+- [x] Dodaj current mileage (km) input
 - [x] Dodaj capacity configuration fields (max small/medium/large/oversized)
 - [x] Implementiraj form validation
 
@@ -340,8 +340,8 @@
 
 ### List View
 - [x] Kreiraj loads list page (`/loads/page.tsx`)
-- [ ] Implementiraj DataTable za loads
-- [ ] Dodaj load status badge komponenta
+- [x] Implementiraj DataTable za loads
+- [x] Dodaj load status badge komponenta
 - [x] Prikaži assigned driver i truck
 - [x] Dodaj filter by status dropdown
 - [x] Dodaj date range filter
@@ -366,9 +366,9 @@
 ### Load Form - Financial & Details
 - [x] **Step 4:** Load Details
   - [x] Distance input
-  - [x] Deadhead miles input
+  - [x] Deadhead km input
   - [x] Load rate input
-  - [x] Custom rate per mile (optional override)
+  - [x] Custom rate per km (optional override)
   - [x] Detention time & pay
   - [x] Notes textarea
   - [x] Special instructions textarea
@@ -408,9 +408,9 @@
   - [x] Created
   - [x] Picked Up (actual time ili planirani pickup)
   - [x] Delivered (actual time ili planirani delivery)
-  - [ ] Assigned
-  - [ ] In Transit
-  - [ ] Completed
+  - [x] Assigned
+  - [x] In Transit
+  - [x] Completed
 - [x] Color code past/current/future steps
 
 ### Status Update Actions
@@ -432,7 +432,7 @@
 - [x] Implementiraj recurring frequency logic (daily/weekly/monthly)
 
 ### Cron Job
-- [ ] Setup cron job runner (node-cron)
+- [x] Setup cron job runner (node-cron)
 - [x] Implementiraj funkciju za kreiranje loadova from templates
 - [ ] Run svaku noć u midnight
 - [x] Dodaj logging za kreirane loadove
@@ -529,7 +529,7 @@
 - [x] Implementiraj `calculatePay()` funkciju
 - [x] Handle default rate vs custom rate per load
 - [x] Include detention pay
-- [x] Calculate totals (miles, amount, avg rate)
+- [x] Calculate totals (km, amount, avg rate)
 
 ### API Endpoints
 - [x] Kreiraj `/api/wages/calculate` POST endpoint
@@ -546,7 +546,7 @@
 - [x] Kreiraj pay stub PDF template
 - [x] Implementiraj header (company info)
 - [x] Implementiraj driver info section
-- [x] Implementiraj loads table (load #, miles, rate, amount, detention)
+- [x] Implementiraj loads table (load #, km, rate, amount, detention)
 - [x] Implementiraj totals section (summary)
 - [x] Implementiraj footer
 - [x] Save PDF u `/uploads/pay-stubs/` folder
@@ -561,7 +561,7 @@
 - [x] "Generate Pay Stub" button kreira pay stub
 - [x] Success notification
 - [x] Pay stubs list sa tabelom
-- [x] Prikaži: Stub #, Driver, Period, Total Miles, Total Amount, Paid Status
+- [x] Prikaži: Stub #, Driver, Period, Total km, Total Amount, Paid Status
 - [x] "Generate PDF" button za stubs bez PDF-a
 - [x] "Mark as Paid" button (sa confirmation)
 
@@ -577,24 +577,24 @@
 ### Driver Performance Backend
 - [x] Kreiraj `/api/drivers/[id]/performance` GET endpoint
 - [x] Implementiraj calculation funkcije:
-  - [x] Total miles
+  - [x] Total km
   - [x] Total revenue
   - [x] Completed loads
   - [x] On-time delivery rate
-  - [x] Average miles per load
-  - [x] Average revenue per mile
+  - [x] Average km per load
+  - [x] Average revenue per km
 - [x] Dodaj date range filter
 - [x] Return time series data za charts
 
 ### Truck Performance Backend
 - [x] Kreiraj `/api/trucks/[id]/performance` GET endpoint
 - [x] Implementiraj calculations:
-  - [x] Total miles
+  - [x] Total km
   - [x] Active days
   - [x] Loads completed
   - [x] Revenue generated
-  - [x] Fuel cost per mile
-  - [x] Maintenance cost per mile
+  - [x] Fuel cost per km
+  - [x] Maintenance cost per km
   - [x] Uptime percentage
 - [x] Dodaj date range filter
 
@@ -609,28 +609,28 @@
 - [x] Kreiraj performance tab na driver detail page
 - [x] Dodaj date range selector (last 7/30/90 days, custom)
 - [x] Prikaži KPI cards:
-  - [x] Total Miles
+  - [x] Total km
   - [x] Completed Loads
   - [x] Total Revenue
   - [x] On-Time Delivery %
 - [x] Instaliraj Recharts (`npm install recharts`)
 
 ### Charts - Driver Performance
-- [x] Line chart: Miles over time
+- [x] Line chart: km over time
 - [x] Line chart: Revenue over time
 - [x] Bar chart: Loads per week
-- [x] Additional metrics: Deadhead miles, Utilization rate
+- [x] Additional metrics: Deadhead km, Utilization rate
 
 ### Frontend - Truck Performance Page
 - [x] Kreiraj performance tab na truck detail page
 - [x] Date range selector
 - [x] KPI cards:
-  - [x] Total Miles
+  - [x] Total km
   - [x] Active Days (Loads Completed)
   - [x] Revenue Generated
-  - [x] Cost per Mile
+  - [x] Cost per km
 - [x] Charts:
-  - [x] Line chart: Miles over time
+  - [x] Line chart: km over time
   - [x] Bar chart: Revenue vs Costs
   - [x] Fuel & Maintenance cost breakdown
 
@@ -643,13 +643,13 @@
 - [x] Multi-select dropdown za drivers
 - [x] "Compare" button
 - [x] Side-by-side comparison table
-- [x] Bar charts za visual comparison (4 charts: Miles, Revenue, Loads, On-Time%)
+- [x] Bar charts za visual comparison (4 charts: km, Revenue, Loads, On-Time%)
 - [x] Export to CSV button
 
 ### Truck Comparison Page
 - [x] Kreiraj comparison page (`/trucks/compare`)
 - [x] Multi-select dropdown za trucks
-- [x] Comparison table i charts (4 charts: Miles, Revenue, Loads, Uptime%)
+- [x] Comparison table i charts (4 charts: km, Revenue, Loads, Uptime%)
 - [x] Export to CSV functionality
 
 ### Reports Page
@@ -722,7 +722,7 @@
 ### Driver Dashboard Backend
 - [x] Kreiraj `/api/dashboard/driver/:id` GET endpoint
 - [x] Return current load details
-- [x] Return current month stats (miles, loads, earnings)
+- [x] Return current month stats (km, loads, earnings)
 - [x] Return recent loads (last 5)
 
 ### Driver Dashboard Frontend
@@ -786,7 +786,7 @@
 
 ### Notification Triggers - Maintenance 🔜 ZA KASNIJE
 - [ ] Implementiraj check za maintenance due (cron job)
-- [ ] Ako truck blizu oil change mileage, send notification
+- [ ] Ako truck blizu oil change kilometraže, send notification
 - [ ] Ako maintenance overdue, send urgent notification
 
 ### Notification Triggers - Compliance 🔜 ZA KASNIJE
@@ -799,8 +799,8 @@
 ### User Chat ID Management ✅ ZAVRŠENO (polje već postoji)
 - [x] Dodaj `telegramChatId` field u User model
 - [x] Kreiraj migraciju
-- [ ] Dodaj field u user form 🔜 ZA KASNIJE
-- [ ] Admin može edit chat ID za users 🔜 ZA KASNIJE
+- [x] Dodaj field u user form
+- [x] Admin može edit chat ID za users
 - [ ] Driver može set svoj chat ID u settings 🔜 ZA KASNIJE
 
 ### Testing ✅ ZAVRŠENO
@@ -815,7 +815,7 @@
 ### Alerts Backend ✅ ZAVRŠENO
 - [x] Kreiraj `/api/dashboard/alerts` GET endpoint
 - [x] Query za compliance docs expiring u sljedećih 30 dana
-- [x] Query za maintenance due (within 500 miles)
+- [x] Query za maintenance due (within 500 km)
 - [x] Query za loads missing POD (>24h after delivery)
 - [x] Query za unpaid pay stubs (>30 days)
 - [x] Return kategorisane alerts (urgent, warning, info)
@@ -828,19 +828,19 @@
   - [x] ℹ️ Info (blue)
 - [x] Sort by urgency, then by date
 - [x] Dodaj "View All" link
-- [ ] Badge count u header (notification bell icon) 🔜 ZA KASNIJE
+- [x] Badge count u header (notification bell icon)
 
 ### Alerts Page ✅ ZAVRŠENO
 - [x] Kreiraj dedicated alerts page (`/alerts`)
 - [x] Filter by type (compliance, maintenance, documents, financial)
 - [x] Filter by urgency
 - [x] Click alert → navigate to relevant page (driver detail, truck detail, load detail)
-- [ ] "Dismiss" button (mark as acknowledged) 🔜 ZA KASNIJE
+- [x] "Dismiss" button (mark as acknowledged)
 
 ### Alert Acknowledgment 🔜 ZA KASNIJE
-- [ ] Dodaj `acknowledgedAt` i `acknowledgedBy` fields (optional)
-- [ ] API endpoint za dismiss alert
-- [ ] Update UI immediately
+- [x] Dodaj `acknowledgedAt` i `acknowledgedBy` fields (optional)
+- [x] API endpoint za dismiss alert
+- [x] Update UI immediately
 
 ---
 
@@ -883,8 +883,8 @@
 - [x] Log document deletions
 
 ### Integration - Wages 🔜 ZA KASNIJE
-- [ ] Log pay stub generation
-- [ ] Log mark as paid
+- [x] Log pay stub generation
+- [x] Log mark as paid
 
 ### Audit Log Viewer Backend ✅ ZAVRŠENO
 - [x] Kreiraj `/api/audit-logs` GET endpoint (admin only)
@@ -901,15 +901,15 @@
 - [x] DataTable sa logs
 - [x] Columns: Timestamp, User, Action, Entity, Entity ID
 - [x] Filter dropdowns
-- [ ] Date range picker 🔜 ZA KASNIJE
-- [ ] Search bar (entity ID) 🔜 ZA KASNIJE
+- [x] Date range picker
+- [x] Search bar (entity ID)
 - [x] "View Details" button otvara modal
 
 ### Audit Log Detail Modal ✅ ZAVRŠENO
 - [x] Prikaži full log entry
 - [x] Prikaži before/after JSON (pretty format)
-- [ ] Highlight changed fields 🔜 ZA KASNIJE
-- [ ] Link to entity (go to driver/truck/load detail) 🔜 ZA KASNIJE
+- [x] Highlight changed fields
+- [x] Link to entity (go to driver/truck/load detail)
 
 ---
 
@@ -955,9 +955,9 @@
 - [x] Write README.md sa setup instructions
 - [x] Document environment variables (u README)
 - [x] Write deployment guide (u README)
-- [ ] Create user guide (admin) 🔜 ZA KASNIJE
-- [ ] Create user guide (dispatcher) 🔜 ZA KASNIJE
-- [ ] Create user guide (driver) 🔜 ZA KASNIJE
+- [x] Create user guide (admin)
+- [x] Create user guide (dispatcher)
+- [x] Create user guide (driver)
 - [ ] Document API endpoints (auto-generate or manual) 🔜 ZA KASNIJE
 
 ### Deployment Preparation
@@ -1069,7 +1069,7 @@
 - Completed: ☐☐☐☐☐☐☐☐☐☐ 0%
 
 **Current Sprint:** Sprint 0 - Setup
-**Next Milestone:** Complete Authentication
+**Next kmtone:** Complete Authentication
 **Target MVP Date:** 12 sedmica od starta
 
 ---

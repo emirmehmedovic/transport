@@ -32,9 +32,9 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('bs-BA', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BAM',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
@@ -75,23 +75,23 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           icon={<TrendingUp className="w-6 h-6" />}
-          label="Total Miles"
+          label="Ukupno km"
           value={formatNumber(performance.totalMiles)}
-          subValue={`${formatNumber(performance.totalLoadedMiles)} loaded`}
+          subValue={`${formatNumber(performance.totalLoadedMiles)} km utovareno`}
           color="blue"
         />
         <KPICard
           icon={<Package className="w-6 h-6" />}
-          label="Completed Loads"
+          label="Završeni loadovi"
           value={formatNumber(performance.completedLoads)}
-          subValue={`${performance.avgMilesPerLoad.toFixed(0)} avg miles/load`}
+          subValue={`${performance.avgMilesPerLoad.toFixed(0)} avg km/load`}
           color="purple"
         />
         <KPICard
           icon={<DollarSign className="w-6 h-6" />}
-          label="Total Revenue"
+          label="Ukupni prihod"
           value={formatCurrency(performance.totalRevenue)}
-          subValue={`$${performance.avgRevenuePerMile.toFixed(2)}/mile`}
+          subValue={`${formatCurrency(performance.avgRevenuePerMile)}/km`}
           color="green"
         />
         <KPICard
@@ -106,11 +106,11 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
       {/* Additional Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
-          label="Average Revenue per Load"
+          label="Prosječni prihod po loadu"
           value={formatCurrency(performance.avgRevenuePerLoad)}
         />
         <StatCard
-          label="Deadhead Miles"
+          label="Deadhead km"
           value={formatNumber(performance.totalDeadheadMiles)}
           subValue={`${((performance.totalDeadheadMiles / performance.totalMiles) * 100).toFixed(1)}% of total`}
         />

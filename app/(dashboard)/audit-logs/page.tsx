@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Filter, ChevronLeft, ChevronRight, Eye } from "lucide-react";
@@ -54,6 +55,7 @@ interface AuditLogsResponse {
 }
 
 export default function AuditLogsPage() {
+  const router = useRouter();
   const [data, setData] = useState<AuditLogsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,9 @@ export default function AuditLogsPage() {
   // Filters
   const [entityFilter, setEntityFilter] = useState<AuditEntity | "all">("all");
   const [actionFilter, setActionFilter] = useState<AuditAction | "all">("all");
+  const [entityIdFilter, setEntityIdFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [page, setPage] = useState(1);
 
   // Selected log for detail view
@@ -68,7 +73,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     fetchLogs();
-  }, [page, entityFilter, actionFilter]);
+  }, [page, entityFilter, actionFilter, entityIdFilter, startDate, endDate]);
 
   const fetchLogs = async () => {
     try {
@@ -86,6 +91,18 @@ export default function AuditLogsPage() {
 
       if (actionFilter !== "all") {
         params.append("action", actionFilter);
+      }
+
+      if (entityIdFilter.trim()) {
+        params.append("entityId", entityIdFilter.trim());
+      }
+
+      if (startDate) {
+        params.append("startDate", startDate);
+      }
+
+      if (endDate) {
+        params.append("endDate", endDate);
       }
 
       const res = await fetch(`/api/audit-logs?${params.toString()}`, {
@@ -165,6 +182,23 @@ export default function AuditLogsPage() {
     }
   };
 
+  const getEntityLink = (entity: AuditEntity, entityId: string): string => {
+    switch (entity) {
+      case "DRIVER":
+        return `/drivers/${entityId}`;
+      case "TRUCK":
+        return `/trucks/${entityId}`;
+      case "LOAD":
+        return `/loads/${entityId}`;
+      case "DOCUMENT":
+        return `/documents`;
+      case "PAY_STUB":
+        return `/wages`;
+      default:
+        return "#";
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("bs-BA", {
       day: "2-digit",
@@ -184,8 +218,22 @@ export default function AuditLogsPage() {
     actionFilter === "all" ? "Sve akcije" : getActionLabel(actionFilter as AuditAction),
   ];
 
+  const changedFields = useMemo(() => {
+    if (!selectedLog?.changes) return [];
+    const before = selectedLog.changes.before || {};
+    const after = selectedLog.changes.after || {};
+    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+    return keys
+      .map((key) => ({
+        key,
+        before: before[key],
+        after: after[key],
+      }))
+      .filter((entry) => JSON.stringify(entry.before) !== JSON.stringify(entry.after));
+  }, [selectedLog]);
+
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
       <PageHeader
         icon={Eye}
         title="Audit Logs"
@@ -193,28 +241,28 @@ export default function AuditLogsPage() {
         actions={
           <button
             onClick={fetchLogs}
-            className="rounded-full border border-white/15 bg-white/5 px-5 py-2 text-sm font-semibold text-dark-50 hover:bg-white/10 hover:border-white/25 transition-colors"
+            className="rounded-full border border-white/15 bg-white/5 px-3 md:px-5 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-dark-50 hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
           >
-            Osvježi podatke
+            Osvježi
           </button>
         }
       >
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno logova</p>
-            <p className="text-2xl font-bold mt-1">{totalLogs}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno logova</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{totalLogs}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Trenutna stranica</p>
-            <p className="text-2xl font-bold mt-1">{currentPage} / {totalPages}</p>
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Stranica</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{currentPage}/{totalPages}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Logova na stranici</p>
-            <p className="text-2xl font-bold mt-1">{logsOnPage}</p>
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Na stranici</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{logsOnPage}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Filteri</p>
-            <p className="text-sm font-medium mt-1 text-white/80">
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Filteri</p>
+            <p className="text-xs md:text-sm font-medium mt-1 text-white/80 truncate">
               {currentFilters.join(" · ")}
             </p>
           </div>
@@ -230,7 +278,7 @@ export default function AuditLogsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Entity Filter */}
             <div>
               <label className="text-sm font-medium text-dark-700 mb-2 block">
@@ -278,6 +326,53 @@ export default function AuditLogsPage() {
                 <option value="ASSIGNMENT">Dodjela</option>
                 <option value="PAYMENT">Plaćanje</option>
               </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-dark-700 mb-2 block">
+                Entity ID
+              </label>
+              <input
+                type="text"
+                value={entityIdFilter}
+                onChange={(e) => {
+                  setEntityIdFilter(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="npr. cml44dtg..."
+                className="w-full px-4 py-2 border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-dark-700 mb-2 block">
+                  Od
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-4 py-2 border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-dark-700 mb-2 block">
+                  Do
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full px-4 py-2 border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
             </div>
           </div>
         </CardContent>
@@ -441,7 +536,58 @@ export default function AuditLogsPage() {
                 </p>
               </div>
 
-              {selectedLog.changes && (
+              <div>
+                <p className="text-sm text-dark-500 mb-2">Entitet</p>
+                <button
+                  onClick={() => {
+                    const link = getEntityLink(selectedLog.entity, selectedLog.entityId);
+                    if (link !== "#") {
+                      router.push(link);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-dark-200 px-4 py-2 text-sm font-semibold text-dark-700 hover:bg-dark-50"
+                >
+                  Otvori {getEntityLabel(selectedLog.entity)}
+                </button>
+              </div>
+
+              {selectedLog.changes && changedFields.length > 0 && (
+                <div>
+                  <p className="text-sm text-dark-500 mb-2">Promijenjena polja</p>
+                  <div className="space-y-2">
+                    {changedFields.map((field) => (
+                      <div
+                        key={field.key}
+                        className="rounded-xl border border-dark-100 bg-dark-50/50 px-4 py-3"
+                      >
+                        <p className="text-xs font-semibold text-dark-500 uppercase tracking-wide">
+                          {field.key}
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 text-xs">
+                          <div>
+                            <p className="text-[11px] text-dark-400 uppercase mb-1">Prije</p>
+                            <div className="rounded-lg border border-dark-100 bg-white px-3 py-2 text-dark-700">
+                              {field.before === undefined
+                                ? "-"
+                                : JSON.stringify(field.before)}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-dark-400 uppercase mb-1">Poslije</p>
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
+                              {field.after === undefined
+                                ? "-"
+                                : JSON.stringify(field.after)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedLog.changes && changedFields.length === 0 && (
                 <div>
                   <p className="text-sm text-dark-500 mb-2">Izmjene</p>
                   <pre className="bg-dark-50 rounded-xl p-4 text-xs overflow-auto max-h-96">

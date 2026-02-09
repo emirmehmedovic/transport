@@ -50,6 +50,9 @@ export async function GET(
           },
         },
         vehicles: true,
+        stops: {
+          orderBy: { sequence: "asc" },
+        },
       },
     });
 
@@ -137,11 +140,13 @@ export async function PUT(
       customRatePerMile,
       detentionTime,
       detentionPay,
+      estimatedDurationHours,
       notes,
       specialInstructions,
       driverId,
       truckId,
       status,
+      stops,
     } = body;
 
     // Minimalna validacija (glavna polja ne smiju biti prazna ako su poslata)
@@ -196,11 +201,39 @@ export async function PUT(
         customRatePerMile: customRatePerMile ? parseFloat(customRatePerMile) : null,
         detentionTime: detentionTime ? parseInt(detentionTime) : null,
         detentionPay: detentionPay ? parseFloat(detentionPay) : 0,
+        estimatedDurationHours: estimatedDurationHours
+          ? parseFloat(estimatedDurationHours)
+          : null,
         notes,
         specialInstructions,
         driverId: driverId || null,
         truckId: truckId || null,
         status: status || existing.status,
+        stops: Array.isArray(stops)
+          ? {
+              deleteMany: {},
+              create: stops.map((stop: any, index: number) => ({
+                type: stop.type,
+                sequence: stop.sequence ?? index + 1,
+                address: stop.address,
+                city: stop.city,
+                state: stop.state,
+                zip: stop.zip,
+                latitude:
+                  stop.latitude !== undefined && stop.latitude !== null
+                    ? parseFloat(stop.latitude)
+                    : null,
+                longitude:
+                  stop.longitude !== undefined && stop.longitude !== null
+                    ? parseFloat(stop.longitude)
+                    : null,
+                contactName: stop.contactName || null,
+                contactPhone: stop.contactPhone || null,
+                scheduledDate: stop.scheduledDate ? new Date(stop.scheduledDate) : null,
+                actualDate: stop.actualDate ? new Date(stop.actualDate) : null,
+              })),
+            }
+          : undefined,
       },
     });
 

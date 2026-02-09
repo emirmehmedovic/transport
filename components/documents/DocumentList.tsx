@@ -146,10 +146,10 @@ export default function DocumentList({
   };
 
   const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    return new Date(dateString).toLocaleDateString("bs-BA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
     });
   };
 

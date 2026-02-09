@@ -241,10 +241,73 @@ export async function checkLoadProximity(
         pickupLongitude: true,
         deliveryLatitude: true,
         deliveryLongitude: true,
+        stops: {
+          orderBy: { sequence: 'asc' },
+          select: {
+            id: true,
+            type: true,
+            sequence: true,
+            latitude: true,
+            longitude: true,
+            actualDate: true,
+          },
+        },
       },
     });
 
     for (const load of loads) {
+      const hasStops = load.stops && load.stops.length > 0;
+      if (hasStops) {
+        const nextStop = load.stops.find((s) => !s.actualDate && s.latitude && s.longitude);
+        if (nextStop && nextStop.latitude && nextStop.longitude) {
+          const distanceToStop = calculateDistance(
+            latitude,
+            longitude,
+            nextStop.latitude,
+            nextStop.longitude
+          );
+
+          if (distanceToStop <= radiusMeters) {
+            await prisma.loadStop.update({
+              where: { id: nextStop.id },
+              data: { actualDate: new Date() },
+            });
+
+            if (nextStop.type === 'PICKUP' && load.status === 'ASSIGNED') {
+              await prisma.load.update({
+                where: { id: load.id },
+                data: {
+                  status: 'PICKED_UP',
+                  actualPickupDate: new Date(),
+                },
+              });
+            } else if (nextStop.type === 'INTERMEDIATE') {
+              if (load.status === 'PICKED_UP') {
+                await prisma.load.update({
+                  where: { id: load.id },
+                  data: { status: 'IN_TRANSIT' },
+                });
+              }
+            } else if (nextStop.type === 'DELIVERY') {
+              if (load.status === 'IN_TRANSIT' || load.status === 'PICKED_UP') {
+                await prisma.load.update({
+                  where: { id: load.id },
+                  data: {
+                    status: 'DELIVERED',
+                    actualDeliveryDate: new Date(),
+                  },
+                });
+              }
+            }
+
+            console.log(
+              `[LoadProximity] ✅ Stop ${nextStop.sequence} (${nextStop.type}) for ${load.loadNumber} (${Math.round(distanceToStop)}m)`
+            );
+          }
+        }
+        continue;
+      }
+
       // Check pickup proximity: ASSIGNED → PICKED_UP
       if (
         load.status === 'ASSIGNED' &&

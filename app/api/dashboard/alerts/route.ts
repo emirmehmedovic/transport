@@ -15,6 +15,8 @@ export interface Alert {
   entityType: "driver" | "truck" | "load" | "payStub";
   createdAt: Date;
   daysUntil?: number; // za expiring stvari
+  acknowledgedAt?: Date;
+  acknowledgedById?: string | null;
 }
 
 /**
@@ -177,7 +179,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 2. MAINTENANCE ALERTS - Due within 500 miles
+    // 2. MAINTENANCE ALERTS - Due within 500 km
     const maintenanceRecords = await prisma.maintenanceRecord.findMany({
       where: {
         nextServiceDue: {
@@ -197,16 +199,16 @@ export async function GET(request: NextRequest) {
 
     for (const record of maintenanceRecords) {
       if (record.nextServiceDue && record.truck.currentMileage) {
-        const milesTillDue = record.nextServiceDue - record.truck.currentMileage;
+        const kmTillDue = record.nextServiceDue - record.truck.currentMileage;
 
-        if (milesTillDue <= 500) {
+        if (kmTillDue <= 500) {
           alerts.push({
             id: `maint-${record.id}`,
             type: "maintenance",
-            urgency: milesTillDue <= 0 ? "urgent" : milesTillDue <= 200 ? "warning" : "info",
-            title: milesTillDue <= 0 ? "Maintenance Overdue" : "Maintenance Due Soon",
+            urgency: kmTillDue <= 0 ? "urgent" : kmTillDue <= 200 ? "warning" : "info",
+            title: kmTillDue <= 0 ? "Maintenance Overdue" : "Maintenance Due Soon",
             description: `Kamion ${record.truck.truckNumber} - ${record.type} ${
-              milesTillDue <= 0 ? `overdue ${Math.abs(milesTillDue)} milja` : `za ${milesTillDue} milja`
+              kmTillDue <= 0 ? `overdue ${Math.abs(kmTillDue)} km` : `za ${kmTillDue} km`
             }`,
             entityId: record.truck.id,
             entityType: "truck",
@@ -216,7 +218,45 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 3. DOCUMENTS ALERTS - Loads missing POD (>24h after delivery)
+    // 3. TOLL/PERMIT ALERTS - Expiring permits (30 dana)
+    const tollPermitsExpiring = await prisma.tollPermit.findMany({
+      where: {
+        validTo: {
+          lte: thirtyDaysFromNow,
+          gte: now,
+        },
+      },
+      include: {
+        truck: {
+          select: {
+            id: true,
+            truckNumber: true,
+          },
+        },
+      },
+    });
+
+    for (const permit of tollPermitsExpiring) {
+      const daysUntil = Math.ceil(
+        (new Date(permit.validTo).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      alerts.push({
+        id: `toll-${permit.id}`,
+        type: "compliance",
+        urgency: daysUntil <= 7 ? "urgent" : daysUntil <= 15 ? "warning" : "info",
+        title: "Toll/Permit Expiring",
+        description: `Kamion ${permit.truck?.truckNumber || ""} - ${permit.countryCode} ${
+          permit.type
+        } ističe za ${daysUntil} dana`,
+        entityId: permit.truck?.id || permit.id,
+        entityType: "truck",
+        createdAt: now,
+        daysUntil,
+      });
+    }
+
+    // 4. DOCUMENTS ALERTS - Loads missing POD (>24h after delivery)
     const twentyFourHoursAgo = new Date();
     twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
@@ -336,9 +376,49 @@ export async function GET(request: NextRequest) {
       info: alerts.filter((a) => a.urgency === "info").length,
     };
 
+    const includeAcknowledged =
+      request.nextUrl.searchParams.get("includeAcknowledged") === "1";
+
+    if (alerts.length > 0) {
+      const acknowledgements = await prisma.alertAcknowledgement.findMany({
+        where: {
+          alertId: {
+            in: alerts.map((a) => a.id),
+          },
+        },
+        select: {
+          alertId: true,
+          acknowledgedAt: true,
+          acknowledgedById: true,
+        },
+      });
+
+      const ackMap = new Map(
+        acknowledgements.map((ack) => [ack.alertId, ack])
+      );
+
+      alerts.forEach((alert) => {
+        const ack = ackMap.get(alert.id);
+        if (ack) {
+          alert.acknowledgedAt = ack.acknowledgedAt;
+          alert.acknowledgedById = ack.acknowledgedById;
+        }
+      });
+
+      if (!includeAcknowledged) {
+        const filtered = alerts.filter((alert) => !ackMap.has(alert.id));
+        alerts.length = 0;
+        alerts.push(...filtered);
+      }
+    }
+
     return NextResponse.json({
       total: alerts.length,
-      breakdown,
+      breakdown: {
+        urgent: alerts.filter((a) => a.urgency === "urgent").length,
+        warning: alerts.filter((a) => a.urgency === "warning").length,
+        info: alerts.filter((a) => a.urgency === "info").length,
+      },
       alerts,
     });
   } catch (error) {

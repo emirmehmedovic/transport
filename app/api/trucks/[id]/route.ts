@@ -81,6 +81,9 @@ export async function GET(
           },
           take: 10,
         },
+        tollPermits: {
+          orderBy: { validTo: "asc" },
+        },
       },
     });
 

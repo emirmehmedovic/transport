@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { auditCreate, getClientIp, AuditEntity } from '@/lib/auditLog';
 import {
   calculateDriverWages,
   generatePayStubNumber,
@@ -228,6 +229,21 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    await auditCreate(
+      decoded.userId,
+      AuditEntity.PAY_STUB,
+      payStub.id,
+      {
+        stubNumber: payStub.stubNumber,
+        driverId: payStub.driverId,
+        periodStart: payStub.periodStart,
+        periodEnd: payStub.periodEnd,
+        totalMiles: payStub.totalMiles,
+        totalAmount: payStub.totalAmount,
+      },
+      getClientIp(request)
+    );
 
     return NextResponse.json({
       message: 'Pay stub generated successfully',

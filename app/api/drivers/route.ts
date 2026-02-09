@@ -34,6 +34,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim() || "";
     const status = searchParams.get("status")?.trim().toUpperCase() || "";
+    const sortBy = searchParams.get("sortBy")?.trim() || "createdAt"; // createdAt | hireDate | status | name
+    const sortDir = (searchParams.get("sortDir")?.trim().toLowerCase() || "desc") as
+      | "asc"
+      | "desc";
+    const page = parseInt(searchParams.get("page") || "1", 10) || 1;
+    const pageSize = parseInt(searchParams.get("pageSize") || "20", 10) || 20;
 
     const where: any = {};
 
@@ -50,33 +56,55 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const drivers = await prisma.driver.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
+    const skip = (page - 1) * pageSize;
+
+    const orderBy =
+      sortBy === "name"
+        ? [{ user: { firstName: sortDir } }, { user: { lastName: sortDir } }]
+        : sortBy === "hireDate"
+        ? { hireDate: sortDir }
+        : sortBy === "status"
+        ? { status: sortDir }
+        : { createdAt: sortDir };
+
+    const [drivers, total] = await Promise.all([
+      prisma.driver.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
+          primaryTruck: {
+            select: {
+              id: true,
+              truckNumber: true,
+              make: true,
+              model: true,
+            },
           },
         },
-        primaryTruck: {
-          select: {
-            id: true,
-            truckNumber: true,
-            make: true,
-            model: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
+        orderBy,
+        skip,
+        take: pageSize,
+      }),
+      prisma.driver.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      drivers,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
       },
     });
-
-    return NextResponse.json({ drivers });
   } catch (error: any) {
     console.error("Error fetching drivers:", error);
     return NextResponse.json(

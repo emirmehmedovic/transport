@@ -38,8 +38,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-dark-50 px-4 py-8 font-sans">
-      <div className="w-full max-w-5xl bg-white rounded-[2.5rem] shadow-soft-xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
+    <div className="min-h-screen flex items-center justify-center bg-dark-50 px-4 py-6 md:py-8 font-sans">
+      <div className="w-full max-w-5xl bg-white rounded-3xl md:rounded-[2.5rem] shadow-soft-xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         {/* Left side - brand / copy */}
         <div className="relative hidden md:flex flex-col justify-between bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 text-white p-10">
           <div>
@@ -67,8 +67,8 @@ export default function LoginPage() {
         </div>
 
         {/* Right side - form */}
-        <div className="p-8 md:p-10 flex items-center justify-center bg-white">
-          <div className="w-full max-w-sm space-y-8">
+        <div className="p-6 md:p-8 lg:p-10 flex items-center justify-center bg-white">
+          <div className="w-full max-w-sm space-y-6 md:space-y-8">
             <div className="md:hidden text-center">
               <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-dark-900 text-white shadow-primary mb-4">
                 <Truck className="w-6 h-6" />
@@ -80,8 +80,8 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <h2 className="text-xl font-bold text-dark-900 mb-1">Dobrodošli nazad</h2>
-              <p className="text-sm text-dark-500">
+              <h2 className="text-lg md:text-xl font-bold text-dark-900 mb-1">Dobrodošli nazad</h2>
+              <p className="text-xs md:text-sm text-dark-500">
                 Unesite svoje podatke za pristup kontrolnoj tabli.
               </p>
             </div>

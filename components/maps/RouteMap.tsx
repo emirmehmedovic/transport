@@ -47,6 +47,7 @@ interface RouteMapProps {
   deliveryLat: number;
   deliveryLng: number;
   deliveryAddress: string;
+  waypoints?: { lat: number; lng: number; label?: string }[];
   routes: RouteOption[];
   selectedRouteIndex: number;
   onRouteSelect: (index: number) => void;
@@ -59,6 +60,7 @@ export default function RouteMap({
   deliveryLat,
   deliveryLng,
   deliveryAddress,
+  waypoints = [],
   routes,
   selectedRouteIndex,
   onRouteSelect,
@@ -90,6 +92,9 @@ export default function RouteMap({
       case "alternative":
         return "Alternativna ruta";
       default:
+        if (type.startsWith("alternative_")) {
+          return "Alternativna ruta";
+        }
         return "Ruta";
     }
   };
@@ -141,6 +146,19 @@ export default function RouteMap({
               </div>
             </Popup>
           </Marker>
+
+          {/* Waypoint Markers */}
+          {waypoints.map((point, idx) => (
+            <Marker key={`waypoint-${idx}`} position={[point.lat, point.lng]}>
+              <Popup>
+                <div className="text-sm">
+                  <p className="font-semibold text-dark-900">
+                    {point.label || `Stop ${idx + 1}`}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
 
           {/* Route Lines - Show all routes */}
           {routes.map((route, index) => {

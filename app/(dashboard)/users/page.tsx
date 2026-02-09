@@ -147,7 +147,7 @@ export default function UsersPage() {
   );
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
       <PageHeader
         icon={User}
         title="Korisnici"
@@ -155,47 +155,47 @@ export default function UsersPage() {
         actions={
           <button
             onClick={() => router.push("/users/new")}
-            className="flex items-center gap-2 rounded-full px-5 py-2.5 border border-white/15 bg-white/5 text-dark-50 font-semibold hover:bg-white/10 hover:border-white/25 transition-colors"
+            className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
           >
-            <Plus className="w-4 h-4" />
-            Dodaj korisnika
+            <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            Dodaj
           </button>
         }
       >
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10">
-            <p className="text-xs font-semibold text-dark-200 uppercase tracking-wide">
-              Ukupno korisnika
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10">
+            <p className="text-[10px] md:text-xs font-semibold text-dark-200 uppercase tracking-wide">
+              Korisnika
             </p>
-            <p className="text-2xl font-bold mt-1">{totalUsers}</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{totalUsers}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10">
-            <p className="text-xs font-semibold text-dark-200 uppercase tracking-wide">
-              Administratori
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10">
+            <p className="text-[10px] md:text-xs font-semibold text-dark-200 uppercase tracking-wide">
+              Admini
             </p>
-            <p className="text-2xl font-bold mt-1">{roleStats.admins}</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{roleStats.admins}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10">
-            <p className="text-xs font-semibold text-dark-200 uppercase tracking-wide">
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10">
+            <p className="text-[10px] md:text-xs font-semibold text-dark-200 uppercase tracking-wide">
               Dispečeri
             </p>
-            <p className="text-2xl font-bold mt-1">{roleStats.dispatchers}</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{roleStats.dispatchers}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10">
-            <p className="text-xs font-semibold text-dark-200 uppercase tracking-wide">
-              Vozači (profil)
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10">
+            <p className="text-[10px] md:text-xs font-semibold text-dark-200 uppercase tracking-wide">
+              Vozači
             </p>
-            <p className="text-2xl font-bold mt-1">{roleStats.withDriverProfile}</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{roleStats.withDriverProfile}</p>
           </div>
         </div>
       </PageHeader>
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-col md:flex-row md:items-center gap-3 w-full md:w-auto">
+      <div className="flex flex-col gap-3 md:gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full">
           <input
             type="text"
-            placeholder="Pretraži po imenu, prezimenu ili emailu..."
-            className="w-full md:w-80 rounded-full border border-dark-200 bg-white px-4 py-3 text-sm text-dark-900 placeholder:text-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Pretraži..."
+            className="flex-1 sm:flex-none sm:w-80 rounded-full border border-dark-200 bg-white px-4 py-2.5 md:py-3 text-xs md:text-sm text-dark-900 placeholder:text-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {

@@ -151,7 +151,7 @@ export async function calculateDriverWages(
     }
   );
 
-  // Kalkuliši average rate per mile
+  // Kalkuliši average rate per km
   if (summary.totalMiles > 0) {
     summary.avgRatePerMile = summary.totalAmount / summary.totalMiles;
   }
@@ -196,9 +196,11 @@ export async function generatePayStubNumber(): Promise<string> {
  * Formatuje iznos kao currency string
  */
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('bs-BA', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'BAM',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 
@@ -207,10 +209,10 @@ export function formatCurrency(amount: number): string {
  */
 export function formatDate(date: Date | null): string {
   if (!date) return '-';
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+  return new Intl.DateTimeFormat("bs-BA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   }).format(date);
 }
 

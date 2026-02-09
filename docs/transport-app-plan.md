@@ -46,9 +46,9 @@ Web aplikacija za kompletno upravljanje transport firmom specijalizovanom za lon
 - Fuel tracking po kamionu
 - Expense tracking (repairs, fuel, tolls)
 - Performance metrici:
-  - Miles per period
+  - km per period
   - Fuel efficiency
-  - Maintenance cost per mile
+  - Maintenance cost per km
   - Uptime/downtime
   - Revenue per truck
 
@@ -61,9 +61,9 @@ Web aplikacija za kompletno upravljanje transport firmom specijalizovanom za lon
   - Vehicle size za capacity calculation
   - Operable/inoperable status
   - Damage notes
-- Distance tracking (loaded + deadhead miles)
+- Distance tracking (loaded + deadhead km)
 - Detention time i pay
-- Custom rate per mile opcija (override default)
+- Custom rate per km opcija (override default)
 - Special instructions i notes
 - **Recurring loads** sa templates
 - Document management per load
@@ -85,7 +85,7 @@ Web aplikacija za kompletno upravljanje transport firmom specijalizovanom za lon
 - Organize po load-u i po vozaču
 
 ### 6. Wages & Payment System
-- Rate per mile sistem (fiksni + custom per load)
+- Rate per km sistem (fiksni + custom per load)
 - Detention pay
 - Isplate po loadu (immediate calculation)
 - Automatsko generisanje pay stubova
@@ -94,7 +94,7 @@ Web aplikacija za kompletno upravljanje transport firmom specijalizovanom za lon
   - Lista svih loadova sa detaljima
   - Ukupne миле
   - Ukupan iznos
-  - Average rate per mile
+  - Average rate per km
 - PDF generisanje pay stubova
 - Payment tracking (paid/unpaid)
 - Nema dedukcija
@@ -325,8 +325,8 @@ Kada se dodaju vozila u load:
 
 ### Osnovni Sistem
 
-**Default rate per mile:**
-- Svaki vozač ima postavljen `ratePerMile` (npr. $0.60/mile)
+**Default rate per km:**
+- Svaki vozač ima postavljen `ratePerMile` (npr. BAM 0.60/km)
 
 **Custom rate per load:**
 - Za specifične loadove može se override rate
@@ -345,10 +345,10 @@ Kada se dodaju vozila u load:
 **Calculation:**
 1. Find all completed loads za vozača u periodu
 2. Za svaki load:
-   - Miles × Rate = Amount
+   - km × Rate = Amount
    - Add detention pay
-3. Sum total miles i total amount
-4. Calculate average rate per mile
+3. Sum total km i total amount
+4. Calculate average rate per km
 5. Generate PDF sa svim detaljima
 6. Store u database sa `isPaid` flag
 
@@ -358,13 +358,13 @@ Kada se dodaju vozila u load:
 - Period dates
 - Tabela svih loadova:
   - Load number
-  - Miles
+  - km
   - Rate
   - Amount
   - Detention (ako postoji)
-- Total miles
+- Total km
 - Total amount
-- Average rate/mile
+- Average rate/km
 - Payment status
 
 ---
@@ -407,7 +407,7 @@ Kada se dodaju vozila u load:
    ⚠️ Maintenance Due
    Truck: #145
    Type: Oil Change
-   Current Mileage: 124,500
+   Current Mileage: 124,500 km
    Due at: 125,000
    ```
 
@@ -476,29 +476,29 @@ Neke rute se ponavljaju redovno (dnevno, sedmično, mjesečno).
 ### Driver Performance
 
 **Osnovni Metrici:**
-- **Total Miles:** Suma svih миlja iz completed loads
+- **Total km:** Suma svih km iz completed loads
 - **Total Revenue:** Suma svih plaćanja
 - **Completed Loads:** Broj delivered + completed loadova
 - **On-Time Delivery Rate:** (On-time deliveries / Total deliveries) × 100%
 
 **Advanced Metrici:**
-- **Average Miles per Load:** Total miles / Completed loads
-- **Average Revenue per Mile:** Total revenue / Total miles
+- **Average km per Load:** Total km / Completed loads
+- **Average Revenue per km:** Total revenue / Total km
 - **Safety Score:** Based on incidents, violations (manual input)
 - **Utilization Rate:** Koliko dana u mjesecu bio aktivan
 
 ### Truck Performance
 
 **Osnovni Metrici:**
-- **Total Miles:** Ukupno pređene миле
+- **Total km:** Ukupno pređeni km
 - **Active Days:** Broj dana u radu
 - **Loads Completed:** Broj loadova
 - **Revenue Generated:** Ukupan revenue
 
 **Cost Metrici:**
-- **Fuel Cost per Mile:** Total fuel expenses / Total miles
-- **Maintenance Cost per Mile:** Total maintenance / Total miles
-- **Total Operating Cost per Mile:** (Fuel + Maintenance + Other) / Miles
+- **Fuel Cost per km:** Total fuel expenses / Total km
+- **Maintenance Cost per km:** Total maintenance / Total km
+- **Total Operating Cost per km:** (Fuel + Maintenance + Other) / km
 
 **Utilization:**
 - **Uptime %:** (Active days / Total days) × 100%
@@ -510,10 +510,10 @@ Neke rute se ponavljaju redovno (dnevno, sedmično, mjesečno).
 ```
 Metric              | Driver A  | Driver B  | Driver C
 --------------------|-----------|-----------|----------
-Total Miles         | 12,450    | 10,230    | 14,100
+Total km         | 12,450    | 10,230    | 14,100
 Completed Loads     | 28        | 25        | 31
 On-Time %           | 96%       | 92%       | 98%
-Avg Revenue/Mile    | $0.61     | $0.59     | $0.63
+Avg Revenue/km      | BAM 0.61     | BAM 0.59     | BAM 0.63
 ```
 
 **Chart Visualizations:**
@@ -624,7 +624,7 @@ Avg Revenue/Mile    | $0.61     | $0.59     | $0.63
    - Registration expiring
 
 2. **Maintenance Alerts:**
-   - Oil change due (within 500 miles)
+   - Oil change due (within 500 km)
    - Scheduled maintenance overdue
    - Tire rotation due
 
@@ -644,7 +644,7 @@ Avg Revenue/Mile    | $0.61     | $0.59     | $0.63
 🚨 Alerts (5)
 
 🔴 URGENT: John Doe - CDL expires in 7 days
-⚠️  Truck #145 - Oil change overdue (1,200 miles)
+⚠️  Truck #145 - Oil change overdue (1,200 km)
 📄 LOAD-2024-089 - Missing POD (2 days)
 💰 Pay Stub PAY-2024-045 - Unpaid (35 days)
 ⚠️  Truck #132 - Low utilization (35% this month)
@@ -895,8 +895,8 @@ NEXT_PUBLIC_APP_URL="https://transport.yourcompany.com"
 - Driver utilization rate (target: >80%)
 
 **Financial:**
-- Revenue per mile
-- Cost per mile
+- Revenue per km
+- Cost per km
 - Profit margin per load
 - Operating expenses trend
 

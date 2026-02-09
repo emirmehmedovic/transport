@@ -896,8 +896,8 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
         <div className="absolute top-4 bottom-4 right-4 z-[1000] w-[420px] overflow-y-auto">
           {(() => {
             const load = loads.find(l => l.id === selectedLoadForPanel)!;
-            const distanceKm = Math.round(load.distance * 1.60934);
-            const customRatePerKm = load.customRatePerMile ? load.customRatePerMile / 1.60934 : null;
+            const distanceKm = Math.round(load.distance);
+            const customRatePerKm = load.customRatePerMile ?? null;
             const formatBAM = (value: number) =>
               new Intl.NumberFormat("bs-BA", { style: "currency", currency: "BAM" }).format(value);
 

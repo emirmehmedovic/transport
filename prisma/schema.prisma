@@ -32,6 +32,12 @@ enum LoadStatus {
   CANCELLED
 }
 
+enum LoadStopType {
+  PICKUP
+  DELIVERY
+  INTERMEDIATE
+}
+
 enum VehicleSize {
   SMALL // sedan, hatchback
   MEDIUM // mid-size SUV
@@ -46,6 +52,8 @@ enum DocumentType {
   LOAD_PHOTO
   RATE_CONFIRMATION
   FUEL_RECEIPT
+  INSPECTION_PHOTO
+  INCIDENT_PHOTO
   CDL_LICENSE
   MEDICAL_CARD
   INSURANCE
@@ -70,6 +78,58 @@ enum ExpenseType {
   INSURANCE
   REGISTRATION
   OTHER
+}
+
+enum TollPermitType {
+  VIGNETTE
+  TOLLBOX
+  PERMIT
+  EMISSION_ZONE
+  OTHER
+}
+
+enum TollPermitStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+enum InspectionType {
+  PRE_TRIP
+  POST_TRIP
+}
+
+enum InspectionStatus {
+  SAFE
+  UNSAFE
+  NEEDS_REPAIR
+}
+
+enum IncidentSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  IN_REVIEW
+  CLOSED
+}
+
+enum ClaimStatus {
+  OPEN
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  VOID
 }
 
 enum AuditAction {
@@ -109,6 +169,7 @@ model User {
 
   driver    Driver?
   auditLogs AuditLog[]
+  alertAcknowledgements AlertAcknowledgement[] @relation("AlertAcknowledgements")
 
   @@index([email])
 }
@@ -138,6 +199,10 @@ model Driver {
   // Financial
   ratePerMile Float @default(0.60)
 
+  // Schengen 90/180 manual override (remaining days as of a date)
+  schengenManualRemainingDays Int?
+  schengenManualAsOf          DateTime?
+
   // GPS Tracking
   lastKnownLatitude  Float?
   lastKnownLongitude Float?
@@ -161,6 +226,9 @@ model Driver {
   recurringLoadTemplates RecurringLoadTemplate[]
   positions              Position[] // Traccar position history
   geofenceEvents         GeofenceEvent[] // Geofence entry/exit events
+  schengenDays           SchengenDay[]
+  inspections            Inspection[]
+  incidents              Incident[]
 
   @@index([userId])
   @@index([status])
@@ -214,9 +282,217 @@ model Truck {
   maintenanceRecords     MaintenanceRecord[]
   expenses               TruckExpense[]
   recurringLoadTemplates RecurringLoadTemplate[]
+  tollPermits            TollPermit[]
+  trailers               Trailer[]
+  inspections            Inspection[]
+  incidents              Incident[]
 
   @@index([truckNumber])
   @@index([isActive])
+}
+
+model Trailer {
+  id String @id @default(cuid())
+
+  trailerNumber String @unique
+  vin           String? @unique
+  make          String?
+  model         String?
+  year          Int?
+  licensePlate  String?
+
+  registrationExpiry DateTime?
+  insuranceExpiry    DateTime?
+
+  isActive Boolean @default(true)
+  currentMileage Int @default(0)
+
+  currentTruckId String?
+  currentTruck   Truck? @relation(fields: [currentTruckId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inspections Inspection[]
+  incidents   Incident[]
+
+  @@index([trailerNumber])
+  @@index([currentTruckId])
+}
+
+model Inspection {
+  id String @id @default(cuid())
+
+  type   InspectionType
+  status InspectionStatus
+  checklist Json?
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  truckId String
+  truck   Truck  @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  trailerId String?
+  trailer   Trailer? @relation(fields: [trailerId], references: [id], onDelete: SetNull)
+
+  odometer Int?
+  defects  Boolean @default(false)
+  defectNotes String? @db.Text
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents Document[]
+
+  @@index([driverId])
+  @@index([truckId])
+  @@index([trailerId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Incident {
+  id String @id @default(cuid())
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  truckId String
+  truck   Truck  @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  trailerId String?
+  trailer   Trailer? @relation(fields: [trailerId], references: [id], onDelete: SetNull)
+
+  loadId String?
+  load   Load? @relation(fields: [loadId], references: [id], onDelete: SetNull)
+
+  occurredAt DateTime
+  location   String
+  description String @db.Text
+  severity IncidentSeverity @default(MINOR)
+  status   IncidentStatus @default(OPEN)
+
+  claims Claim[]
+  documents Document[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([driverId])
+  @@index([truckId])
+  @@index([trailerId])
+  @@index([loadId])
+  @@index([status])
+  @@index([severity])
+  @@index([occurredAt])
+}
+
+model Claim {
+  id String @id @default(cuid())
+
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  claimNumber String? @unique
+  amount Float? @default(0)
+  status ClaimStatus @default(OPEN)
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([incidentId])
+  @@index([status])
+}
+
+model Customer {
+  id String @id @default(cuid())
+
+  name  String
+  email String?
+  phone String?
+  vatNumber String?
+  address String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices Invoice[]
+
+  @@index([name])
+}
+
+model Invoice {
+  id String @id @default(cuid())
+
+  invoiceNumber String @unique
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  issueDate DateTime
+  dueDate   DateTime
+  status    InvoiceStatus @default(DRAFT)
+  currency  String @default("EUR")
+  totalAmount Float @default(0)
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines InvoiceLine[]
+
+  @@index([invoiceNumber])
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model InvoiceLine {
+  id String @id @default(cuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  description String
+  quantity    Int @default(1)
+  unitPrice   Float @default(0)
+  lineTotal   Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([invoiceId])
+}
+
+model TollPermit {
+  id String @id @default(cuid())
+
+  truckId String
+  truck   Truck  @relation(fields: [truckId], references: [id], onDelete: Cascade)
+
+  countryCode String
+  countryName String?
+
+  type   TollPermitType
+  status TollPermitStatus @default(ACTIVE)
+
+  provider    String?
+  referenceNo String?
+  validFrom   DateTime
+  validTo     DateTime
+  notes       String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([truckId])
+  @@index([countryCode])
+  @@index([type])
+  @@index([status])
+  @@index([validTo])
 }
 
 model Load {
@@ -232,6 +508,9 @@ model Load {
 
   // Status
   status LoadStatus @default(AVAILABLE)
+  assignedAt   DateTime?
+  inTransitAt  DateTime?
+  completedAt  DateTime?
 
   // Pickup Details
   pickupAddress       String
@@ -264,6 +543,7 @@ model Load {
   customRatePerMile Float? // override default driver rate
   detentionTime     Int? // hours
   detentionPay      Float? @default(0)
+  estimatedDurationHours Float?
 
   // Notes
   notes               String? @db.Text
@@ -279,11 +559,61 @@ model Load {
   // Relations
   vehicles  Vehicle[]
   documents Document[]
+  stops     LoadStop[]
+  incidents Incident[]
 
   @@index([loadNumber])
   @@index([status])
   @@index([driverId])
   @@index([truckId])
+  @@index([actualDeliveryDate])
+  @@index([scheduledDeliveryDate])
+}
+
+model LoadStop {
+  id     String @id @default(cuid())
+  loadId String
+  load   Load   @relation(fields: [loadId], references: [id], onDelete: Cascade)
+
+  type     LoadStopType
+  sequence Int
+
+  address String
+  city    String
+  state   String
+  zip     String
+  latitude  Float?
+  longitude Float?
+
+  contactName  String?
+  contactPhone String?
+
+  scheduledDate DateTime?
+  actualDate    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([loadId])
+  @@index([type])
+  @@index([sequence])
+}
+
+model SchengenDay {
+  id       String   @id @default(cuid())
+  driverId String
+  driver   Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  date        DateTime
+  inSchengen  Boolean @default(false)
+  positionCount Int?  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([driverId, date])
+  @@index([driverId])
+  @@index([date])
 }
 
 model Vehicle {
@@ -329,6 +659,12 @@ model Document {
   driverId String?
   driver   Driver? @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
+  inspectionId String?
+  inspection   Inspection? @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  incidentId String?
+  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
   uploadedById String?
 
   createdAt DateTime @default(now())
@@ -337,6 +673,8 @@ model Document {
   @@index([type])
   @@index([loadId])
   @@index([driverId])
+  @@index([inspectionId])
+  @@index([incidentId])
 }
 
 model PayStub {
@@ -447,6 +785,18 @@ model AuditLog {
   @@index([entity])
   @@index([entityId])
   @@index([createdAt])
+}
+
+model AlertAcknowledgement {
+  id String @id @default(cuid())
+
+  alertId String @unique
+
+  acknowledgedAt  DateTime @default(now())
+  acknowledgedById String?
+  acknowledgedBy  User?     @relation("AlertAcknowledgements", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@index([acknowledgedAt])
 }
 
 model Setting {

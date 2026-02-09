@@ -76,6 +76,7 @@ interface LoadFormState {
   customRatePerMile: string;
   detentionTime: string;
   detentionPay: string;
+  estimatedDurationHours: string;
   notes: string;
   specialInstructions: string;
 }
@@ -115,6 +116,19 @@ interface VehicleForm {
   size: "SMALL" | "MEDIUM" | "LARGE" | "OVERSIZED";
   isOperable: boolean;
   damageNotes: string;
+}
+
+interface StopForm {
+  id: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  latitude?: number;
+  longitude?: number;
+  contactName: string;
+  contactPhone: string;
+  scheduledDate: string;
 }
 
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -261,6 +275,7 @@ export default function CreateLoadPage() {
     customRatePerMile: "",
     detentionTime: "",
     detentionPay: "",
+    estimatedDurationHours: "",
     notes: "",
     specialInstructions: "",
   });
@@ -280,6 +295,8 @@ export default function CreateLoadPage() {
     damageNotes: "",
   });
   const [vehicleErrors, setVehicleErrors] = useState<Record<string, string>>({});
+
+  const [intermediateStops, setIntermediateStops] = useState<StopForm[]>([]);
 
   const [drivers, setDrivers] = useState<DriverOption[]>([]);
   const [trucks, setTrucks] = useState<TruckOption[]>([]);
@@ -307,111 +324,59 @@ export default function CreateLoadPage() {
     setFieldErrors((prev) => ({ ...prev, [field]: "" }));
   };
 
-  // Calculate truck-adjusted duration (trucks are slower than cars)
-  const calculateTruckDuration = (carDurationSeconds: number, distanceMeters: number) => {
-    // Average truck speed: 90 km/h on highways, 60 km/h on regular roads
-    // OSRM assumes car speed ~120 km/h on highways
-    // We'll add ~30% more time for trucks
-    const truckDurationSeconds = carDurationSeconds * 1.3;
-    return Math.round(truckDurationSeconds / 3600 * 10) / 10; // Convert to hours
+  const getRouteCoordinates = () => {
+    if (!form.pickupLatitude || !form.pickupLongitude) return [];
+    if (!form.deliveryLatitude || !form.deliveryLongitude) return [];
+
+    const coords = [
+      { lat: form.pickupLatitude, lng: form.pickupLongitude },
+      ...intermediateStops
+        .filter((s) => s.latitude !== undefined && s.longitude !== undefined)
+        .map((s) => ({ lat: s.latitude as number, lng: s.longitude as number })),
+      { lat: form.deliveryLatitude, lng: form.deliveryLongitude },
+    ];
+
+    return coords;
   };
 
-  // Calculate distance using OSRM with multiple route alternatives including waypoints
+  // Calculate distance using OSRM (self-hosted)
   const calculateDistance = async () => {
     if (!form.pickupLatitude || !form.pickupLongitude || !form.deliveryLatitude || !form.deliveryLongitude) {
       alert("Molimo prvo odaberite pickup i delivery lokacije na mapi.");
       return;
     }
 
+    const missingStop = intermediateStops.find(
+      (s) => s.latitude === undefined || s.longitude === undefined
+    );
+    if (missingStop) {
+      alert("Svi dodatni stopovi moraju imati odabranu lokaciju na mapi.");
+      return;
+    }
+
     try {
       setError("Računanje ruta...");
-      
-      const routes: Array<{
-        distance: number;
-        duration: number;
-        geometry: [number, number][];
-        type: string;
-      }> = [];
-      
-      // 1. Direct route (fastest, usually via Hungary for Bosnia->Austria)
-      const directUrl = `https://router.project-osrm.org/route/v1/driving/${form.pickupLongitude},${form.pickupLatitude};${form.deliveryLongitude},${form.deliveryLatitude}?overview=full&geometries=geojson`;
-      const directRes = await fetch(directUrl);
-      const directData = await directRes.json();
 
-      if (directData.code === "Ok" && directData.routes && directData.routes.length > 0) {
-        const route = directData.routes[0];
-        const distanceInKm = Math.round(route.distance / 1000 * 100) / 100;
-        const truckDuration = calculateTruckDuration(route.duration, route.distance);
-        const geometry = route.geometry.coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]] as [number, number]
-        );
+      const res = await fetch("/api/routing/osrm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          coordinates: getRouteCoordinates(),
+        }),
+      });
 
-        routes.push({
-          distance: distanceInKm,
-          duration: truckDuration,
-          geometry,
-          type: "direct",
-        });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri računanju rute");
       }
 
-      // 2. Route via Slovenia (Ljubljana waypoint: 46.0569, 14.5058)
-      const sloveniaUrl = `https://router.project-osrm.org/route/v1/driving/${form.pickupLongitude},${form.pickupLatitude};14.5058,46.0569;${form.deliveryLongitude},${form.deliveryLatitude}?overview=full&geometries=geojson`;
-      const sloveniaRes = await fetch(sloveniaUrl);
-      const sloveniaData = await sloveniaRes.json();
-
-      if (sloveniaData.code === "Ok" && sloveniaData.routes && sloveniaData.routes.length > 0) {
-        const route = sloveniaData.routes[0];
-        const distanceInKm = Math.round(route.distance / 1000 * 100) / 100;
-        const truckDuration = calculateTruckDuration(route.duration, route.distance);
-        const geometry = route.geometry.coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]] as [number, number]
-        );
-
-        routes.push({
-          distance: distanceInKm,
-          duration: truckDuration,
-          geometry,
-          type: "via_slovenia",
-        });
-      }
-
-      // 3. Route via Croatia (Zagreb waypoint: 45.8150, 15.9819)
-      const croatiaUrl = `https://router.project-osrm.org/route/v1/driving/${form.pickupLongitude},${form.pickupLatitude};15.9819,45.8150;${form.deliveryLongitude},${form.deliveryLatitude}?overview=full&geometries=geojson`;
-      const croatiaRes = await fetch(croatiaUrl);
-      const croatiaData = await croatiaRes.json();
-
-      if (croatiaData.code === "Ok" && croatiaData.routes && croatiaData.routes.length > 0) {
-        const route = croatiaData.routes[0];
-        const distanceInKm = Math.round(route.distance / 1000 * 100) / 100;
-        const truckDuration = calculateTruckDuration(route.duration, route.distance);
-        const geometry = route.geometry.coordinates.map(
-          (coord: [number, number]) => [coord[1], coord[0]] as [number, number]
-        );
-
-        routes.push({
-          distance: distanceInKm,
-          duration: truckDuration,
-          geometry,
-          type: "via_croatia",
-        });
-      }
-
+      const routes = data.routes || [];
       if (routes.length > 0) {
-        console.log("✅ Successfully calculated routes:", routes.length);
-        routes.forEach((route, index) => {
-          console.log(`Route ${index} (${route.type}):`, {
-            distance: route.distance,
-            duration: route.duration,
-            geometryPoints: route.geometry.length,
-            firstPoint: route.geometry[0],
-            lastPoint: route.geometry[route.geometry.length - 1],
-          });
-        });
-        
-        // Set the first route as selected and update distance field
         setRouteOptions(routes);
         setSelectedRouteIndex(0);
         updateField("distance", routes[0].distance.toString());
+        updateField("estimatedDurationHours", routes[0].duration.toString());
         setRouteCalculated(true);
         setError("");
       } else {
@@ -428,6 +393,7 @@ export default function CreateLoadPage() {
   const handleRouteSelect = (index: number) => {
     setSelectedRouteIndex(index);
     updateField("distance", routeOptions[index].distance.toString());
+    updateField("estimatedDurationHours", routeOptions[index].duration.toString());
   };
 
   const validateStep = (currentStep: 1 | 2 | 3 | 4 | 5 | 6 | 7) => {
@@ -462,6 +428,21 @@ export default function CreateLoadPage() {
         errors.deliveryContactName = "Kontakt osoba za delivery je obavezna";
       if (!form.deliveryContactPhone)
         errors.deliveryContactPhone = "Telefon kontakt osobe za delivery je obavezan";
+
+      if (intermediateStops.length > 0) {
+        const invalidStop = intermediateStops.find(
+          (s) =>
+            !s.address ||
+            !s.city ||
+            !s.state ||
+            !s.zip ||
+            s.latitude === undefined ||
+            s.longitude === undefined
+        );
+        if (invalidStop) {
+          errors.intermediateStops = "Svi dodatni stopovi moraju imati punu lokaciju";
+        }
+      }
     }
 
     if (currentStep === 4) {
@@ -526,6 +507,7 @@ export default function CreateLoadPage() {
         },
         body: JSON.stringify({
           ...form,
+          estimatedDurationHours: form.estimatedDurationHours,
           driverId: selectedDriverId || null,
           truckId: selectedTruckId || null,
           vehicles: vehicles.map((v) => ({
@@ -538,6 +520,47 @@ export default function CreateLoadPage() {
             isOperable: v.isOperable,
             damageNotes: v.damageNotes,
           })),
+          stops: [
+            {
+              type: "PICKUP",
+              sequence: 1,
+              address: form.pickupAddress,
+              city: form.pickupCity,
+              state: form.pickupState,
+              zip: form.pickupZip,
+              latitude: form.pickupLatitude,
+              longitude: form.pickupLongitude,
+              contactName: form.pickupContactName,
+              contactPhone: form.pickupContactPhone,
+              scheduledDate: form.scheduledPickupDate,
+            },
+            ...intermediateStops.map((s, idx) => ({
+              type: "INTERMEDIATE",
+              sequence: idx + 2,
+              address: s.address,
+              city: s.city,
+              state: s.state,
+              zip: s.zip,
+              latitude: s.latitude,
+              longitude: s.longitude,
+              contactName: s.contactName || null,
+              contactPhone: s.contactPhone || null,
+              scheduledDate: s.scheduledDate || null,
+            })),
+            {
+              type: "DELIVERY",
+              sequence: intermediateStops.length + 2,
+              address: form.deliveryAddress,
+              city: form.deliveryCity,
+              state: form.deliveryState,
+              zip: form.deliveryZip,
+              latitude: form.deliveryLatitude,
+              longitude: form.deliveryLongitude,
+              contactName: form.deliveryContactName,
+              contactPhone: form.deliveryContactPhone,
+              scheduledDate: form.scheduledDeliveryDate,
+            },
+          ],
         }),
       });
 
@@ -545,6 +568,10 @@ export default function CreateLoadPage() {
 
       if (!res.ok) {
         throw new Error(data.error || "Greška pri kreiranju loada");
+      }
+
+      if (data.warning) {
+        alert(data.warning);
       }
 
       if (typeof window !== "undefined") {
@@ -595,6 +622,55 @@ export default function CreateLoadPage() {
 
   const removeVehicle = (id: string) => {
     setVehicles((prev) => prev.filter((v) => v.id !== id));
+  };
+
+  const addIntermediateStop = () => {
+    setIntermediateStops((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${prev.length + 1}`,
+        address: "",
+        city: "",
+        state: "",
+        zip: "",
+        latitude: undefined,
+        longitude: undefined,
+        contactName: "",
+        contactPhone: "",
+        scheduledDate: "",
+      },
+    ]);
+  };
+
+  const removeIntermediateStop = (id: string) => {
+    setIntermediateStops((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const updateStopField = (id: string, field: keyof StopForm, value: string) => {
+    setIntermediateStops((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
+    );
+  };
+
+  const updateStopLocation = (
+    id: string,
+    location: { address: string; city: string; state: string; zip: string; latitude: number; longitude: number }
+  ) => {
+    setIntermediateStops((prev) =>
+      prev.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              address: location.address,
+              city: location.city,
+              state: location.state,
+              zip: location.zip,
+              latitude: location.latitude,
+              longitude: location.longitude,
+            }
+          : s
+      )
+    );
   };
 
   const renderStep = () => {
@@ -793,6 +869,99 @@ export default function CreateLoadPage() {
               </div>
             </div>
           </div>
+
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-md font-semibold text-dark-900">Dodatni stopovi (opcionalno)</h3>
+              <button
+                type="button"
+                onClick={addIntermediateStop}
+                className="px-4 py-2 rounded-xl bg-dark-900 text-white text-xs font-semibold hover:bg-dark-800"
+              >
+                + Dodaj stop
+              </button>
+            </div>
+
+            {fieldErrors.intermediateStops && (
+              <p className="text-xs text-red-600">{fieldErrors.intermediateStops}</p>
+            )}
+
+            {intermediateStops.length === 0 && (
+              <p className="text-sm text-dark-500">
+                Nema dodatnih stopova. Dodajte stop ako postoje međustanice.
+              </p>
+            )}
+
+            {intermediateStops.map((stop, index) => (
+              <div key={stop.id} className="border border-dark-200 rounded-2xl p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-dark-900">
+                    Stop {index + 1}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => removeIntermediateStop(stop.id)}
+                    className="text-xs text-red-600 hover:text-red-700"
+                  >
+                    Ukloni
+                  </button>
+                </div>
+
+                <LocationPicker
+                  label={`Stop ${index + 1} lokacija`}
+                  initialLocation={
+                    stop.latitude && stop.longitude
+                      ? {
+                          address: stop.address,
+                          city: stop.city,
+                          state: stop.state,
+                          zip: stop.zip,
+                          latitude: stop.latitude,
+                          longitude: stop.longitude,
+                        }
+                      : undefined
+                  }
+                  onChange={(location) => updateStopLocation(stop.id, location)}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-dark-700 mb-1">
+                      Planirani datum/vrijeme (opcionalno)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      value={stop.scheduledDate}
+                      onChange={(e) => updateStopField(stop.id, "scheduledDate", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-dark-700 mb-1">
+                      Kontakt osoba (opcionalno)
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      value={stop.contactName}
+                      onChange={(e) => updateStopField(stop.id, "contactName", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-dark-700 mb-1">
+                      Telefon kontakt osobe (opcionalno)
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      value={stop.contactPhone}
+                      onChange={(e) => updateStopField(stop.id, "contactPhone", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -842,6 +1011,13 @@ export default function CreateLoadPage() {
                   deliveryLat={form.deliveryLatitude}
                   deliveryLng={form.deliveryLongitude}
                   deliveryAddress={`${form.deliveryAddress}, ${form.deliveryCity}`}
+                  waypoints={intermediateStops
+                    .filter((s) => s.latitude !== undefined && s.longitude !== undefined)
+                    .map((s, idx) => ({
+                      lat: s.latitude as number,
+                      lng: s.longitude as number,
+                      label: `Stop ${idx + 1}`,
+                    }))}
                   routes={routeOptions}
                   selectedRouteIndex={selectedRouteIndex}
                   onRouteSelect={handleRouteSelect}
@@ -1247,6 +1423,10 @@ export default function CreateLoadPage() {
               <span className="font-medium">Planirani delivery:</span>{" "}
               {form.scheduledDeliveryDate || "Nije uneseno"}
             </p>
+            <p className="text-sm text-dark-700">
+              <span className="font-medium">Dodatni stopovi:</span>{" "}
+              {intermediateStops.length}
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -1254,6 +1434,10 @@ export default function CreateLoadPage() {
             <p className="text-sm text-dark-700">
               <span className="font-medium">Udaljenost:</span>{" "}
               {form.distance || "0"} km
+            </p>
+            <p className="text-sm text-dark-700">
+              <span className="font-medium">Procijenjeno vrijeme:</span>{" "}
+              {form.estimatedDurationHours || "0"} h
             </p>
             <p className="text-sm text-dark-700">
               <span className="font-medium">Deadhead kilometri:</span>{" "}
@@ -1426,6 +1610,9 @@ export default function CreateLoadPage() {
         if (parsed.selectedTruckId) {
           setSelectedTruckId(parsed.selectedTruckId as string);
         }
+        if (parsed.intermediateStops && Array.isArray(parsed.intermediateStops)) {
+          setIntermediateStops(parsed.intermediateStops as StopForm[]);
+        }
         if (parsed.step && parsed.step >= 1 && parsed.step <= 7) {
           setStep(parsed.step as 1 | 2 | 3 | 4 | 5 | 6 | 7);
         }
@@ -1441,6 +1628,7 @@ export default function CreateLoadPage() {
     const payload = {
       form,
       vehicles,
+      intermediateStops,
       selectedDriverId,
       selectedTruckId,
       step,
@@ -1450,7 +1638,7 @@ export default function CreateLoadPage() {
     } catch {
       // ignore storage errors
     }
-  }, [form, vehicles, selectedDriverId, selectedTruckId, step]);
+  }, [form, vehicles, intermediateStops, selectedDriverId, selectedTruckId, step]);
 
   const totalSteps = stepsConfig.length;
   const currentStepMeta = stepsConfig.find((config) => config.id === step) ?? stepsConfig[0];
@@ -1458,7 +1646,7 @@ export default function CreateLoadPage() {
   const StepIcon = stepIconMap[step];
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
       <PageHeader
         icon={PackageIcon}
         title="Kreiraj novi load"

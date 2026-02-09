@@ -114,7 +114,7 @@ export async function generatePayStubPDF(
   const col1 = 50; // Load #
   const col2 = 120; // Pickup Date
   const col3 = 200; // Delivery Date
-  const col4 = 280; // Miles
+  const col4 = 280; // Kilometri
   const col5 = 340; // Rate
   const col6 = 400; // Detention
   const col7 = 480; // Total
@@ -125,8 +125,8 @@ export async function generatePayStubPDF(
     .text('Load #', col1, tableTop)
     .text('Pickup', col2, tableTop)
     .text('Delivery', col3, tableTop)
-    .text('Miles', col4, tableTop)
-    .text('Rate', col5, tableTop)
+    .text('Kilometri', col4, tableTop)
+    .text('Cijena/km', col5, tableTop)
     .text('Detention', col6, tableTop)
     .text('Total', col7, tableTop);
 
@@ -155,7 +155,7 @@ export async function generatePayStubPDF(
       .text(pickupDate, col2, yPosition, { width: 75 })
       .text(deliveryDate, col3, yPosition, { width: 75 })
       .text(load.totalMiles.toString(), col4, yPosition, { width: 55 })
-      .text(`$${load.ratePerMile.toFixed(2)}`, col5, yPosition, { width: 55 })
+      .text(`${load.ratePerMile.toFixed(2)} KM/km`, col5, yPosition, { width: 55 })
       .text(formatCurrency(load.detentionPay), col6, yPosition, { width: 75 })
       .text(formatCurrency(load.totalPayment), col7, yPosition, { width: 75 });
 
@@ -184,16 +184,16 @@ export async function generatePayStubPDF(
   yPosition += 20;
   doc
     .font('Helvetica')
-    .text('Total Miles:', summaryCol1, yPosition)
+    .text('Ukupno km:', summaryCol1, yPosition)
     .font('Helvetica-Bold')
     .text(payStubData.totalMiles.toString(), summaryCol2, yPosition);
 
   yPosition += 20;
   doc
     .font('Helvetica')
-    .text('Average Rate per Mile:', summaryCol1, yPosition)
+    .text('Prosječna cijena po km:', summaryCol1, yPosition)
     .font('Helvetica-Bold')
-    .text(`$${payStubData.avgRatePerMile.toFixed(3)}`, summaryCol2, yPosition);
+    .text(`${payStubData.avgRatePerMile.toFixed(3)} KM/km`, summaryCol2, yPosition);
 
   yPosition += 25;
   doc

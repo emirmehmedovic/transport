@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,14 @@ import {
   DollarSign,
   Truck,
   Package,
+  Plus,
   AlertCircle,
   CheckCircle,
   PlayCircle,
   MapPin,
+  Shield,
+  TrendingUp,
+  BarChart3,
 } from "lucide-react";
 import { DriverPerformance } from "@/components/performance";
 
@@ -52,9 +56,9 @@ interface Driver {
     id: string;
     loadNumber: string;
     status: string;
-    scheduledPickup: string;
-    scheduledDelivery: string;
-    totalMiles: number | null;
+    scheduledPickupDate: string;
+    scheduledDeliveryDate: string;
+    distance: number | null;
     loadRate: number;
   }[];
   vacationPeriods: {
@@ -66,6 +70,34 @@ interface Driver {
   }[];
 }
 
+type HistoryLoad = {
+  id: string;
+  loadNumber: string;
+  status: string;
+  scheduledPickupDate: string;
+  scheduledDeliveryDate: string;
+  distance: number | null;
+  loadRate: number;
+  truck?: { id: string; truckNumber: string; make?: string; model?: string } | null;
+};
+
+type HistoryPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+type DriverPerformanceSummary = {
+  totalMiles: number;
+  totalRevenue: number;
+  completedLoads: number;
+  avgRevenuePerMile: number;
+  avgMilesPerLoad: number;
+  onTimeDeliveryRate: number;
+  activeDays: number;
+};
+
 export default function DriverDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -75,12 +107,69 @@ export default function DriverDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "performance">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "performance" | "history">("overview");
   const [updatingLoadId, setUpdatingLoadId] = useState<string | null>(null);
+  const [schengenStats, setSchengenStats] = useState<{
+    usedDays: number;
+    remainingDays: number;
+    from: string;
+    to: string;
+    manual?: {
+      remainingDays: number;
+      asOf: string;
+      daysSinceManual: number;
+    };
+  } | null>(null);
+  const [schengenError, setSchengenError] = useState<string>("");
+  const [manualRemaining, setManualRemaining] = useState<string>("");
+  const [manualAsOf, setManualAsOf] = useState<string>("");
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState<string>("");
+  const [historyLoads, setHistoryLoads] = useState<HistoryLoad[]>([]);
+  const [historyPagination, setHistoryPagination] = useState<HistoryPagination | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyFilters, setHistoryFilters] = useState({
+    status: "",
+    from: "",
+    to: "",
+    loadNumber: "",
+  });
+  const [historyPage, setHistoryPage] = useState(1);
+  const [summary, setSummary] = useState<DriverPerformanceSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
+  const [vacationModalOpen, setVacationModalOpen] = useState(false);
+  const [vacationForm, setVacationForm] = useState({
+    startDate: "",
+    endDate: "",
+    type: "VACATION",
+    notes: "",
+  });
+  const [vacationSaving, setVacationSaving] = useState(false);
+  const [vacationError, setVacationError] = useState("");
 
   useEffect(() => {
     fetchDriver();
   }, [driverId]);
+
+  useEffect(() => {
+    fetchSchengen();
+  }, [driverId]);
+
+  useEffect(() => {
+    fetchSummary();
+  }, [driverId]);
+
+  useEffect(() => {
+    if (activeTab === "history") {
+      fetchHistory();
+    }
+  }, [activeTab, historyFilters, historyPage, driverId]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historyFilters]);
 
   const fetchDriver = async () => {
     try {
@@ -96,6 +185,171 @@ export default function DriverDetailPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSchengen = async () => {
+    try {
+      setSchengenError("");
+      const res = await fetch(`/api/drivers/${driverId}/schengen`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri učitavanju Schengen podataka");
+      }
+
+      setSchengenStats(data);
+      if (data?.manual) {
+        setManualRemaining(String(data.manual.remainingDays));
+        setManualAsOf(data.manual.asOf.slice(0, 10));
+      } else {
+        setManualRemaining("");
+        setManualAsOf("");
+      }
+    } catch (err: any) {
+      setSchengenError(err.message || "Greška pri učitavanju Schengen podataka");
+    }
+  };
+
+  const handleSaveManual = async () => {
+    try {
+      setManualSaving(true);
+      setManualError("");
+      const remaining = manualRemaining.trim();
+      const payload =
+        remaining.length === 0
+          ? { remainingDays: null }
+          : { remainingDays: Number(remaining), asOf: manualAsOf || undefined };
+
+      const res = await fetch(`/api/drivers/${driverId}/schengen-override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri spremanju");
+      }
+      await fetchSchengen();
+    } catch (err: any) {
+      setManualError(err.message || "Greška pri spremanju");
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
+  const handleClearManual = async () => {
+    try {
+      setManualSaving(true);
+      setManualError("");
+      const res = await fetch(`/api/drivers/${driverId}/schengen-override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remainingDays: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri spremanju");
+      }
+      await fetchSchengen();
+    } catch (err: any) {
+      setManualError(err.message || "Greška pri spremanju");
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
+  const fetchSummary = async () => {
+    try {
+      setSummaryLoading(true);
+      setSummaryError("");
+      const res = await fetch(`/api/drivers/${driverId}/performance?days=30`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri učitavanju performansi");
+      }
+      setSummary(data.performance);
+    } catch (err: any) {
+      setSummaryError(err.message || "Greška pri učitavanju performansi");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      setHistoryError("");
+      const params = new URLSearchParams({
+        driverId,
+        page: String(historyPage),
+        pageSize: "20",
+        sortBy: "scheduledPickupDate",
+        sortDir: "desc",
+      });
+      if (historyFilters.status) params.set("status", historyFilters.status);
+      if (historyFilters.from) params.set("from", historyFilters.from);
+      if (historyFilters.to) params.set("to", historyFilters.to);
+      if (historyFilters.loadNumber) params.set("loadNumber", historyFilters.loadNumber);
+
+      const res = await fetch(`/api/loads?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri učitavanju historije");
+      }
+      setHistoryLoads(data.loads || []);
+      setHistoryPagination(data.pagination || null);
+    } catch (err: any) {
+      setHistoryError(err.message || "Greška pri učitavanju historije");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleAddVacation = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setVacationError("");
+
+    if (!vacationForm.startDate || !vacationForm.endDate || !vacationForm.type) {
+      setVacationError("Popunite sva obavezna polja.");
+      return;
+    }
+
+    if (new Date(vacationForm.endDate) < new Date(vacationForm.startDate)) {
+      setVacationError("Datum završetka mora biti nakon datuma početka.");
+      return;
+    }
+
+    try {
+      setVacationSaving(true);
+      const res = await fetch(`/api/drivers/${driverId}/vacation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: vacationForm.startDate,
+          endDate: vacationForm.endDate,
+          type: vacationForm.type,
+          notes: vacationForm.notes || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri dodavanju perioda odmora.");
+      }
+
+      setVacationModalOpen(false);
+      setVacationForm({
+        startDate: "",
+        endDate: "",
+        type: "VACATION",
+        notes: "",
+      });
+      await fetchDriver();
+    } catch (err: any) {
+      setVacationError(err.message || "Greška pri dodavanju perioda odmora.");
+    } finally {
+      setVacationSaving(false);
     }
   };
 
@@ -191,6 +445,28 @@ export default function DriverDetailPage() {
     });
   };
 
+  const statusOptions = useMemo(
+    () => [
+      { value: "", label: "Svi statusi" },
+      { value: "ASSIGNED", label: "ASSIGNED" },
+      { value: "PICKED_UP", label: "PICKED_UP" },
+      { value: "IN_TRANSIT", label: "IN_TRANSIT" },
+      { value: "DELIVERED", label: "DELIVERED" },
+      { value: "COMPLETED", label: "COMPLETED" },
+      { value: "CANCELLED", label: "CANCELLED" },
+    ],
+    []
+  );
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("bs-BA", {
+      style: "currency",
+      currency: "BAM",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
   const isExpiringSoon = (dateString: string, days: number = 30) => {
     const expiryDate = new Date(dateString);
     const today = new Date();
@@ -276,7 +552,7 @@ export default function DriverDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="bg-white rounded-2xl shadow-soft px-4">
         <nav className="flex gap-8">
           <button
             onClick={() => setActiveTab("overview")}
@@ -287,6 +563,16 @@ export default function DriverDetailPage() {
             }`}
           >
             Pregled
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === "history"
+                ? "border-primary-500 text-primary-600"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}
+          >
+            Historija vožnji
           </button>
           <button
             onClick={() => setActiveTab("performance")}
@@ -304,6 +590,74 @@ export default function DriverDetailPage() {
       {/* Tab Content */}
       {activeTab === "overview" && (
         <>
+          {/* Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="border-dark-50 shadow-soft">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-dark-500">Ukupno km (30 dana)</p>
+                    <p className="text-2xl font-bold text-dark-900">
+                      {summaryLoading ? "..." : summary ? summary.totalMiles.toLocaleString() : "-"}
+                    </p>
+                  </div>
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <TrendingUp className="w-5 h-5 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-dark-50 shadow-soft">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-dark-500">Prihod (30 dana)</p>
+                    <p className="text-2xl font-bold text-dark-900">
+                      {summaryLoading ? "..." : summary ? formatCurrency(summary.totalRevenue) : "-"}
+                    </p>
+                  </div>
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <DollarSign className="w-5 h-5 text-emerald-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-dark-50 shadow-soft">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-dark-500">Završeni loadovi (30 dana)</p>
+                    <p className="text-2xl font-bold text-dark-900">
+                      {summaryLoading ? "..." : summary ? summary.completedLoads : "-"}
+                    </p>
+                  </div>
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <BarChart3 className="w-5 h-5 text-purple-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-dark-50 shadow-soft">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-dark-500">Schengen preostalo</p>
+                    <p className="text-2xl font-bold text-dark-900">
+                      {schengenStats ? schengenStats.remainingDays : "-"}
+                    </p>
+                    <p className="text-[11px] text-dark-400">dana u 90/180</p>
+                  </div>
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <Shield className="w-5 h-5 text-orange-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          {summaryError && (
+            <div className="text-sm text-red-600">{summaryError}</div>
+          )}
+
           {/* Basic Info Card */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
@@ -349,9 +703,9 @@ export default function DriverDetailPage() {
               <div className="flex items-start gap-3">
                 <DollarSign className="w-5 h-5 text-dark-400 mt-1" />
                 <div>
-                  <p className="text-sm text-dark-500">Cijena po milji</p>
+                  <p className="text-sm text-dark-500">Cijena po km</p>
                   <p className="font-medium text-dark-900">
-                    {driver.ratePerMile ? `$${driver.ratePerMile}` : "-"}
+                    {driver.ratePerMile ? `${driver.ratePerMile} KM` : "-"}
                   </p>
                 </div>
               </div>
@@ -454,8 +808,8 @@ export default function DriverDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Trucks & Loads */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Trucks, Schengen & Loads */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Assigned Truck */}
         <Card>
           <CardHeader>
@@ -483,11 +837,98 @@ export default function DriverDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Recent Loads */}
+        {/* Schengen 90/180 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
+              <Shield className="w-5 h-5" />
+              Schengen 90/180
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {schengenError ? (
+              <div className="text-sm text-red-600">{schengenError}</div>
+            ) : schengenStats ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-dark-500">Iskorišteno dana</span>
+                  <span className="font-semibold text-dark-900">
+                    {schengenStats.usedDays}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-dark-500">Preostalo dana</span>
+                  <span className="font-semibold text-dark-900">
+                    {schengenStats.remainingDays}
+                  </span>
+                </div>
+                <div className="text-xs text-dark-400">
+                  Period: {formatDate(schengenStats.from)} - {formatDate(schengenStats.to)}
+                </div>
+                {schengenStats.manual && (
+                  <div className="text-xs text-amber-600">
+                    Ručni unos aktivan (preostalo {schengenStats.manual.remainingDays} dana na dan {formatDate(schengenStats.manual.asOf)}).
+                  </div>
+                )}
+                <div className="border-t border-dark-100 pt-3">
+                  <p className="text-xs text-dark-500 mb-2">
+                    Ručni unos (preostalo dana) – koristi se ako nema istorijskih GPS podataka.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-dark-50 rounded-xl p-3 border border-dark-100">
+                    <div>
+                      <label className="block text-xs text-dark-500 mb-1">Preostalo dana</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="90"
+                        className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm"
+                        value={manualRemaining}
+                        onChange={(e) => setManualRemaining(e.target.value)}
+                        placeholder="npr. 45"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-dark-500 mb-1">Datum (as of)</label>
+                      <input
+                        type="date"
+                        className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm"
+                        value={manualAsOf}
+                        onChange={(e) => setManualAsOf(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {manualError && <div className="text-xs text-red-600 mt-2">{manualError}</div>}
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSaveManual}
+                      disabled={manualSaving}
+                    >
+                      {manualSaving ? "Spremam..." : "Spremi ručni unos"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleClearManual}
+                      disabled={manualSaving}
+                    >
+                      Ukloni ručni unos
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-dark-500">Učitavanje...</p>
+            )}
+          </CardContent>
+        </Card>
+
+          {/* Recent Loads */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
               Nedavni loadovi ({driver.loads.length})
             </CardTitle>
           </CardHeader>
@@ -513,14 +954,14 @@ export default function DriverDetailPage() {
                     </div>
                     <div className="text-sm text-dark-600 mb-3">
                       <p>
-                        Pickup: {formatDate(load.scheduledPickup)}
+                        Pickup: {formatDate(load.scheduledPickupDate)}
                       </p>
                       <p>
-                        Delivery: {formatDate(load.scheduledDelivery)}
+                        Delivery: {formatDate(load.scheduledDeliveryDate)}
                       </p>
-                      {load.totalMiles && (
+                      {load.distance && (
                         <p className="text-primary-600 font-medium mt-1">
-                          {load.totalMiles} milja • ${load.loadRate}
+                          {load.distance} km • {formatCurrency(load.loadRate)}
                         </p>
                       )}
                     </div>
@@ -575,12 +1016,29 @@ export default function DriverDetailPage() {
       </div>
 
       {/* Vacation Periods */}
-      {driver.vacationPeriods.length > 0 && (
-        <Card>
-          <CardHeader>
+      <Card>
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
             <CardTitle>Periodi odmora</CardTitle>
-          </CardHeader>
-          <CardContent>
+            <p className="text-sm text-dark-500">
+              Planirajte odmore i bolovanja za vozača.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setVacationModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Dodaj period
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {driver.vacationPeriods.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-dark-200 bg-dark-50/50 px-5 py-6 text-sm text-dark-500">
+              Trenutno nema planiranih perioda odmora ili bolovanja.
+            </div>
+          ) : (
             <div className="space-y-3">
               {driver.vacationPeriods.map((period) => (
                 <div
@@ -602,15 +1060,261 @@ export default function DriverDetailPage() {
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+        </>
+      )}
+
+      {/* History Tab */}
+      {activeTab === "history" && (
+        <Card className="rounded-[2rem] shadow-soft border-none overflow-hidden bg-white">
+          <CardHeader className="bg-dark-50/70 border-b border-dark-50">
+            <CardTitle>Historija vožnji</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs text-dark-500 mb-1">Status</label>
+                <select
+                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  value={historyFilters.status}
+                  onChange={(e) =>
+                    setHistoryFilters((prev) => ({ ...prev, status: e.target.value }))
+                  }
+                >
+                  {statusOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-dark-500 mb-1">Od</label>
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  value={historyFilters.from}
+                  onChange={(e) =>
+                    setHistoryFilters((prev) => ({ ...prev, from: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-dark-500 mb-1">Do</label>
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  value={historyFilters.to}
+                  onChange={(e) =>
+                    setHistoryFilters((prev) => ({ ...prev, to: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-dark-500 mb-1">Load #</label>
+                <input
+                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  placeholder="Unesi broj"
+                  value={historyFilters.loadNumber}
+                  onChange={(e) =>
+                    setHistoryFilters((prev) => ({ ...prev, loadNumber: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            {historyError && <div className="text-sm text-red-600">{historyError}</div>}
+
+            {historyLoading ? (
+              <div className="text-sm text-dark-500">Učitavanje...</div>
+            ) : historyLoads.length === 0 ? (
+              <div className="text-sm text-dark-500">Nema loadova za odabrane filtere.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left text-dark-600">
+                      <th className="py-2 pr-3">Load #</th>
+                      <th className="py-2 pr-3">Status</th>
+                      <th className="py-2 pr-3">Pickup</th>
+                      <th className="py-2 pr-3">Delivery</th>
+                      <th className="py-2 pr-3 text-right">Km</th>
+                      <th className="py-2 pr-3 text-right">Cijena</th>
+                      <th className="py-2 pr-3">Kamion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyLoads.map((load) => (
+                      <tr key={load.id} className="border-b border-gray-100">
+                        <td className="py-2 pr-3">
+                          <button
+                            className="text-primary-600 hover:underline"
+                            onClick={() => router.push(`/loads/${load.id}`)}
+                          >
+                            {load.loadNumber}
+                          </button>
+                        </td>
+                        <td className="py-2 pr-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getLoadStatusBadge(load.status)}`}>
+                            {load.status}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3">{formatDate(load.scheduledPickupDate)}</td>
+                        <td className="py-2 pr-3">{formatDate(load.scheduledDeliveryDate)}</td>
+                        <td className="py-2 pr-3 text-right">
+                          {load.distance ? load.distance.toLocaleString() : "-"}
+                        </td>
+                        <td className="py-2 pr-3 text-right">
+                          {formatCurrency(load.loadRate)}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {load.truck ? load.truck.truckNumber : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {historyPagination && historyPagination.totalPages > 1 && (
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-dark-500">
+                  Stranica {historyPagination.page} od {historyPagination.totalPages}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                    disabled={historyPagination.page <= 1 || historyLoading}
+                  >
+                    Prethodna
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setHistoryPage((p) =>
+                        historyPagination ? Math.min(historyPagination.totalPages, p + 1) : p + 1
+                      )
+                    }
+                    disabled={historyPagination.page >= historyPagination.totalPages || historyLoading}
+                  >
+                    Sljedeća
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
-        </>
       )}
 
       {/* Performance Tab */}
       {activeTab === "performance" && (
         <DriverPerformance driverId={driverId} />
+      )}
+
+      {vacationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-900/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-dark-100 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-dark-900">Dodaj period odmora</h3>
+                <p className="text-sm text-dark-500">
+                  Postavi datume i tip odsustva.
+                </p>
+              </div>
+              <button
+                onClick={() => setVacationModalOpen(false)}
+                className="text-dark-500 hover:text-dark-900"
+                aria-label="Zatvori"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleAddVacation} className="space-y-4 px-6 py-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-dark-500 uppercase tracking-wide mb-2">
+                    Datum početka
+                  </label>
+                  <input
+                    type="date"
+                    value={vacationForm.startDate}
+                    onChange={(e) =>
+                      setVacationForm((prev) => ({ ...prev, startDate: e.target.value }))
+                    }
+                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-dark-500 uppercase tracking-wide mb-2">
+                    Datum završetka
+                  </label>
+                  <input
+                    type="date"
+                    value={vacationForm.endDate}
+                    onChange={(e) =>
+                      setVacationForm((prev) => ({ ...prev, endDate: e.target.value }))
+                    }
+                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark-500 uppercase tracking-wide mb-2">
+                  Tip odsustva
+                </label>
+                <select
+                  value={vacationForm.type}
+                  onChange={(e) =>
+                    setVacationForm((prev) => ({ ...prev, type: e.target.value }))
+                  }
+                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="VACATION">Odmor</option>
+                  <option value="SICK_LEAVE">Bolovanje</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-dark-500 uppercase tracking-wide mb-2">
+                  Napomena (opcionalno)
+                </label>
+                <textarea
+                  value={vacationForm.notes}
+                  onChange={(e) =>
+                    setVacationForm((prev) => ({ ...prev, notes: e.target.value }))
+                  }
+                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  rows={3}
+                />
+              </div>
+              {vacationError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {vacationError}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setVacationModalOpen(false)}
+                  disabled={vacationSaving}
+                >
+                  Odustani
+                </Button>
+                <Button type="submit" disabled={vacationSaving}>
+                  {vacationSaving ? "Spremam..." : "Sačuvaj"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

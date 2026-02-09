@@ -171,11 +171,11 @@ ${emoji} <b>${isOverdue ? "URGENT: " : ""}Maintenance ${isOverdue ? "Overdue" : 
 
 🚛 <b>Kamion:</b> ${data.truckNumber}
 🔧 <b>Tip:</b> ${data.maintenanceType}
-📊 <b>Trenutne milje:</b> ${data.currentMileage.toLocaleString()}
+📊 <b>Trenutna kilometraža:</b> ${data.currentMileage.toLocaleString()}
   `.trim();
 
   if (data.dueMileage) {
-    message += `\n⏰ <b>Due na:</b> ${data.dueMileage.toLocaleString()} milja`;
+    message += `\n⏰ <b>Due na:</b> ${data.dueMileage.toLocaleString()} km`;
   }
 
   if (isOverdue && data.daysOverdue) {

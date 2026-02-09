@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { AuditAction, AuditEntity } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/audit-logs
  * Vraća audit logs sa filterima i paginacijom

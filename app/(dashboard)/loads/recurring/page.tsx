@@ -234,7 +234,7 @@ export default function RecurringLoadsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-dark-700 mb-1">
-                  Distance (milje)
+                  Udaljenost (km)
                 </label>
                 <input
                   type="number"
@@ -245,7 +245,7 @@ export default function RecurringLoadsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-dark-700 mb-1">
-                  Load rate ($)
+                  Cijena loada (BAM)
                 </label>
                 <input
                   type="number"
@@ -350,7 +350,7 @@ export default function RecurringLoadsPage() {
                           grupa: {t.recurringGroupId}
                         </div>
                       </td>
-                      <td className="py-2 px-3">{t.distance} mi</td>
+                      <td className="py-2 px-3">{t.distance} km</td>
                       <td className="py-2 px-3">${t.loadRate.toFixed(2)}</td>
                       <td className="py-2 px-3">{formatFrequency(t)}</td>
                       <td className="py-2 px-3">

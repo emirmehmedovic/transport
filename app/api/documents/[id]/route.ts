@@ -46,6 +46,18 @@ export async function GET(
             },
           },
         },
+        inspection: {
+          select: {
+            id: true,
+            driverId: true,
+          },
+        },
+        incident: {
+          select: {
+            id: true,
+            driverId: true,
+          },
+        },
       },
     });
 
@@ -62,7 +74,11 @@ export async function GET(
         where: { userId: decoded.userId },
       });
 
-      if (!driver || document.driverId !== driver.id) {
+      const isOwnDriverDoc = driver && document.driverId === driver.id;
+      const isOwnInspectionDoc = driver && document.inspection?.driverId === driver.id;
+      const isOwnIncidentDoc = driver && document.incident?.driverId === driver.id;
+
+      if (!driver || (!isOwnDriverDoc && !isOwnInspectionDoc && !isOwnIncidentDoc)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }

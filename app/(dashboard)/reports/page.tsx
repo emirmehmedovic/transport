@@ -16,13 +16,22 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 
-type ReportType = "driver" | "truck" | "revenue" | "expense" | null;
+type ReportType = "driver" | "truck" | "revenue" | "expense" | "ar_ap" | "custom" | null;
 
 export default function ReportsPage() {
   const router = useRouter();
   const [selectedReport, setSelectedReport] = useState<ReportType>(null);
 
   const reportTypes = [
+    {
+      id: "custom" as ReportType,
+      name: "Custom Report Builder",
+      description: "Sastavi vlastiti izvještaj po vozaču, kamionu ili mjesecu.",
+      icon: FileText,
+      color: "teal",
+      available: true,
+      route: "/reports/custom",
+    },
     {
       id: "driver" as ReportType,
       name: "Performanse Vozača",
@@ -59,6 +68,15 @@ export default function ReportsPage() {
       available: true,
       route: "/reports/expenses",
     },
+    {
+      id: "ar_ap" as ReportType,
+      name: "AR/AP izvještaj",
+      description: "Pregled statusa faktura i dospjelih obaveza",
+      icon: FileText,
+      color: "teal",
+      available: true,
+      route: "/reports/ar-ap",
+    },
   ];
 
   const handleGenerateReport = () => {
@@ -71,7 +89,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 px-4 md:px-0">
       <PageHeader
         icon={FileText}
         title="Izvještaji"
@@ -79,51 +97,51 @@ export default function ReportsPage() {
         actions={
           <Button
             variant="outline"
-            className="rounded-full border-white/25 bg-white/10 text-white hover:bg-white/20"
+            className="rounded-full border-white/25 bg-white/10 text-white hover:bg-white/20 text-xs md:text-sm px-3 md:px-4"
             onClick={() => router.push("/reports/revenue")}
           >
-            <PieChart className="w-4 h-4 mr-2" />
+            <PieChart className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1.5 md:mr-2" />
             Prihodi
           </Button>
         }
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {["Vozači", "Kamioni", "Prihodi", "Troškovi"].map((label) => (
-            <div key={label} className="bg-dark-50 rounded-2xl px-5 py-3 border border-white/20 text-dark-900">
-              <p className="text-xs font-semibold text-dark-500 uppercase tracking-wide">
+            <div key={label} className="bg-dark-50 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/20 text-dark-900">
+              <p className="text-[10px] md:text-xs font-semibold text-dark-500 uppercase tracking-wide">
                 {label}
               </p>
-              <p className="text-lg mt-1">Brzi pristup izvještajima</p>
+              <p className="text-sm md:text-lg mt-1">Izvještaji</p>
             </div>
           ))}
         </div>
       </PageHeader>
 
       {/* Info Card */}
-      <div className="bg-dark-50 rounded-3xl p-6 relative overflow-hidden border border-dark-100">
+      <div className="bg-dark-50 rounded-2xl md:rounded-3xl p-4 md:p-6 relative overflow-hidden border border-dark-100">
         <div className="absolute top-0 right-0 -mt-4 -mr-2 w-24 h-24 bg-primary-100 rounded-full blur-3xl opacity-50"></div>
-        <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-sm">
-              <Calendar className="w-6 h-6 text-primary-600" />
+        <div className="relative z-10 flex flex-col gap-3 md:gap-4">
+          <div className="flex items-start gap-2 md:gap-3">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white flex items-center justify-center shadow-sm flex-shrink-0">
+              <Calendar className="w-5 h-5 md:w-6 md:h-6 text-primary-600" />
             </div>
-            <div>
-              <p className="font-semibold text-dark-900">Izvještaji su spremni</p>
-              <p className="text-sm text-dark-600">
+            <div className="min-w-0">
+              <p className="font-semibold text-dark-900 text-sm md:text-base">Izvještaji su spremni</p>
+              <p className="text-xs md:text-sm text-dark-600">
                 Pristupite metrikama za vozače i kamione ili otvorite detaljne finansijske
                 izvještaje za period koji vam treba.
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => router.push("/drivers/compare")}>
+            <Button variant="outline" onClick={() => router.push("/drivers/compare")} className="text-xs md:text-sm">
               Uporedi vozače
             </Button>
             <Button
               onClick={() => router.push("/reports/expenses")}
-              className="flex items-center gap-2 bg-dark-900 text-white hover:bg-primary-600"
+              className="flex items-center justify-center gap-2 bg-dark-900 text-white hover:bg-primary-600 text-xs md:text-sm"
             >
-              <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-3.5 h-3.5 md:w-4 md:h-4" />
               Troškovi
             </Button>
           </div>

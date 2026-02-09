@@ -269,9 +269,9 @@ export default function EditDriverPage() {
                 required
               />
 
-              {/* Cijena po milji */}
+              {/* Cijena po km */}
               <Input
-                label="Cijena po milji ($)"
+                label="Cijena po km (KM)"
                 type="number"
                 step="0.01"
                 name="ratePerMile"

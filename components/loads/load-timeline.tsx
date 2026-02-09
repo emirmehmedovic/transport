@@ -5,6 +5,9 @@ import React from "react";
 interface LoadTimelineProps {
   status: string;
   createdAt: string;
+  assignedAt?: string | null;
+  inTransitAt?: string | null;
+  completedAt?: string | null;
   scheduledPickupDate: string;
   actualPickupDate?: string | null;
   scheduledDeliveryDate: string;
@@ -34,6 +37,9 @@ const formatDateTime = (value?: string | null) => {
 export function LoadTimeline({
   status,
   createdAt,
+  assignedAt,
+  inTransitAt,
+  completedAt,
   scheduledPickupDate,
   actualPickupDate,
   scheduledDeliveryDate,
@@ -50,7 +56,7 @@ export function LoadTimeline({
       key: "ASSIGNED",
       label: "Dodijeljen",
       description: "Load je dodijeljen vozaču i kamionu",
-      timestamp: scheduledPickupDate,
+      timestamp: assignedAt || scheduledPickupDate,
     },
     {
       key: "PICKUP",
@@ -62,7 +68,7 @@ export function LoadTimeline({
       key: "IN_TRANSIT",
       label: "U transportu",
       description: "Vozilo je na putu između pickup i delivery lokacije",
-      timestamp: actualPickupDate || scheduledPickupDate,
+      timestamp: inTransitAt || actualPickupDate || scheduledPickupDate,
     },
     {
       key: "DELIVERY",
@@ -74,7 +80,7 @@ export function LoadTimeline({
       key: "COMPLETED",
       label: "Završen",
       description: "Load je u potpunosti završen",
-      timestamp: actualDeliveryDate || scheduledDeliveryDate,
+      timestamp: completedAt || actualDeliveryDate || scheduledDeliveryDate,
     },
   ];
 

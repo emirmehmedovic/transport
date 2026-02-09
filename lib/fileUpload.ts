@@ -33,6 +33,8 @@ export const DOCUMENT_FOLDERS = {
   LOAD_PHOTO: 'load-photos',
   RATE_CONFIRMATION: 'documents/rate-confirmations',
   FUEL_RECEIPT: 'documents/fuel-receipts',
+  INSPECTION_PHOTO: 'documents/inspections',
+  INCIDENT_PHOTO: 'documents/incidents',
   CDL_LICENSE: 'documents/compliance/cdl',
   MEDICAL_CARD: 'documents/compliance/medical',
   INSURANCE: 'documents/compliance/insurance',

@@ -362,9 +362,9 @@ function getWeekStart(date: Date): Date {
  * Format currency
  */
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('bs-BA', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'BAM',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);

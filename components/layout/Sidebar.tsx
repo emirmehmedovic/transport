@@ -18,6 +18,8 @@ import {
   Map,
   Sparkles,
   X,
+  Clipboard,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 
@@ -40,7 +42,10 @@ const navigation: { category?: string; items: NavItem[] }[] = [
     category: "MANAGEMENT",
     items: [
       { name: "Vozači", href: "/drivers", icon: Users, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Schengen 90/180", href: "/schengen", icon: Shield, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Kamioni", href: "/trucks", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Prikolice", href: "/trailers", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "DVIR", href: "/driver/inspections", icon: Clipboard, roles: ["DRIVER"] },
       { name: "Loadovi", href: "/loads", icon: Package },
       { name: "Dokumenti", href: "/documents", icon: FileText },
       { name: "Korisnici", href: "/users", icon: Users, roles: ["ADMIN"] },
@@ -50,6 +55,10 @@ const navigation: { category?: string; items: NavItem[] }[] = [
     category: "FINANCE & REPORTS",
     items: [
       { name: "Plaćanja", href: "/wages", icon: DollarSign, roles: ["ADMIN"] },
+      { name: "Klijenti", href: "/customers", icon: Users, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Fakture", href: "/invoices", icon: FileText, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Inspekcije", href: "/inspections", icon: Clipboard, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Incidenti", href: "/incidents", icon: AlertTriangle, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Izvještaji", href: "/reports", icon: BarChart3, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Alarmi", href: "/alerts", icon: AlertTriangle, roles: ["ADMIN"] },
       { name: "Audit Logs", href: "/audit-logs", icon: ScrollText, roles: ["ADMIN"] },

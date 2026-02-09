@@ -16,6 +16,8 @@ import {
  * - type: DocumentType (required)
  * - loadId: string (optional)
  * - driverId: string (optional)
+ * - inspectionId: string (optional)
+ * - incidentId: string (optional)
  * - expiryDate: string (optional, ISO date)
  */
 export async function POST(request: NextRequest) {
@@ -37,6 +39,8 @@ export async function POST(request: NextRequest) {
     const type = formData.get('type') as DocumentType;
     const loadId = formData.get('loadId') as string | null;
     const driverId = formData.get('driverId') as string | null;
+    const inspectionId = formData.get('inspectionId') as string | null;
+    const incidentId = formData.get('incidentId') as string | null;
     const expiryDateStr = formData.get('expiryDate') as string | null;
 
     // Validacija
@@ -79,8 +83,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (inspectionId) {
+      const inspection = await prisma.inspection.findUnique({
+        where: { id: inspectionId },
+      });
+      if (!inspection) {
+        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 });
+      }
+      if (decoded.role === 'DRIVER' && inspection.driverId !== decoded.driverId) {
+        return NextResponse.json({ error: 'Nemate dozvolu' }, { status: 403 });
+      }
+    }
+
+    if (incidentId) {
+      const incident = await prisma.incident.findUnique({
+        where: { id: incidentId },
+      });
+      if (!incident) {
+        return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
+      }
+      if (decoded.role === 'DRIVER' && incident.driverId !== decoded.driverId) {
+        return NextResponse.json({ error: 'Nemate dozvolu' }, { status: 403 });
+      }
+    }
+
     // Process upload - sačuvaj na disk
-    const entityId = loadId || driverId || undefined;
+    const entityId = loadId || driverId || inspectionId || incidentId || undefined;
     const uploadResult = await processUpload(file, type, entityId);
 
     // Parse expiry date ako postoji
@@ -103,6 +131,8 @@ export async function POST(request: NextRequest) {
         expiryDate,
         loadId: loadId || undefined,
         driverId: driverId || undefined,
+        inspectionId: inspectionId || undefined,
+        incidentId: incidentId || undefined,
         uploadedById: decoded.userId,
       },
       include: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { auditPayment, getClientIp } from '@/lib/auditLog';
 
 /**
  * PATCH /api/wages/pay-stubs/[id]/mark-paid
@@ -71,6 +72,17 @@ export async function PATCH(
         },
       },
     });
+
+    await auditPayment(
+      decoded.userId,
+      updatedPayStub.id,
+      {
+        isPaid: true,
+        paidDate: updatedPayStub.paidDate,
+        totalAmount: updatedPayStub.totalAmount,
+      },
+      getClientIp(request)
+    );
 
     return NextResponse.json({
       message: 'Pay stub marked as paid',

@@ -121,11 +121,11 @@ export default function DriversComparePage() {
       "Driver Name",
       "Email",
       "Status",
-      "Total Miles",
+      "Total km",
       "Total Revenue",
       "Completed Loads",
       "On-Time Delivery %",
-      "Avg Revenue/Mile",
+      "Prosjek prihoda/km",
       "Avg Revenue/Load",
       "Utilization Rate %",
     ];
@@ -156,9 +156,9 @@ export default function DriversComparePage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("bs-BA", {
       style: "currency",
-      currency: "USD",
+      currency: "BAM",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
@@ -171,7 +171,7 @@ export default function DriversComparePage() {
   // Prepare chart data
   const chartData = comparisons.map((c) => ({
     name: c.driverName.split(" ")[0], // First name only for chart
-    "Total Miles": c.performance.totalMiles,
+    "Total km": c.performance.totalMiles,
     Revenue: c.performance.totalRevenue,
     Loads: c.performance.completedLoads,
     "On-Time %": c.performance.onTimeDeliveryRate,
@@ -308,13 +308,13 @@ export default function DriversComparePage() {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-4 text-sm font-semibold text-dark-700">
-                        Driver
+                        Vozač
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
-                        Total Miles
+                        Ukupno km
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
-                        Revenue
+                        Prihod
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
                         Loads
@@ -323,7 +323,7 @@ export default function DriversComparePage() {
                         On-Time %
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
-                        $/Mile
+                        BAM/km
                       </th>
                       <th className="text-right py-3 px-4 text-sm font-semibold text-dark-700">
                         Utilization
@@ -369,7 +369,7 @@ export default function DriversComparePage() {
                           </span>
                         </td>
                         <td className="text-right py-3 px-4 text-dark-900">
-                          ${comparison.performance.avgRevenuePerMile.toFixed(2)}
+                          {formatCurrency(comparison.performance.avgRevenuePerMile)}/km
                         </td>
                         <td className="text-right py-3 px-4 text-dark-900">
                           {comparison.performance.utilizationRate.toFixed(1)}%
@@ -384,12 +384,12 @@ export default function DriversComparePage() {
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Miles Chart */}
+            {/* KM Chart */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="w-5 h-5" />
-                  Total Miles
+                  Total km
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -399,7 +399,7 @@ export default function DriversComparePage() {
                     <XAxis dataKey="name" stroke="#64748b" />
                     <YAxis stroke="#64748b" />
                     <Tooltip />
-                    <Bar dataKey="Total Miles" fill="#0ea5e9" />
+                    <Bar dataKey="Total km" fill="#0ea5e9" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

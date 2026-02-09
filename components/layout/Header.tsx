@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, Search, Calendar, ChevronDown, Menu } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/authContext";
 
 interface HeaderProps {
@@ -9,11 +10,30 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { user } = useAuth();
+  const [alertCount, setAlertCount] = useState(0);
   const today = new Date().toLocaleDateString("bs-BA", {
     weekday: "short",
     day: "numeric",
     month: "long",
   });
+
+  useEffect(() => {
+    const fetchAlertCount = async () => {
+      if (!user || (user.role !== "ADMIN" && user.role !== "DISPATCHER")) {
+        setAlertCount(0);
+        return;
+      }
+      try {
+        const res = await fetch("/api/dashboard/alerts", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setAlertCount(data?.total ?? 0);
+      } catch {
+        // ignore
+      }
+    };
+    fetchAlertCount();
+  }, [user]);
 
   return (
     <header className="h-24 bg-dark-50 flex items-center px-4 md:px-8 gap-4 md:gap-8">
@@ -55,9 +75,16 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
 
         {/* Notifications */}
-        <button className="relative p-3.5 bg-white rounded-full shadow-soft hover:shadow-primary transition-all group">
+        <button
+          className="relative p-3.5 bg-white rounded-full shadow-soft hover:shadow-primary transition-all group"
+          onClick={() => window.location.assign("/alerts")}
+        >
           <Bell className="w-5 h-5 text-dark-600 group-hover:text-primary-600" />
-          <span className="absolute top-3 right-3.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+          {alertCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+              {alertCount > 99 ? "99+" : alertCount}
+            </span>
+          )}
         </button>
 
         {/* User Profile Dropdown Trigger */}

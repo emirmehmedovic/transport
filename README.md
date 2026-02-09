@@ -87,6 +87,9 @@ MAX_FILE_SIZE=10485760
 # App Config
 NODE_ENV="development"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Schengen 90/180
+SCHENGEN_GEOJSON_PATH="./data/schengen.geojson"
 ```
 
 4. **Setup database**
@@ -117,6 +120,25 @@ After seeding, you can login with:
 - **Password**: `admin123`
 
 **⚠️ IMPORTANT**: Change this password immediately in production!
+
+## 🛂 Schengen 90/180
+
+### GeoJSON setup
+Schengen kalkulacija koristi polygon granice iz `data/schengen.geojson`. Fajl možeš generisati iz globalnog `countries.geojson`:
+
+```bash
+python3 scripts/build-schengen-geojson.py /putanja/do/countries.geojson
+```
+
+### Pravilo (90/180)
+- Nema resetovanja po “polugodištu”.
+- U svakom trenutku se gleda **zadnjih 180 dana**.
+- Ako je vozač bio u Schengenu **bilo koji dio dana**, taj dan se broji kao 1 dan.
+- **Preostalo = 90 − (broj dana u Schengenu u zadnjih 180 dana)**.
+
+### Ručni unos
+- Ako nemaš historijske GPS podatke, možeš ručno unijeti **preostalo dana** i datum “as of”.
+- Od tog datuma aplikacija oduzima nove Schengen dane kako se pojavljuju GPS pozicije.
 
 ## 📁 Project Structure
 

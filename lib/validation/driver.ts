@@ -28,7 +28,7 @@ export const driverSchema = z
             : typeof val === "string"
             ? parseFloat(val)
             : val,
-        z.number().positive("Cijena po milji mora biti pozitivna").nullable()
+        z.number().positive("Cijena po km mora biti pozitivna").nullable()
       )
       .optional(),
     status: z

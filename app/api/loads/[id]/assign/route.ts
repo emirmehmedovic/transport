@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { isInSchengen } from "@/lib/schengen";
 import {
   sendAdminNotification,
   sendTelegramNotification,
@@ -40,6 +41,9 @@ export async function PATCH(
       where: { id: params.id },
       include: {
         vehicles: true,
+        stops: {
+          select: { latitude: true, longitude: true },
+        },
         truck: {
           select: {
             id: true,
@@ -114,6 +118,7 @@ export async function PATCH(
             : load.status === "AVAILABLE"
             ? "AVAILABLE"
             : load.status,
+        assignedAt: driverId && truckId ? new Date() : null,
       },
     });
 
@@ -190,7 +195,56 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ load: updated });
+    let warning: string | null = null;
+    if (driverId) {
+      const points = [
+        { lat: load.pickupLatitude, lng: load.pickupLongitude },
+        { lat: load.deliveryLatitude, lng: load.deliveryLongitude },
+        ...(load.stops || []).map((s) => ({ lat: s.latitude, lng: s.longitude })),
+      ].filter((p) => typeof p.lat === "number" && typeof p.lng === "number") as Array<{
+        lat: number;
+        lng: number;
+      }>;
+
+      const isSchengenLoad = points.some((p) => isInSchengen(p.lat, p.lng));
+
+      if (isSchengenLoad) {
+        const now = new Date();
+        const windowFrom = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+
+        const driver = await prisma.driver.findUnique({
+          where: { id: driverId },
+          select: {
+            schengenManualRemainingDays: true,
+            schengenManualAsOf: true,
+          },
+        });
+
+        if (driver) {
+          const days = await prisma.schengenDay.findMany({
+            where: {
+              driverId,
+              date: { gte: driver.schengenManualAsOf || windowFrom },
+              inSchengen: true,
+            },
+            select: { date: true },
+          });
+
+          let remainingDays = 90 - days.length;
+          if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
+            remainingDays = Math.max(0, driver.schengenManualRemainingDays - days.length);
+          } else {
+            remainingDays = Math.max(0, remainingDays);
+          }
+
+          if (remainingDays < 7) {
+            warning = `Upozorenje: vozaču je preostalo ${remainingDays} dana u Schengen 90/180.`;
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ load: updated, warning });
   } catch (error: any) {
     console.error("Error assigning load:", error);
     return NextResponse.json(

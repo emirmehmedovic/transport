@@ -78,7 +78,7 @@ export async function POST(
       start_transit: {
         from: ['PICKED_UP'],
         to: 'IN_TRANSIT',
-        dateField: 'actualPickupDate', // No separate field, but we could add one
+        dateField: 'inTransitAt',
       },
       deliver: {
         from: ['IN_TRANSIT', 'PICKED_UP'], // Allow direct delivery from PICKED_UP

@@ -37,8 +37,6 @@ export default function WagesPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const USD_TO_BAM = 1.8;
-  const MILES_TO_KILOMETERS = 1.60934;
 
   // Generate form state
   const [selectedDriver, setSelectedDriver] = useState('');
@@ -150,16 +148,14 @@ export default function WagesPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    const amountInBAM = amount * USD_TO_BAM;
     return new Intl.NumberFormat('bs-BA', {
       style: 'currency',
       currency: 'BAM',
       minimumFractionDigits: 2,
-    }).format(amountInBAM);
+    }).format(amount);
   };
 
-  const formatKilometers = (miles: number) => {
-    const km = miles * MILES_TO_KILOMETERS;
+  const formatKilometers = (km: number) => {
     return km.toLocaleString('bs-BA', { maximumFractionDigits: 2 });
   };
 
@@ -176,7 +172,7 @@ export default function WagesPage() {
   const totalAmount = payStubs.reduce((acc, stub) => acc + stub.totalAmount, 0);
 
   return (
-    <div className="space-y-8 font-sans">
+    <div className="space-y-4 md:space-y-6 lg:space-y-8 font-sans px-4 md:px-0">
       <PageHeader
         icon={DollarSign}
         title="Isplate i obračuni"
@@ -184,28 +180,28 @@ export default function WagesPage() {
         actions={
           <button
             onClick={() => setShowGenerateModal(true)}
-            className="flex items-center gap-2 rounded-full px-5 py-2.5 border border-white/15 bg-white/5 text-dark-50 font-semibold hover:bg-white/10 hover:border-white/25 transition-colors"
+            className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
           >
-            + Generiši obračun
+            + Generiši
           </button>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno obračuna</p>
-            <p className="text-2xl font-bold mt-1">{payStubs.length}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Obračuna</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{payStubs.length}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Plaćeni</p>
-            <p className="text-2xl font-bold mt-1">{paid}</p>
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Plaćeni</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{paid}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Neplaćeni</p>
-            <p className="text-2xl font-bold mt-1">{unpaid}</p>
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Neplaćeni</p>
+            <p className="text-xl md:text-2xl font-bold mt-1">{unpaid}</p>
           </div>
-          <div className="bg-white/5 rounded-2xl px-5 py-3 border border-white/10 text-white">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno (BAM)</p>
-            <p className="text-2xl font-bold mt-1">{formatCurrency(totalAmount)}</p>
+          <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10 text-white">
+            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-white/70">Ukupno (BAM)</p>
+            <p className="text-xl md:text-2xl font-bold mt-1 truncate">{formatCurrency(totalAmount)}</p>
           </div>
         </div>
       </PageHeader>

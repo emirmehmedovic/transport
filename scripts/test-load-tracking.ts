@@ -65,7 +65,7 @@ async function main() {
       // Load details
       scheduledPickupDate: new Date(),
       scheduledDeliveryDate: new Date(Date.now() + 5 * 60 * 60 * 1000), // +5 hours
-      distance: 195, // ~195 miles
+      distance: 195, // ~195 km
       loadRate: 500,
     },
   });

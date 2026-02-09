@@ -10,6 +10,8 @@ import { verifyToken } from '@/lib/auth';
  * - loadId: filter by load
  * - driverId: filter by driver
  * - type: filter by document type
+ * - inspectionId: filter by inspection
+ * - incidentId: filter by incident
  * - search: search by filename
  * - page: page number (default 1)
  * - limit: items per page (default 20)
@@ -31,6 +33,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const loadId = searchParams.get('loadId') || undefined;
     const driverId = searchParams.get('driverId') || undefined;
+    const inspectionId = searchParams.get('inspectionId') || undefined;
+    const incidentId = searchParams.get('incidentId') || undefined;
     const type = searchParams.get('type') || undefined;
     const search = searchParams.get('search') || undefined;
     const page = parseInt(searchParams.get('page') || '1', 10);
@@ -60,6 +64,28 @@ export async function GET(request: NextRequest) {
 
         // Vozač može vidjeti sve dokumente za svoj load
         where.loadId = loadId;
+      } else if (inspectionId) {
+        const inspection = await prisma.inspection.findUnique({
+          where: { id: inspectionId },
+        });
+        if (!inspection || inspection.driverId !== driver?.id) {
+          return NextResponse.json(
+            { error: 'Nemate dozvolu za pristup dokumentima ove inspekcije' },
+            { status: 403 }
+          );
+        }
+        where.inspectionId = inspectionId;
+      } else if (incidentId) {
+        const incident = await prisma.incident.findUnique({
+          where: { id: incidentId },
+        });
+        if (!incident || incident.driverId !== driver?.id) {
+          return NextResponse.json(
+            { error: 'Nemate dozvolu za pristup dokumentima incidenta' },
+            { status: 403 }
+          );
+        }
+        where.incidentId = incidentId;
       } else if (driverId) {
         // Ako se traže dokumenti po driverId, dozvoli samo svoje
         if (driverId !== driver?.id) {
@@ -81,6 +107,12 @@ export async function GET(request: NextRequest) {
 
       if (driverId) {
         where.driverId = driverId;
+      }
+      if (inspectionId) {
+        where.inspectionId = inspectionId;
+      }
+      if (incidentId) {
+        where.incidentId = incidentId;
       }
     }
 
