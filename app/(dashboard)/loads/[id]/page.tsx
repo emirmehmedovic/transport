@@ -34,6 +34,7 @@ import {
   ChevronDown,
   Check,
   X,
+  Route,
   UploadCloud,
 } from "lucide-react";
 import { LoadTimeline } from "@/components/loads/load-timeline";
@@ -397,6 +398,61 @@ export default function LoadDetailPage() {
         return "Otkazan";
       default:
         return status;
+    }
+  };
+
+  const getStopTypeLabel = (type: string) => {
+    switch (type) {
+      case "PICKUP":
+        return "Preuzimanje";
+      case "DELIVERY":
+        return "Dostava";
+      case "INTERMEDIATE":
+        return "Međustop";
+      default:
+        return type;
+    }
+  };
+
+  const getStopTypeStyles = (type: string) => {
+    if (type === "PICKUP") {
+      return {
+        badge: "bg-emerald-100 text-emerald-700",
+        border: "border-emerald-200",
+        bg: "bg-emerald-50/40",
+      };
+    }
+    if (type === "DELIVERY") {
+      return {
+        badge: "bg-sky-100 text-sky-700",
+        border: "border-sky-200",
+        bg: "bg-sky-50/40",
+      };
+    }
+    if (type === "INTERMEDIATE") {
+      return {
+        badge: "bg-amber-100 text-amber-700",
+        border: "border-amber-200",
+        bg: "bg-amber-50/40",
+      };
+    }
+    return {
+      badge: "bg-dark-100 text-dark-700",
+      border: "border-dark-200",
+      bg: "bg-white",
+    };
+  };
+
+  const getStopTypeIcon = (type: string) => {
+    switch (type) {
+      case "PICKUP":
+        return Package;
+      case "DELIVERY":
+        return MapPin;
+      case "INTERMEDIATE":
+        return Route;
+      default:
+        return MapPin;
     }
   };
 
@@ -813,16 +869,16 @@ export default function LoadDetailPage() {
             </Card>
           </div>
 
-          {/* Pickup & Delivery */}
+          {/* Preuzimanje & Dostava */}
           <Card>
             <CardHeader>
-              <CardTitle>Pickup i delivery detalji</CardTitle>
+              <CardTitle>Detalji preuzimanja i dostave</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
                   <h3 className="text-sm font-semibold text-dark-800 mb-3 flex items-center gap-2">
-                    <MapPin className="w-4 h-4" /> Pickup
+                    <MapPin className="w-4 h-4" /> Preuzimanje
                   </h3>
                   <p className="text-sm text-dark-900">
                     {load.pickupAddress}
@@ -841,7 +897,7 @@ export default function LoadDetailPage() {
 
                 <div>
                   <h3 className="text-sm font-semibold text-dark-800 mb-3 flex items-center gap-2">
-                    <MapPin className="w-4 h-4" /> Delivery
+                    <MapPin className="w-4 h-4" /> Dostava
                   </h3>
                   <p className="text-sm text-dark-900">
                     {load.deliveryAddress}
@@ -864,9 +920,9 @@ export default function LoadDetailPage() {
           {/* Destination Map */}
           <Card>
             <CardHeader>
-              <CardTitle>Mapa destinacije</CardTitle>
+              <CardTitle>Mapa dostave</CardTitle>
               <p className="text-sm text-dark-500 mt-2">
-                Pinovana lokacija gdje ide delivery.
+                Pinovana lokacija gdje ide dostava.
               </p>
             </CardHeader>
             <CardContent>
@@ -897,80 +953,145 @@ export default function LoadDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {load.stops.map((stop) => (
-                    <div
-                      key={stop.id}
-                      className="rounded-xl border border-dark-200 bg-white px-4 py-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-dark-900">
-                          {stop.sequence}. {stop.type}
+                  {load.stops.map((stop) => {
+                    const vehiclesAtStop =
+                      load.cargoType === "LABUDICA"
+                        ? load.vehicles.filter((v) => v.pickupStopSequence === stop.sequence)
+                        : [];
+                    const itemsAtStop =
+                      load.cargoType !== "LABUDICA" && load.cargoItems
+                        ? load.cargoItems.filter((i) => i.pickupStopSequence === stop.sequence)
+                        : [];
+                    const typeStyles = getStopTypeStyles(stop.type);
+                    const StopIcon = getStopTypeIcon(stop.type);
+
+                    return (
+                      <div
+                        key={stop.id}
+                        className={`rounded-2xl border ${typeStyles.border} ${typeStyles.bg} px-4 py-4`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-dark-900 text-white text-sm font-semibold">
+                                {stop.sequence}
+                              </span>
+                              <div>
+                                <p className="text-xs text-dark-500">Stop {stop.sequence}</p>
+                                <p className="text-sm font-semibold text-dark-900">
+                                  {getStopTypeLabel(stop.type)}
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`text-[11px] font-semibold uppercase tracking-[0.2em] px-2.5 py-1 rounded-full ${typeStyles.badge}`}
+                            >
+                              <span className="inline-flex items-center gap-1.5">
+                                <StopIcon className="w-3.5 h-3.5" />
+                                {getStopTypeLabel(stop.type)}
+                              </span>
+                            </span>
+                          </div>
+                          {stop.scheduledDate && (
+                            <p className="text-xs text-dark-500">
+                              {formatDateTime(stop.scheduledDate)}
+                            </p>
+                          )}
+                        </div>
+
+                        <p className="text-sm text-dark-700 mt-3 flex items-start gap-2">
+                          <MapPin className="w-4 h-4 text-dark-400 mt-0.5" />
+                          <span>
+                          {stop.address}
+                          <br />
+                          {stop.city}, {stop.state} {stop.zip}
+                          </span>
                         </p>
-                        {stop.scheduledDate && (
-                          <p className="text-xs text-dark-500">
-                            {formatDateTime(stop.scheduledDate)}
+
+                        {stop.type === "PICKUP" && (
+                          <div className="mt-3 rounded-xl border border-dark-200 bg-white px-3 py-2">
+                            <p className="text-xs font-semibold text-dark-700">
+                              Šta se preuzima na ovom stopu
+                            </p>
+
+                            {load.cargoType === "LABUDICA" ? (
+                              vehiclesAtStop.length > 0 ? (
+                                <div className="mt-2 space-y-1 text-xs text-dark-700">
+                                  <p className="text-[11px] uppercase tracking-[0.2em] text-dark-400">
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <Truck className="w-3.5 h-3.5" /> Vozila ({vehiclesAtStop.length})
+                                    </span>
+                                  </p>
+                                  <ul className="space-y-1">
+                                    {vehiclesAtStop.map((v) => (
+                                      <li key={v.id} className="flex flex-wrap gap-2">
+                                        <span className="font-medium">
+                                          {v.make || "Vozilo"} {v.model || ""} {v.year || ""}
+                                        </span>
+                                        {v.vin && (
+                                          <span className="text-dark-500">VIN: {v.vin}</span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-xs text-dark-500">
+                                  Nema dodijeljenih vozila za ovaj pickup.
+                                </p>
+                              )
+                            ) : itemsAtStop.length > 0 ? (
+                              <div className="mt-2 space-y-1 text-xs text-dark-700">
+                                <p className="text-[11px] uppercase tracking-[0.2em] text-dark-400">
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <Package className="w-3.5 h-3.5" /> Teret ({itemsAtStop.length})
+                                  </span>
+                                </p>
+                                <ul className="space-y-1">
+                                  {itemsAtStop.map((item) => (
+                                    <li key={item.id} className="flex flex-wrap gap-2">
+                                      <span className="font-medium">{item.name || "Teret"}</span>
+                                      {item.quantity ? <span>{item.quantity}</span> : null}
+                                      {item.unit ? <span>{item.unit}</span> : null}
+                                      {item.volumeLiters ? (
+                                        <span>{item.volumeLiters} L</span>
+                                      ) : null}
+                                      {item.volumeM3 ? <span>{item.volumeM3} m3</span> : null}
+                                      {item.weightKg ? <span>{item.weightKg} kg</span> : null}
+                                      {item.pallets ? <span>{item.pallets} pal</span> : null}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-xs text-dark-500">
+                                Nema dodijeljenog tereta za ovaj pickup.
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {stop.items && (
+                          <p className="text-xs text-dark-600 mt-2 flex items-start gap-2">
+                            <Clipboard className="w-4 h-4 text-dark-400 mt-0.5" />
+                            <span>
+                              <span className="font-medium">Napomena o preuzimanju:</span>{" "}
+                              {stop.items}
+                            </span>
+                          </p>
+                        )}
+                        {(stop.contactName || stop.contactPhone) && (
+                          <p className="text-xs text-dark-600 mt-2 flex items-start gap-2">
+                            <Phone className="w-4 h-4 text-dark-400 mt-0.5" />
+                            <span>
+                              {stop.contactName || "Kontakt"}{" "}
+                              {stop.contactPhone ? `• ${stop.contactPhone}` : ""}
+                            </span>
                           </p>
                         )}
                       </div>
-                      <p className="text-sm text-dark-700 mt-2">
-                        {stop.address}
-                        <br />
-                        {stop.city}, {stop.state} {stop.zip}
-                      </p>
-                      {load.cargoType === "LABUDICA" && (
-                        <>
-                          {load.vehicles.filter((v) => v.pickupStopSequence === stop.sequence).length > 0 && (
-                            <div className="mt-2 text-xs text-dark-700">
-                              <p className="font-semibold">Vozila na ovom stopu:</p>
-                              <ul className="mt-1 space-y-1">
-                                {load.vehicles
-                                  .filter((v) => v.pickupStopSequence === stop.sequence)
-                                  .map((v) => (
-                                    <li key={v.id}>
-                                      {v.make || "Vozilo"} {v.model || ""} {v.year || ""}
-                                    </li>
-                                  ))}
-                              </ul>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {load.cargoType !== "LABUDICA" && load.cargoItems && (
-                        <>
-                          {load.cargoItems.filter((i) => i.pickupStopSequence === stop.sequence).length > 0 && (
-                            <div className="mt-2 text-xs text-dark-700">
-                              <p className="font-semibold">Teret na ovom stopu:</p>
-                              <ul className="mt-1 space-y-1">
-                                {load.cargoItems
-                                  .filter((i) => i.pickupStopSequence === stop.sequence)
-                                  .map((item) => (
-                                    <li key={item.id}>
-                                      {item.name || "Teret"}
-                                      {item.quantity ? ` • ${item.quantity}` : ""}
-                                      {item.unit ? ` ${item.unit}` : ""}
-                                      {item.volumeLiters ? ` • ${item.volumeLiters} L` : ""}
-                                      {item.volumeM3 ? ` • ${item.volumeM3} m3` : ""}
-                                      {item.weightKg ? ` • ${item.weightKg} kg` : ""}
-                                      {item.pallets ? ` • ${item.pallets} pal` : ""}
-                                    </li>
-                                  ))}
-                              </ul>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {stop.items && (
-                        <p className="text-xs text-dark-600 mt-2">
-                          <span className="font-medium">Preuzimanje:</span> {stop.items}
-                        </p>
-                      )}
-                      {(stop.contactName || stop.contactPhone) && (
-                        <p className="text-xs text-dark-600 mt-2">
-                          {stop.contactName || "Kontakt"} {stop.contactPhone ? `• ${stop.contactPhone}` : ""}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

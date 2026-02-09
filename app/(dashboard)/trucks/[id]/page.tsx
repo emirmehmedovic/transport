@@ -79,6 +79,13 @@ type TruckPerformanceSummary = {
   uptimePercentage: number;
 };
 
+type DriverOption = {
+  id: string;
+  user: { firstName: string; lastName: string };
+  status: string;
+  primaryTruck?: { id: string; truckNumber: string } | null;
+};
+
 const permitTypes = [
   { value: "VIGNETTE", label: "Vinjeta" },
   { value: "TOLLBOX", label: "Toll box" },
@@ -128,9 +135,19 @@ export default function TruckDetailPage() {
     validTo: "",
     notes: "",
   });
+  const [driverOptions, setDriverOptions] = useState<DriverOption[]>([]);
+  const [primaryDriverId, setPrimaryDriverId] = useState("");
+  const [backupDriverId, setBackupDriverId] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignError, setAssignError] = useState("");
+  const [assignSuccess, setAssignSuccess] = useState("");
 
   useEffect(() => {
     fetchTruck();
+  }, [truckId]);
+
+  useEffect(() => {
+    fetchDrivers();
   }, [truckId]);
 
   useEffect(() => {
@@ -154,10 +171,76 @@ export default function TruckDetailPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Greška pri učitavanju kamiona");
       setTruck(data.truck);
+      setPrimaryDriverId(data.truck?.primaryDriver?.id || "");
+      setBackupDriverId(data.truck?.backupDriver?.id || "");
     } catch (err: any) {
       setError(err.message || "Greška pri učitavanju kamiona");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDrivers = async () => {
+    try {
+      const res = await fetch(
+        `/api/drivers?status=ACTIVE&pageSize=200&sortBy=name&sortDir=asc`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri učitavanju vozača");
+      }
+      setDriverOptions(data.drivers || []);
+    } catch (err: any) {
+      setAssignError(err.message || "Greška pri učitavanju vozača");
+    }
+  };
+
+  const handleAssignDrivers = async () => {
+    if (!truck) return;
+
+    try {
+      setAssignLoading(true);
+      setAssignError("");
+      setAssignSuccess("");
+
+      const selectedPrimary = driverOptions.find((d) => d.id === primaryDriverId);
+      if (
+        selectedPrimary?.primaryTruck?.id &&
+        selectedPrimary.primaryTruck.id !== truck.id
+      ) {
+        const unassignRes = await fetch(
+          `/api/trucks/${selectedPrimary.primaryTruck.id}/assign-driver`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ primaryDriverId: null }),
+          }
+        );
+        const unassignData = await unassignRes.json();
+        if (!unassignRes.ok) {
+          throw new Error(unassignData.error || "Greška pri uklanjanju dodjele");
+        }
+      }
+
+      const res = await fetch(`/api/trucks/${truck.id}/assign-driver`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          primaryDriverId: primaryDriverId || null,
+          backupDriverId: backupDriverId || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri dodjeli vozača");
+      }
+
+      await fetchTruck();
+      setAssignSuccess("Dodjela vozača je sačuvana.");
+    } catch (err: any) {
+      setAssignError(err.message || "Greška pri dodjeli vozača");
+    } finally {
+      setAssignLoading(false);
     }
   };
 
@@ -445,7 +528,7 @@ export default function TruckDetailPage() {
               <CardHeader>
                 <CardTitle>Vozači</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 <div>
                   <p className="text-xs text-dark-500">Primarni</p>
                   <p className="font-semibold text-dark-900">
@@ -461,6 +544,53 @@ export default function TruckDetailPage() {
                       ? `${truck.backupDriver.user.firstName} ${truck.backupDriver.user.lastName}`
                       : "-"}
                   </p>
+                </div>
+
+                <div className="pt-2 border-t border-dark-100">
+                  <p className="text-xs text-dark-500 mb-2">Brza dodjela</p>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs text-dark-500 mb-1">Primarni</label>
+                      <select
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={primaryDriverId}
+                        onChange={(e) => setPrimaryDriverId(e.target.value)}
+                      >
+                        <option value="">Bez primarnog</option>
+                        {driverOptions.map((driverOption) => (
+                          <option key={driverOption.id} value={driverOption.id}>
+                            {driverOption.user.firstName} {driverOption.user.lastName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-dark-500 mb-1">Backup</label>
+                      <select
+                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        value={backupDriverId}
+                        onChange={(e) => setBackupDriverId(e.target.value)}
+                      >
+                        <option value="">Bez backup vozača</option>
+                        {driverOptions.map((driverOption) => (
+                          <option key={driverOption.id} value={driverOption.id}>
+                            {driverOption.user.firstName} {driverOption.user.lastName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button
+                      className="w-full"
+                      onClick={handleAssignDrivers}
+                      disabled={assignLoading}
+                    >
+                      {assignLoading ? "Spremam..." : "Spasi dodjelu"}
+                    </Button>
+                    {assignError && <p className="text-xs text-red-600">{assignError}</p>}
+                    {assignSuccess && (
+                      <p className="text-xs text-emerald-600">{assignSuccess}</p>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

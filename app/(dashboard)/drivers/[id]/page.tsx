@@ -98,6 +98,15 @@ type DriverPerformanceSummary = {
   activeDays: number;
 };
 
+type TruckOption = {
+  id: string;
+  truckNumber: string;
+  make: string;
+  model: string;
+  year: number;
+  isActive: boolean;
+};
+
 export default function DriverDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -148,9 +157,18 @@ export default function DriverDetailPage() {
   });
   const [vacationSaving, setVacationSaving] = useState(false);
   const [vacationError, setVacationError] = useState("");
+  const [availableTrucks, setAvailableTrucks] = useState<TruckOption[]>([]);
+  const [truckAssignId, setTruckAssignId] = useState("");
+  const [truckAssignLoading, setTruckAssignLoading] = useState(false);
+  const [truckAssignError, setTruckAssignError] = useState("");
+  const [truckAssignSuccess, setTruckAssignSuccess] = useState("");
 
   useEffect(() => {
     fetchDriver();
+  }, [driverId]);
+
+  useEffect(() => {
+    fetchAvailableTrucks();
   }, [driverId]);
 
   useEffect(() => {
@@ -181,10 +199,104 @@ export default function DriverDetailPage() {
       }
 
       setDriver(data.driver);
+      if (data?.driver?.primaryTruck?.id) {
+        setTruckAssignId(data.driver.primaryTruck.id);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvailableTrucks = async () => {
+    try {
+      const res = await fetch(`/api/trucks?status=active`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri učitavanju kamiona");
+      }
+
+      setAvailableTrucks(data.trucks || []);
+    } catch (err: any) {
+      setTruckAssignError(err.message || "Greška pri učitavanju kamiona");
+    }
+  };
+
+  const handleAssignTruck = async () => {
+    if (!driver) return;
+    const nextTruckId = truckAssignId.trim();
+
+    if (!nextTruckId) {
+      setTruckAssignError("Odaberi kamion");
+      return;
+    }
+
+    try {
+      setTruckAssignLoading(true);
+      setTruckAssignError("");
+      setTruckAssignSuccess("");
+
+      if (driver.primaryTruck?.id && driver.primaryTruck.id !== nextTruckId) {
+        const unassignRes = await fetch(
+          `/api/trucks/${driver.primaryTruck.id}/assign-driver`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ primaryDriverId: null }),
+          }
+        );
+        const unassignData = await unassignRes.json();
+        if (!unassignRes.ok) {
+          throw new Error(unassignData.error || "Greška pri uklanjanju dodjele");
+        }
+      }
+
+      const assignRes = await fetch(`/api/trucks/${nextTruckId}/assign-driver`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryDriverId: driver.id }),
+      });
+      const assignData = await assignRes.json();
+      if (!assignRes.ok) {
+        throw new Error(assignData.error || "Greška pri dodjeli kamiona");
+      }
+
+      await fetchDriver();
+      setTruckAssignSuccess("Kamion je uspješno dodijeljen.");
+    } catch (err: any) {
+      setTruckAssignError(err.message || "Greška pri dodjeli kamiona");
+    } finally {
+      setTruckAssignLoading(false);
+    }
+  };
+
+  const handleRemoveTruck = async () => {
+    if (!driver?.primaryTruck?.id) return;
+
+    try {
+      setTruckAssignLoading(true);
+      setTruckAssignError("");
+      setTruckAssignSuccess("");
+
+      const res = await fetch(`/api/trucks/${driver.primaryTruck.id}/assign-driver`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryDriverId: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri uklanjanju dodjele");
+      }
+
+      await fetchDriver();
+      setTruckAssignId("");
+      setTruckAssignSuccess("Dodjela kamiona je uklonjena.");
+    } catch (err: any) {
+      setTruckAssignError(err.message || "Greška pri uklanjanju dodjele");
+    } finally {
+      setTruckAssignLoading(false);
     }
   };
 
@@ -834,6 +946,50 @@ export default function DriverDetailPage() {
             ) : (
               <p className="text-dark-500">Nema dodijeljenog kamiona</p>
             )}
+
+            <div className="mt-4 space-y-2">
+              <label className="block text-xs text-dark-500">Brza dodjela kamiona</label>
+              <div className="flex flex-col gap-2">
+                <select
+                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  value={truckAssignId}
+                  onChange={(e) => setTruckAssignId(e.target.value)}
+                >
+                  <option value="">Odaberi kamion</option>
+                  {availableTrucks.map((truckOption) => (
+                    <option key={truckOption.id} value={truckOption.id}>
+                      {truckOption.truckNumber} • {truckOption.make} {truckOption.model} (
+                      {truckOption.year})
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    className="w-full sm:w-auto"
+                    onClick={handleAssignTruck}
+                    disabled={truckAssignLoading || !truckAssignId}
+                  >
+                    {truckAssignLoading ? "Dodjeljujem..." : "Dodijeli kamion"}
+                  </Button>
+                  {driver.primaryTruck && (
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      onClick={handleRemoveTruck}
+                      disabled={truckAssignLoading}
+                    >
+                      Ukloni dodjelu
+                    </Button>
+                  )}
+                </div>
+                {truckAssignError && (
+                  <p className="text-xs text-red-600">{truckAssignError}</p>
+                )}
+                {truckAssignSuccess && (
+                  <p className="text-xs text-emerald-600">{truckAssignSuccess}</p>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
