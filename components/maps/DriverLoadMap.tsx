@@ -33,6 +33,15 @@ const deliveryIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+const stopIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
 const driverIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
@@ -49,6 +58,15 @@ interface DriverLoadMapProps {
   deliveryLat: number;
   deliveryLng: number;
   deliveryAddress: string;
+  stops?: {
+    id: string;
+    sequence: number;
+    address: string;
+    city: string;
+    state: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  }[];
 }
 
 export default function DriverLoadMap({
@@ -58,6 +76,7 @@ export default function DriverLoadMap({
   deliveryLat,
   deliveryLng,
   deliveryAddress,
+  stops = [],
 }: DriverLoadMapProps) {
   const [driverLocation, setDriverLocation] = useState<[number, number] | null>(null);
   const [routeGeometry, setRouteGeometry] = useState<[number, number][]>([]);
@@ -65,6 +84,14 @@ export default function DriverLoadMap({
   const [durationToPickup, setDurationToPickup] = useState<number | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [loadingRoute, setLoadingRoute] = useState(true);
+  const fallbackRoute = [
+    [pickupLat, pickupLng] as [number, number],
+    ...stops
+      .filter((stop) => typeof stop.latitude === "number" && typeof stop.longitude === "number")
+      .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+      .map((stop) => [stop.latitude as number, stop.longitude as number] as [number, number]),
+    [deliveryLat, deliveryLng] as [number, number],
+  ];
 
   // Get driver's current location
   useEffect(() => {
@@ -94,11 +121,22 @@ export default function DriverLoadMap({
     }
   }, []);
 
-  // Fetch planned route (pickup → delivery)
+  // Fetch planned route (pickup → stops → delivery)
   useEffect(() => {
     const fetchPlannedRoute = async () => {
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${pickupLng},${pickupLat};${deliveryLng},${deliveryLat}?overview=full&geometries=geojson`;
+        const stopPoints = stops
+          .filter((stop) => typeof stop.latitude === "number" && typeof stop.longitude === "number")
+          .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+          .map((stop) => `${stop.longitude},${stop.latitude}`);
+
+        const waypoints = [
+          `${pickupLng},${pickupLat}`,
+          ...stopPoints,
+          `${deliveryLng},${deliveryLat}`,
+        ];
+
+        const url = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(";")}?overview=full&geometries=geojson`;
         const response = await fetch(url);
         const data = await response.json();
 
@@ -116,7 +154,7 @@ export default function DriverLoadMap({
     };
 
     fetchPlannedRoute();
-  }, [pickupLat, pickupLng, deliveryLat, deliveryLng]);
+  }, [pickupLat, pickupLng, deliveryLat, deliveryLng, stops]);
 
   // Calculate route from driver's location to pickup
   const fetchRouteToPickup = async (driverLat: number, driverLng: number) => {
@@ -205,6 +243,29 @@ export default function DriverLoadMap({
             </Popup>
           </Marker>
 
+          {/* Stop Markers */}
+          {stops
+            .filter((stop) => typeof stop.latitude === "number" && typeof stop.longitude === "number")
+            .map((stop) => (
+              <Marker
+                key={stop.id}
+                position={[stop.latitude as number, stop.longitude as number]}
+                icon={stopIcon}
+              >
+                <Popup>
+                  <div className="text-sm">
+                    <p className="font-semibold text-green-700 flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      <span>Stop {stop.sequence}</span>
+                    </p>
+                    <p className="text-dark-700">
+                      {stop.address}, {stop.city} {stop.state}
+                    </p>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
           {/* Driver's Current Location */}
           {driverLocation && (
             <>
@@ -234,13 +295,14 @@ export default function DriverLoadMap({
           )}
 
           {/* Planned Route (pickup → delivery) */}
-          {routeGeometry.length > 0 && (
+          {(routeGeometry.length > 0 || fallbackRoute.length > 1) && (
             <Polyline
-              positions={routeGeometry}
+              positions={routeGeometry.length > 0 ? routeGeometry : fallbackRoute}
               pathOptions={{
                 color: "#10B981",
                 weight: 4,
                 opacity: 0.7,
+                dashArray: routeGeometry.length > 0 ? undefined : "8, 8",
               }}
             />
           )}
@@ -259,7 +321,7 @@ export default function DriverLoadMap({
       {/* Legend */}
       <div className="p-4 bg-dark-50 rounded-xl border border-dark-200">
         <p className="text-sm font-semibold text-dark-900 mb-3">Legenda:</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-blue-500"></div>
             <span className="text-dark-700">Vaša trenutna lokacija</span>
@@ -267,6 +329,10 @@ export default function DriverLoadMap({
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500"></div>
             <span className="text-dark-700">Pickup lokacija</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <span className="text-dark-700">Stopovi</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-500"></div>

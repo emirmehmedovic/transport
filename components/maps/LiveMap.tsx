@@ -52,6 +52,15 @@ const deliveryIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+const stopIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
 // Helper function to check GPS status
 function getGPSStatus(lastLocationUpdate: Date | null): 'active' | 'warning' | 'offline' {
   if (!lastLocationUpdate) return 'offline';
@@ -170,6 +179,16 @@ interface LoadData {
   distance: number;
   loadRate: number;
   customRatePerMile: number | null;
+  stops?: {
+    id: string;
+    sequence: number;
+    type: string;
+    address: string;
+    city: string;
+    state: string;
+    latitude: number | null;
+    longitude: number | null;
+  }[];
   driver: {
     id: string;
     user: {
@@ -194,6 +213,16 @@ interface LoadInfo {
   deliveryState: string;
   deliveryLatitude: number | null;
   deliveryLongitude: number | null;
+  stops?: {
+    id: string;
+    sequence: number;
+    type: string;
+    address: string;
+    city: string;
+    state: string;
+    latitude: number | null;
+    longitude: number | null;
+  }[];
 }
 
 interface DriverLocation {
@@ -349,8 +378,17 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
       const toPickupRes = await fetch(toPickupUrl);
       const toPickupData = await toPickupRes.json();
 
-      // Route from pickup to delivery
-      const toDeliveryUrl = `https://router.project-osrm.org/route/v1/driving/${loadWithGPS.pickupLongitude},${loadWithGPS.pickupLatitude};${loadWithGPS.deliveryLongitude},${loadWithGPS.deliveryLatitude}?overview=full&geometries=geojson`;
+      const stopPoints = (loadWithGPS.stops || [])
+        .filter((stop) => typeof stop.latitude === "number" && typeof stop.longitude === "number")
+        .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+        .map((stop) => `${stop.longitude},${stop.latitude}`);
+
+      // Route from pickup to delivery (via stops)
+      const toDeliveryUrl = `https://router.project-osrm.org/route/v1/driving/${[
+        `${loadWithGPS.pickupLongitude},${loadWithGPS.pickupLatitude}`,
+        ...stopPoints,
+        `${loadWithGPS.deliveryLongitude},${loadWithGPS.deliveryLatitude}`,
+      ].join(";")}?overview=full&geometries=geojson`;
       const toDeliveryRes = await fetch(toDeliveryUrl);
       const toDeliveryData = await toDeliveryRes.json();
 
@@ -423,7 +461,18 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
     }
 
     try {
-      const routeUrl = `https://router.project-osrm.org/route/v1/driving/${load.pickupLongitude},${load.pickupLatitude};${load.deliveryLongitude},${load.deliveryLatitude}?overview=full&geometries=geojson`;
+      const stopPoints = (load.stops || [])
+        .filter((stop) => typeof stop.latitude === "number" && typeof stop.longitude === "number")
+        .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+        .map((stop) => `${stop.longitude},${stop.latitude}`);
+
+      const waypoints = [
+        `${load.pickupLongitude},${load.pickupLatitude}`,
+        ...stopPoints,
+        `${load.deliveryLongitude},${load.deliveryLatitude}`,
+      ];
+
+      const routeUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(";")}?overview=full&geometries=geojson`;
       const res = await fetch(routeUrl);
       const data = await res.json();
 
@@ -545,6 +594,33 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                 />
               )}
 
+              {/* Stop Markers */}
+              {(load.stops || [])
+                .filter((stop) => typeof stop.latitude === "number" && typeof stop.longitude === "number")
+                .map((stop) => (
+                  <Marker
+                    key={`${load.id}-stop-${stop.id}`}
+                    position={[stop.latitude as number, stop.longitude as number]}
+                    icon={stopIcon}
+                    eventHandlers={{
+                      click: () => {
+                        setSelectedLoadForPanel(load.id);
+                      },
+                    }}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <p className="font-semibold text-yellow-700">
+                          Stop {stop.sequence}
+                        </p>
+                        <p className="text-dark-700">
+                          {stop.address}, {stop.city} {stop.state}
+                        </p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
+
               {/* Route Line - Use calculated route if available, otherwise direct line */}
               {load.pickupLatitude &&
                 load.pickupLongitude &&
@@ -552,8 +628,19 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                 load.deliveryLongitude && (
                   <Polyline
                     positions={
-                      loadRoutes[load.id] || [
+                      loadRoutes[load.id] ||
+                      [
                         [load.pickupLatitude, load.pickupLongitude],
+                        ...(load.stops || [])
+                          .filter(
+                            (stop) =>
+                              typeof stop.latitude === "number" && typeof stop.longitude === "number"
+                          )
+                          .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+                          .map((stop) => [
+                            stop.latitude as number,
+                            stop.longitude as number,
+                          ] as [number, number]),
                         [load.deliveryLatitude, load.deliveryLongitude],
                       ]
                     }
@@ -632,6 +719,26 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                         </div>
                       </Popup>
                     </Marker>
+                    {(loadWithGPS.stops || [])
+                      .filter((stop) => typeof stop.latitude === "number" && typeof stop.longitude === "number")
+                      .map((stop) => (
+                        <Marker
+                          key={`selected-stop-${stop.id}`}
+                          position={[stop.latitude as number, stop.longitude as number]}
+                          icon={stopIcon}
+                        >
+                          <Popup>
+                            <div className="text-sm">
+                              <p className="font-semibold text-yellow-700">
+                                Stop {stop.sequence}
+                              </p>
+                              <p className="text-dark-700">
+                                {stop.address}, {stop.city} {stop.state}
+                              </p>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      ))}
                   </>
                 )}
               </div>

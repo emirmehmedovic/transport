@@ -850,6 +850,7 @@ export default function LoadDetailPage() {
                   pickupLat={load.pickupLatitude ?? load.deliveryLatitude}
                   pickupLng={load.pickupLongitude ?? load.deliveryLongitude}
                   pickupAddress={`${load.pickupAddress}, ${load.pickupCity}`}
+                  stops={load.stops}
                   deliveryLat={load.deliveryLatitude}
                   deliveryLng={load.deliveryLongitude}
                   deliveryAddress={`${load.deliveryAddress}, ${load.deliveryCity}`}
@@ -1437,6 +1438,7 @@ export default function LoadDetailPage() {
                 deliveryLat={load.deliveryLatitude}
                 deliveryLng={load.deliveryLongitude}
                 deliveryAddress={`${load.deliveryAddress}, ${load.deliveryCity}`}
+                stops={load.stops}
               />
             ) : (
               <div className="text-center py-12 text-dark-500">

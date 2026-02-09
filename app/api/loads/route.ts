@@ -117,6 +117,19 @@ export async function GET(req: NextRequest) {
             size: true,
           },
         },
+        stops: {
+          orderBy: { sequence: "asc" },
+          select: {
+            id: true,
+            sequence: true,
+            type: true,
+            address: true,
+            city: true,
+            state: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
         },
         orderBy: {
           [sortBy]: sortDir,

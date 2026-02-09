@@ -142,6 +142,19 @@ export async function GET(req: NextRequest) {
             deliveryState: true,
             deliveryLatitude: true,
             deliveryLongitude: true,
+            stops: {
+              orderBy: { sequence: "asc" },
+              select: {
+                id: true,
+                sequence: true,
+                type: true,
+                address: true,
+                city: true,
+                state: true,
+                latitude: true,
+                longitude: true,
+              },
+            },
           },
           orderBy: {
             createdAt: 'asc',
