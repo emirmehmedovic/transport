@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +46,21 @@ const DriverLoadMap = dynamic(
     ssr: false,
     loading: () => (
       <div className="w-full h-[600px] flex items-center justify-center bg-dark-50 rounded-xl border border-dark-200">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
+          <p className="text-sm text-dark-600">Učitavanje mape...</p>
+        </div>
+      </div>
+    ),
+  }
+);
+
+const LoadDestinationMap = dynamic(
+  () => import("@/components/maps/LoadDestinationMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[320px] flex items-center justify-center bg-dark-50 rounded-xl border border-dark-200">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-2"></div>
           <p className="text-sm text-dark-600">Učitavanje mape...</p>
@@ -155,6 +170,8 @@ export default function LoadDetailPage() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [activeTab, setActiveTab] = useState<"info" | "documents" | "timeline" | "map">("info");
+  const [highlightUpload, setHighlightUpload] = useState(false);
+  const uploadCardRef = useRef<HTMLDivElement | null>(null);
 
   const isDriver = user?.role === "DRIVER";
 
@@ -177,6 +194,28 @@ export default function LoadDetailPage() {
       fetchDocuments();
     }
   }, [activeTab, loadId]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (!tab) return;
+    if (tab === "info" || tab === "documents" || tab === "timeline" || tab === "map") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab !== "documents") return;
+    if (searchParams.get("tab") !== "documents") return;
+    setHighlightUpload(true);
+    const timer = setTimeout(() => setHighlightUpload(false), 3000);
+    const scrollTimer = setTimeout(() => {
+      uploadCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(scrollTimer);
+    };
+  }, [activeTab, searchParams]);
 
   const fetchDocuments = async () => {
     try {
@@ -599,11 +638,11 @@ export default function LoadDetailPage() {
         </div>
       </PageHeader>
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-8">
+      <div className="border-b border-gray-200 overflow-x-auto no-scrollbar">
+        <nav className="flex gap-4 md:gap-8 min-w-max">
           <button
             onClick={() => setActiveTab("info")}
-            className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+            className={`py-3 px-1 border-b-2 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === "info"
                 ? "border-primary-500 text-primary-600"
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -613,7 +652,7 @@ export default function LoadDetailPage() {
           </button>
           <button
             onClick={() => setActiveTab("documents")}
-            className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+            className={`py-3 px-1 border-b-2 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === "documents"
                 ? "border-primary-500 text-primary-600"
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -623,7 +662,7 @@ export default function LoadDetailPage() {
           </button>
           <button
             onClick={() => setActiveTab("timeline")}
-            className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+            className={`py-3 px-1 border-b-2 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === "timeline"
                 ? "border-primary-500 text-primary-600"
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -633,7 +672,7 @@ export default function LoadDetailPage() {
           </button>
           <button
             onClick={() => setActiveTab("map")}
-            className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+            className={`py-3 px-1 border-b-2 text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === "map"
                 ? "border-primary-500 text-primary-600"
                 : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -794,6 +833,33 @@ export default function LoadDetailPage() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Destination Map */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Mapa destinacije</CardTitle>
+              <p className="text-sm text-dark-500 mt-2">
+                Pinovana lokacija gdje ide delivery.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {load.deliveryLatitude && load.deliveryLongitude ? (
+                <LoadDestinationMap
+                  pickupLat={load.pickupLatitude ?? load.deliveryLatitude}
+                  pickupLng={load.pickupLongitude ?? load.deliveryLongitude}
+                  pickupAddress={`${load.pickupAddress}, ${load.pickupCity}`}
+                  deliveryLat={load.deliveryLatitude}
+                  deliveryLng={load.deliveryLongitude}
+                  deliveryAddress={`${load.deliveryAddress}, ${load.deliveryCity}`}
+                />
+              ) : (
+                <div className="text-center py-10 text-dark-500 border border-dashed border-dark-200 rounded-xl">
+                  <MapPin className="w-10 h-10 mx-auto mb-3 text-dark-300" />
+                  <p>GPS koordinate nisu dostupne za ovu destinaciju.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -998,7 +1064,14 @@ export default function LoadDetailPage() {
       {activeTab === "documents" && (
         <div className="space-y-6">
           {/* Upload Form */}
-          <Card>
+          <div ref={uploadCardRef} className="scroll-mt-24">
+            <Card
+              className={
+                highlightUpload
+                  ? "ring-2 ring-primary-500 ring-offset-2 ring-offset-white"
+                  : ""
+              }
+            >
             <CardHeader>
               <CardTitle>Upload dokument</CardTitle>
             </CardHeader>
@@ -1163,18 +1236,19 @@ export default function LoadDetailPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
                   <Button
                     onClick={handleFileUpload}
                     disabled={!selectedFile || uploading}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 w-full sm:w-auto"
                   >
                     {uploading ? "Upload-ovanje..." : "Upload dokument"}
                   </Button>
                 </div>
               </div>
             </CardContent>
-          </Card>
+            </Card>
+          </div>
 
           {/* Documents Display */}
           {documentsLoading ? (

@@ -88,37 +88,41 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          "w-[280px] h-screen bg-white text-dark-600 fixed left-0 top-0 flex flex-col shadow-soft z-50 transition-transform duration-300 lg:translate-x-0",
+          "w-[85vw] max-w-[320px] lg:w-[280px] h-[100dvh] bg-white text-dark-600 fixed left-0 top-0 flex flex-col shadow-soft z-50 transition-transform duration-300 lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Logo & Header */}
-        <div className="px-6 pt-8 pb-4 relative">
+        <div className="px-5 pt-6 pb-3 md:px-6 md:pt-8 md:pb-4 relative">
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 p-2 text-dark-400 hover:text-dark-900 lg:hidden"
+            className="absolute right-3 top-3 p-2 text-dark-400 hover:text-dark-900 lg:hidden"
           >
             <X className="w-5 h-5" />
           </button>
 
-          <Link href="/" className="flex items-center gap-3 group mb-6">
-            <div className="h-10 w-10 rounded-2xl bg-primary-600 flex items-center justify-center text-white shadow-primary group-hover:shadow-primary-lg transition-all">
+          <Link href="/" className="flex items-center gap-3 group mb-5">
+            <div className="h-9 w-9 md:h-10 md:w-10 rounded-2xl bg-primary-600 flex items-center justify-center text-white shadow-primary group-hover:shadow-primary-lg transition-all">
               <Truck className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-dark-900 font-bold text-xl tracking-tight">TransportApp</h1>
+              <h1 className="text-dark-900 font-bold text-lg md:text-xl tracking-tight">TransportApp</h1>
               <p className="text-[10px] font-semibold text-dark-400 uppercase tracking-wider">Dashboard</p>
             </div>
           </Link>
 
           <div className="mb-2">
-            <h2 className="text-lg font-semibold text-dark-900">Hej, {user?.firstName || "Korisnik"}!</h2>
-            <p className="text-xs text-dark-400 mt-1">Trebate pomoć? Javite se podršci.</p>
+            <h2 className="text-base md:text-lg font-semibold text-dark-900">
+              Hej, {user?.firstName || "Korisnik"}!
+            </h2>
+            <p className="text-[11px] md:text-xs text-dark-400 mt-1">
+              Trebate pomoć? Javite se podršci.
+            </p>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 overflow-y-auto no-scrollbar">
+        <nav className="flex-1 px-3 md:px-4 overflow-y-auto no-scrollbar">
           <div className="space-y-6">
             {navigation.map((section, idx) => {
               // Filter items based on role
@@ -132,7 +136,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               return (
                 <div key={idx}>
                   {section.category && (
-                    <p className="px-4 mb-2 text-[10px] font-bold text-dark-400 uppercase tracking-widest">
+                    <p className="px-3 md:px-4 mb-2 text-[10px] font-bold text-dark-400 uppercase tracking-widest">
                       {section.category}
                     </p>
                   )}
@@ -147,13 +151,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                           href={item.href}
                           onClick={() => onClose?.()}
                           className={cn(
-                            "flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all duration-200 group relative",
+                            "flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-2xl text-[13px] md:text-sm transition-all duration-200 group relative",
                             isActive
                               ? "bg-dark-900 text-white shadow-soft-lg"
                               : "text-dark-500 hover:bg-dark-50 hover:text-dark-900"
                           )}
                         >
-                          <Icon className={cn("w-5 h-5", isActive ? "text-white" : "text-dark-400 group-hover:text-dark-900")} />
+                          <Icon
+                            className={cn(
+                              "w-5 h-5",
+                              isActive ? "text-white" : "text-dark-400 group-hover:text-dark-900"
+                            )}
+                          />
                           <span className="font-medium">{item.name}</span>
                           {isActive && (
                             <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></span>
@@ -171,7 +180,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Bottom Actions & Promo */}
         <div className="p-4 space-y-4">
           {/* Promo Card Style */}
-          <div className="bg-dark-50 rounded-3xl p-5 relative overflow-hidden group">
+          <div className="hidden sm:block bg-dark-50 rounded-3xl p-5 relative overflow-hidden group">
             <div className="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-primary-100 rounded-full blur-xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
             
             <div className="relative z-10">

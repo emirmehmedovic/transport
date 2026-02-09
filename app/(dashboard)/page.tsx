@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -674,6 +675,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
 }
 
 function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string }) {
+  const router = useRouter();
   const [data, setData] = useState<DriverDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -681,37 +683,39 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
   const [statusSelection, setStatusSelection] = useState<string | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [startRouteUpdating, setStartRouteUpdating] = useState(false);
+  const [startRouteMessage, setStartRouteMessage] = useState<string | null>(null);
   const [locationSharing, setLocationSharing] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [autoTracking, setAutoTracking] = useState(false);
   const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch(`/api/dashboard/driver/${driverId}`, {
-          credentials: "include",
-        });
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(`/api/dashboard/driver/${driverId}`, {
+        credentials: "include",
+      });
 
-        if (!res.ok) {
-          const body = await res.json();
-          throw new Error(body.error || "Greška pri dohvaćanju podataka");
-        }
-
-        const json: DriverDashboardResponse = await res.json();
-        setData(json);
-      } catch (err) {
-        console.error("Driver dashboard load error", err);
-        setError(err instanceof Error ? err.message : "Došlo je do greške");
-      } finally {
-        setLoading(false);
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Greška pri dohvaćanju podataka");
       }
-    };
 
-    fetchData();
+      const json: DriverDashboardResponse = await res.json();
+      setData(json);
+    } catch (err) {
+      console.error("Driver dashboard load error", err);
+      setError(err instanceof Error ? err.message : "Došlo je do greške");
+    } finally {
+      setLoading(false);
+    }
   }, [driverId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     if (data?.currentLoad) {
@@ -781,6 +785,34 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
       setStatusMessage(err instanceof Error ? err.message : "Greška pri ažuriranju");
     } finally {
       setStatusUpdating(false);
+    }
+  };
+
+  const handleStartRoute = async (loadId: string) => {
+    try {
+      setStartRouteUpdating(true);
+      setStartRouteMessage(null);
+      const res = await fetch(`/api/loads/${loadId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "PICKED_UP" }),
+      });
+
+      const body = await res.json();
+
+      if (!res.ok) {
+        throw new Error(body.error || "Greška pri ažuriranju statusa");
+      }
+
+      setStartRouteMessage("Ruta je označena kao preuzeta. Sretan put!");
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      setStartRouteMessage(err instanceof Error ? err.message : "Greška pri ažuriranju");
+    } finally {
+      setStartRouteUpdating(false);
     }
   };
 
@@ -971,6 +1003,45 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
         </p>
       </div>
 
+      {data.nextLoad && !data.currentLoad && (
+        <section className="bg-amber-50 border border-amber-200 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs md:text-sm font-semibold uppercase tracking-wider text-amber-700 mb-1">
+                Dodijeljena nova ruta
+              </p>
+              <h2 className="text-lg md:text-xl font-bold text-dark-900">
+                {data.nextLoad.pickupCity} → {data.nextLoad.deliveryCity}
+              </h2>
+              <p className="text-xs md:text-sm text-dark-600 mt-1">
+                Load #{data.nextLoad.loadNumber} • Polazak: {formatDateTime(data.nextLoad.scheduledPickupDate)}
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => router.push(`/loads/${data.nextLoad!.id}`)}
+                className="px-4 py-2 rounded-lg md:rounded-xl bg-white text-dark-900 border border-amber-200 text-xs md:text-sm font-bold hover:bg-amber-100 transition-colors"
+              >
+                Pregledaj rutu
+              </button>
+              <button
+                onClick={() => handleStartRoute(data.nextLoad!.id)}
+                disabled={startRouteUpdating}
+                className="px-4 py-2 rounded-lg md:rounded-xl bg-amber-600 text-white text-xs md:text-sm font-bold hover:bg-amber-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+              >
+                {startRouteUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Krenuo na rutu
+              </button>
+            </div>
+          </div>
+          {startRouteMessage && (
+            <p className="mt-3 text-xs md:text-sm font-medium text-amber-800 bg-amber-100/60 rounded-lg px-3 py-2">
+              {startRouteMessage}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Top Section: Current Load & Quick Actions */}
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
         {/* Current Load Card (Left Side - Large) */}
@@ -1095,6 +1166,15 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
 
         {/* Quick Actions & Status Panel */}
         <div className="xl:col-span-1 flex flex-col gap-4 md:gap-6">
+          {data.currentLoad && (
+            <button
+              onClick={() => router.push(`/loads/${data.currentLoad!.id}?tab=documents`)}
+              className="w-full rounded-2xl md:rounded-3xl border-2 border-primary-600 bg-primary-600/10 text-primary-700 px-4 md:px-5 py-3 md:py-4 font-bold text-sm md:text-base hover:bg-primary-600 hover:text-white transition-colors flex items-center justify-center gap-2"
+            >
+              <FileUp className="w-4 h-4 md:w-5 md:h-5" />
+              Brzi upload dokumenata
+            </button>
+          )}
           {/* Status Update Card */}
           <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft flex-1 flex flex-col">
             <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
@@ -1148,7 +1228,7 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
           </div>
 
           {/* Quick Buttons Grid */}
-          <div className="grid grid-cols-2 gap-3 md:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             <button
               onClick={() => setShowUpload(!showUpload)}
               disabled={!data.currentLoad}

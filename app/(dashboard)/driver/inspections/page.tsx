@@ -232,7 +232,7 @@ export default function DriverInspectionsPage() {
             onChange={(e) => setForm((p) => ({ ...p, defectNotes: e.target.value }))}
           />
         )}
-        <Button onClick={handleCreate} disabled={saving}>
+        <Button onClick={handleCreate} disabled={saving} className="w-full sm:w-auto">
           {saving ? "Spremanje..." : "Snimi"}
         </Button>
       </div>
