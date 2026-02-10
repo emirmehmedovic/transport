@@ -6,13 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/authContext";
-import { Truck } from "lucide-react";
+import { Eye, EyeOff, Truck } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -98,14 +99,25 @@ export default function LoginPage() {
                     required
                   />
 
-                  <Input
-                    label="Lozinka"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      label="Lozinka"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="pr-11"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-9 text-dark-400 hover:text-dark-700"
+                      aria-label={showPassword ? "Sakrij lozinku" : "Prikaži lozinku"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
 
                   {error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">

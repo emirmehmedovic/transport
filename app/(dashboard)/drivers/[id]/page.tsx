@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/authContext";
 import {
   ArrowLeft,
   Pencil,
@@ -162,6 +163,10 @@ export default function DriverDetailPage() {
   const [truckAssignLoading, setTruckAssignLoading] = useState(false);
   const [truckAssignError, setTruckAssignError] = useState("");
   const [truckAssignSuccess, setTruckAssignSuccess] = useState("");
+  const [aggregateLoading, setAggregateLoading] = useState(false);
+  const [aggregateMessage, setAggregateMessage] = useState("");
+
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchDriver();
@@ -297,6 +302,24 @@ export default function DriverDetailPage() {
       setTruckAssignError(err.message || "Greška pri uklanjanju dodjele");
     } finally {
       setTruckAssignLoading(false);
+    }
+  };
+
+  const handleAggregateSchengen = async () => {
+    try {
+      setAggregateLoading(true);
+      setAggregateMessage("");
+      const res = await fetch("/api/schengen/aggregate", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri agregaciji Schengen dana");
+      }
+      setAggregateMessage("Agregacija je uspješno završena.");
+      await fetchSchengen();
+    } catch (err: any) {
+      setAggregateMessage(err.message || "Greška pri agregaciji Schengen dana");
+    } finally {
+      setAggregateLoading(false);
     }
   };
 
@@ -1024,6 +1047,32 @@ export default function DriverDetailPage() {
                 {schengenStats.manual && (
                   <div className="text-xs text-amber-600">
                     Ručni unos aktivan (preostalo {schengenStats.manual.remainingDays} dana na dan {formatDate(schengenStats.manual.asOf)}).
+                  </div>
+                )}
+                {user?.role === "ADMIN" && (
+                  <div className="border-t border-dark-100 pt-3">
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAggregateSchengen}
+                        disabled={aggregateLoading}
+                        className="w-full"
+                      >
+                        {aggregateLoading ? "Agregiram..." : "Agregiraj Schengen dane"}
+                      </Button>
+                      {aggregateMessage && (
+                        <p
+                          className={`text-xs ${
+                            aggregateMessage.toLowerCase().includes("greška")
+                              ? "text-red-600"
+                              : "text-emerald-600"
+                          }`}
+                        >
+                          {aggregateMessage}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
                 <div className="border-t border-dark-100 pt-3">

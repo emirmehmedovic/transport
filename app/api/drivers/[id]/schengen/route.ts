@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import { isInSchengen } from "@/lib/schengen";
+import { toDayKeyInTimeZone } from "@/lib/schengen-aggregate";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/drivers/[id]/schengen
@@ -74,7 +75,7 @@ export async function GET(
       for (const pos of positions) {
         if (pos.latitude === null || pos.longitude === null) continue;
         if (!isInSchengen(pos.latitude, pos.longitude)) continue;
-        const dayKey = new Date(pos.recordedAt).toISOString().slice(0, 10);
+        const dayKey = toDayKeyInTimeZone(new Date(pos.recordedAt));
         daysInSchengen.add(dayKey);
       }
       return daysInSchengen.size;

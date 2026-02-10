@@ -1,8 +1,25 @@
 import { prisma } from "@/lib/prisma";
 import { isInSchengen } from "@/lib/schengen";
 
+const SCHENGEN_TIMEZONE = "Europe/Sarajevo";
+
+export function toDayKeyInTimeZone(date: Date, timeZone = SCHENGEN_TIMEZONE): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const month = parts.find((p) => p.type === "month")?.value ?? "01";
+  const day = parts.find((p) => p.type === "day")?.value ?? "01";
+
+  return `${year}-${month}-${day}`;
+}
+
 function toDayKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return toDayKeyInTimeZone(date);
 }
 
 function dayStart(date: Date): Date {

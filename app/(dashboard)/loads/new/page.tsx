@@ -178,14 +178,14 @@ const stepsConfig: {
   {
     id: 3,
     badge: "Pickup",
-    headline: "Korak 3: Pickup detalji",
-    description: "Precizno definišite lokacije preuzimanja i ključne kontakt informacije.",
+    headline: "Korak 3: Pickup stopovi",
+    description: "Prvi stop je glavni pickup, a po potrebi dodajte dodatne pickup lokacije.",
   },
   {
     id: 4,
     badge: "Delivery",
-    headline: "Korak 4: Delivery detalji i stopovi",
-    description: "Unesite destinaciju isporuke, dodatne stopove i dodjele tereta po lokaciji.",
+    headline: "Korak 4: Delivery detalji",
+    description: "Unesite destinaciju isporuke i kontakt informacije za dostavu.",
   },
   {
     id: 5,
@@ -256,10 +256,10 @@ const StepIndicator = ({ currentStep }: { currentStep: WizardStep }) => {
 
 const stepIconMap: Record<WizardStep, LucideIcon> = {
   1: Calendar,
-  2: MapPin,
+  2: PackageIcon,
   3: MapPin,
-  4: ClipboardList,
-  5: Car,
+  4: MapPin,
+  5: ClipboardList,
   6: Truck,
   7: CheckCircle2,
 };
@@ -379,7 +379,7 @@ export default function CreateLoadPage() {
       (s) => s.latitude === undefined || s.longitude === undefined
     );
     if (missingStop) {
-      alert("Svi dodatni stopovi moraju imati odabranu lokaciju na mapi.");
+      alert("Svi pickup stopovi moraju imati odabranu lokaciju na mapi.");
       return;
     }
 
@@ -429,12 +429,12 @@ export default function CreateLoadPage() {
     const errors: Record<string, string> = {};
 
     if (currentStep === 1) {
-    if (!form.routeName) {
-      errors.routeName = "Naziv rute je obavezan";
-    }
-    if (!form.scheduledPickupDate) {
-      errors.scheduledPickupDate = "Planirani pickup datum/vrijeme je obavezan";
-    }
+      if (!form.routeName) {
+        errors.routeName = "Naziv rute je obavezan";
+      }
+      if (!form.scheduledPickupDate) {
+        errors.scheduledPickupDate = "Planirani pickup datum/vrijeme je obavezan";
+      }
       if (!form.scheduledDeliveryDate) {
         errors.scheduledDeliveryDate = "Planirani delivery datum/vrijeme je obavezan";
       }
@@ -449,17 +449,6 @@ export default function CreateLoadPage() {
         errors.pickupContactName = "Kontakt osoba za pickup je obavezna";
       if (!form.pickupContactPhone)
         errors.pickupContactPhone = "Telefon kontakt osobe za pickup je obavezan";
-    }
-
-    if (currentStep === 4) {
-      if (!form.deliveryAddress) errors.deliveryAddress = "Delivery adresa je obavezna";
-      if (!form.deliveryCity) errors.deliveryCity = "Delivery grad je obavezan";
-      if (!form.deliveryState) errors.deliveryState = "Delivery država je obavezna";
-      if (!form.deliveryZip) errors.deliveryZip = "Delivery ZIP je obavezan";
-      if (!form.deliveryContactName)
-        errors.deliveryContactName = "Kontakt osoba za delivery je obavezna";
-      if (!form.deliveryContactPhone)
-        errors.deliveryContactPhone = "Telefon kontakt osobe za delivery je obavezan";
 
       if (intermediateStops.length > 0) {
         const invalidStop = intermediateStops.find(
@@ -472,7 +461,7 @@ export default function CreateLoadPage() {
             s.longitude === undefined
         );
         if (invalidStop) {
-          errors.intermediateStops = "Svi dodatni stopovi moraju imati punu lokaciju";
+          errors.intermediateStops = "Svi pickup stopovi moraju imati punu lokaciju";
         }
       }
 
@@ -488,6 +477,17 @@ export default function CreateLoadPage() {
           errors.stopAssignments = "Dodijelite teret na pickup stopove.";
         }
       }
+    }
+
+    if (currentStep === 4) {
+      if (!form.deliveryAddress) errors.deliveryAddress = "Delivery adresa je obavezna";
+      if (!form.deliveryCity) errors.deliveryCity = "Delivery grad je obavezan";
+      if (!form.deliveryState) errors.deliveryState = "Delivery država je obavezna";
+      if (!form.deliveryZip) errors.deliveryZip = "Delivery ZIP je obavezan";
+      if (!form.deliveryContactName)
+        errors.deliveryContactName = "Kontakt osoba za delivery je obavezna";
+      if (!form.deliveryContactPhone)
+        errors.deliveryContactPhone = "Telefon kontakt osobe za delivery je obavezan";
     }
 
     if (currentStep === 5) {
@@ -608,7 +608,7 @@ export default function CreateLoadPage() {
               items: null,
             },
             ...intermediateStops.map((s, idx) => ({
-              type: "INTERMEDIATE",
+              type: "PICKUP",
               sequence: idx + 2,
               address: s.address,
               city: s.city,
@@ -1237,12 +1237,20 @@ export default function CreateLoadPage() {
     }
 
     if (step === 3) {
+      const pickupStops = [
+        { sequence: 1, label: `Stop 1 - ${form.pickupCity || "Pickup"}` },
+        ...intermediateStops.map((stop, idx) => ({
+          sequence: idx + 2,
+          label: `Stop ${idx + 2} - ${stop.city || stop.address || "Pickup"}`,
+        })),
+      ];
+
       return (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-dark-900">Pickup detalji</h2>
+          <h2 className="text-lg font-semibold text-dark-900">Pickup stopovi</h2>
 
           <LocationPicker
-            label="Pickup lokacija"
+            label="Stop 1 - pickup lokacija"
             initialLocation={
               form.pickupLatitude && form.pickupLongitude
                 ? {
@@ -1309,101 +1317,16 @@ export default function CreateLoadPage() {
               </div>
             </div>
           </div>
-        </div>
-      );
-    }
-
-    if (step === 4) {
-      const pickupStops = [
-        { sequence: 1, label: `Pickup - ${form.pickupCity || "Pickup"}` },
-        ...intermediateStops.map((stop, idx) => ({
-          sequence: idx + 2,
-          label: `Stop ${idx + 1} - ${stop.city || stop.address || "Stop"}`,
-        })),
-      ];
-
-      return (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-dark-900">Delivery detalji</h2>
-
-          <LocationPicker
-            label="Delivery lokacija"
-            initialLocation={
-              form.deliveryLatitude && form.deliveryLongitude
-                ? {
-                    address: form.deliveryAddress,
-                    city: form.deliveryCity,
-                    state: form.deliveryState,
-                    zip: form.deliveryZip,
-                    latitude: form.deliveryLatitude,
-                    longitude: form.deliveryLongitude,
-                  }
-                : undefined
-            }
-            onChange={(location) => {
-              setForm((prev) => ({
-                ...prev,
-                deliveryAddress: location.address,
-                deliveryCity: location.city,
-                deliveryState: location.state,
-                deliveryZip: location.zip,
-                deliveryLatitude: location.latitude,
-                deliveryLongitude: location.longitude,
-              }));
-            }}
-          />
-
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <p className="text-sm font-semibold text-blue-900 mb-3">
-              📞 Kontakt informacije za delivery
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-dark-700 mb-1">
-                  Kontakt osoba <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ime i prezime"
-                  className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  value={form.deliveryContactName}
-                  onChange={(e) => updateField("deliveryContactName", e.target.value)}
-                />
-                {fieldErrors.deliveryContactName && (
-                  <p className="text-xs text-red-600 mt-1">
-                    {fieldErrors.deliveryContactName}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-dark-700 mb-1">
-                  Telefon kontakt osobe <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="+387 61 123 456"
-                  className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  value={form.deliveryContactPhone}
-                  onChange={(e) => updateField("deliveryContactPhone", e.target.value)}
-                />
-                {fieldErrors.deliveryContactPhone && (
-                  <p className="text-xs text-red-600 mt-1">
-                    {fieldErrors.deliveryContactPhone}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
 
           <div className="mt-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-md font-semibold text-dark-900">Dodatni stopovi (opcionalno)</h3>
+              <h3 className="text-md font-semibold text-dark-900">Dodatni pickup stopovi (opcionalno)</h3>
               <button
                 type="button"
                 onClick={addIntermediateStop}
                 className="px-4 py-2 rounded-xl bg-dark-900 text-white text-xs font-semibold hover:bg-dark-800"
               >
-                + Dodaj stop
+                + Dodaj pickup stop
               </button>
             </div>
 
@@ -1413,7 +1336,7 @@ export default function CreateLoadPage() {
 
             {intermediateStops.length === 0 && (
               <p className="text-sm text-dark-500">
-                Nema dodatnih stopova. Dodajte stop ako postoje međustanice.
+                Nema dodatnih pickup stopova. Dodajte stop ako se teret preuzima na više lokacija.
               </p>
             )}
 
@@ -1421,7 +1344,7 @@ export default function CreateLoadPage() {
               <div key={stop.id} className="border border-dark-200 rounded-2xl p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-dark-900">
-                    Stop {index + 1}
+                    Stop {index + 2}
                   </p>
                   <button
                     type="button"
@@ -1433,7 +1356,7 @@ export default function CreateLoadPage() {
                 </div>
 
                 <LocationPicker
-                  label={`Stop ${index + 1} lokacija`}
+                  label={`Stop ${index + 2} lokacija`}
                   initialLocation={
                     stop.latitude && stop.longitude
                       ? {
@@ -1500,7 +1423,7 @@ export default function CreateLoadPage() {
                   checked={assignAllToFirstPickup}
                   onChange={(e) => setAssignAllToFirstPickup(e.target.checked)}
                 />
-                Sve preuzmi na prvom stopu
+                Sva roba se tovari na Stop 1
               </label>
             </div>
             {fieldErrors.stopAssignments && (
@@ -1594,6 +1517,83 @@ export default function CreateLoadPage() {
       );
     }
 
+    if (step === 4) {
+      return (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-dark-900">Delivery detalji</h2>
+
+          <LocationPicker
+            label="Delivery lokacija"
+            initialLocation={
+              form.deliveryLatitude && form.deliveryLongitude
+                ? {
+                    address: form.deliveryAddress,
+                    city: form.deliveryCity,
+                    state: form.deliveryState,
+                    zip: form.deliveryZip,
+                    latitude: form.deliveryLatitude,
+                    longitude: form.deliveryLongitude,
+                  }
+                : undefined
+            }
+            onChange={(location) => {
+              setForm((prev) => ({
+                ...prev,
+                deliveryAddress: location.address,
+                deliveryCity: location.city,
+                deliveryState: location.state,
+                deliveryZip: location.zip,
+                deliveryLatitude: location.latitude,
+                deliveryLongitude: location.longitude,
+              }));
+            }}
+          />
+
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <p className="text-sm font-semibold text-blue-900 mb-3">
+              📞 Kontakt informacije za delivery
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-dark-700 mb-1">
+                  Kontakt osoba <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ime i prezime"
+                  className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  value={form.deliveryContactName}
+                  onChange={(e) => updateField("deliveryContactName", e.target.value)}
+                />
+                {fieldErrors.deliveryContactName && (
+                  <p className="text-xs text-red-600 mt-1">
+                    {fieldErrors.deliveryContactName}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-dark-700 mb-1">
+                  Telefon kontakt osobe <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="+387 61 123 456"
+                  className="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-sm text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  value={form.deliveryContactPhone}
+                  onChange={(e) => updateField("deliveryContactPhone", e.target.value)}
+                />
+                {fieldErrors.deliveryContactPhone && (
+                  <p className="text-xs text-red-600 mt-1">
+                    {fieldErrors.deliveryContactPhone}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (step === 5) {
       return (
         <div className="space-y-4">
@@ -1643,7 +1643,7 @@ export default function CreateLoadPage() {
                     .map((s, idx) => ({
                       lat: s.latitude as number,
                       lng: s.longitude as number,
-                      label: `Stop ${idx + 1}`,
+                      label: `Stop ${idx + 2}`,
                     }))}
                   routes={routeOptions}
                   selectedRouteIndex={selectedRouteIndex}
@@ -1886,7 +1886,7 @@ export default function CreateLoadPage() {
               {form.scheduledDeliveryDate || "Nije uneseno"}
             </p>
             <p className="text-sm text-dark-700">
-              <span className="font-medium">Dodatni stopovi:</span>{" "}
+              <span className="font-medium">Dodatni pickup stopovi:</span>{" "}
               {intermediateStops.length}
             </p>
             <p className="text-sm text-dark-700">
