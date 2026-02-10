@@ -45,6 +45,10 @@ export function middleware(request: NextRequest) {
 
   // 2. Rate Limiting (samo za API routes)
   if (pathname.startsWith("/api/")) {
+    // Skip rate limiting for auth endpoints to prevent lockouts on refresh
+    if (pathname.startsWith("/api/auth/")) {
+      return response;
+    }
     const ip = request.ip || request.headers.get("x-forwarded-for") || "unknown";
     const now = Date.now();
 

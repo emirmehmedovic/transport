@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface User {
@@ -26,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const sessionVerified = useRef(false);
 
   useEffect(() => {
     // Check if user is logged in on mount
@@ -48,14 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (loading || !user) return;
+    if (loading || sessionVerified.current) return;
+    sessionVerified.current = true;
 
     const verifySession = async () => {
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (!token) return;
+
         const res = await fetch("/api/auth/me", {
           credentials: "include",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          headers: { Authorization: `Bearer ${token}` },
         });
 
         if (res.ok) {
@@ -90,15 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     verifySession();
-
-    const interval = setInterval(() => {
-      fetch("/api/auth/refresh", { method: "POST", credentials: "include" }).catch(() => {
-        // ignore background refresh errors
-      });
-    }, 1000 * 60 * 60 * 12);
-
-    return () => clearInterval(interval);
-  }, [loading, user, router]);
+  }, [loading, router]);
 
   const login = async (email: string, password: string) => {
     const res = await fetch("/api/auth/login", {
