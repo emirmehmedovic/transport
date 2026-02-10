@@ -192,6 +192,15 @@ const DRIVER_STATUS_FLOW: Record<string, string[]> = {
   DELIVERED: ["COMPLETED"],
 };
 
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return "N/A";
+  return new Date(value).toLocaleDateString("bs-BA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 export default function DashboardPage() {
   const { user } = useAuth();
 
