@@ -47,6 +47,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  useEffect(() => {
+    if (loading || !user) return;
+
+    const verifySession = async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user || null);
+          return;
+        }
+
+        const refreshRes = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (!refreshRes.ok) {
+          throw new Error("Session expired");
+        }
+
+        const refreshData = await refreshRes.json();
+        if (typeof window !== "undefined") {
+          localStorage.setItem("token", refreshData.token);
+          localStorage.setItem("user", JSON.stringify(refreshData.user));
+        }
+        setUser(refreshData.user || null);
+      } catch (error) {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+        }
+        setUser(null);
+        router.push("/login");
+      }
+    };
+
+    verifySession();
+
+    const interval = setInterval(() => {
+      fetch("/api/auth/refresh", { method: "POST", credentials: "include" }).catch(() => {
+        // ignore background refresh errors
+      });
+    }, 1000 * 60 * 60 * 12);
+
+    return () => clearInterval(interval);
+  }, [loading, user, router]);
+
   const login = async (email: string, password: string) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
