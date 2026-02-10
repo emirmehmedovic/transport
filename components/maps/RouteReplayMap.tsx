@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Play, Pause, RotateCcw, FastForward, Rewind } from "lucide-react";
+import { formatDateTimeDMY } from "@/lib/date";
 
 // Fix Leaflet default icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -27,6 +28,7 @@ interface Position {
 interface RouteReplayMapProps {
   positions: Position[];
   driverName: string;
+  fullScreen?: boolean;
 }
 
 // Custom component to fit map to route bounds
@@ -58,7 +60,20 @@ function FollowPosition({ position, isPlaying }: { position: Position; isPlaying
   return null;
 }
 
-export default function RouteReplayMap({ positions, driverName }: RouteReplayMapProps) {
+function InvalidateSize({ trigger }: { trigger: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    return () => window.clearTimeout(id);
+  }, [map, trigger]);
+
+  return null;
+}
+
+export default function RouteReplayMap({ positions, driverName, fullScreen = false }: RouteReplayMapProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -114,22 +129,24 @@ export default function RouteReplayMap({ positions, driverName }: RouteReplayMap
     setIsPlaying(false);
   };
   const handleSpeedChange = (speed: number) => setPlaybackSpeed(speed);
+  const [resizeTick, setResizeTick] = useState(0);
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('bs-BA', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  useEffect(() => {
+    setResizeTick((prev) => prev + 1);
+  }, [fullScreen]);
+
+  const formatDate = (dateStr: string) => formatDateTimeDMY(dateStr);
 
   return (
-    <div className="space-y-4">
+    <div className={fullScreen ? "flex h-full flex-col" : "space-y-4"}>
       {/* Map */}
-      <div className="h-[700px] rounded-xl overflow-hidden border border-dark-200">
+      <div
+        className={
+          fullScreen
+            ? "flex-1 min-h-0 overflow-hidden border-b border-dark-200"
+            : "h-[700px] rounded-xl overflow-hidden border border-dark-200"
+        }
+      >
         <MapContainer
           center={[currentPosition.latitude, currentPosition.longitude]}
           zoom={13}
@@ -187,11 +204,18 @@ export default function RouteReplayMap({ positions, driverName }: RouteReplayMap
 
           <FitBounds positions={positions} />
           <FollowPosition position={currentPosition} isPlaying={isPlaying} />
+          <InvalidateSize trigger={resizeTick} />
         </MapContainer>
       </div>
 
       {/* Playback Controls */}
-      <div className="bg-white rounded-xl p-4 border border-dark-200">
+      <div
+        className={
+          fullScreen
+            ? "bg-white p-4 border-t border-dark-200"
+            : "bg-white rounded-xl p-4 border border-dark-200"
+        }
+      >
         {/* Timeline Slider */}
         <div className="mb-4">
           <input
@@ -208,6 +232,9 @@ export default function RouteReplayMap({ positions, driverName }: RouteReplayMap
               {currentIndex + 1} / {positions.length}
             </span>
             <span>{formatDate(positions[positions.length - 1].recordedAt)}</span>
+          </div>
+          <div className="mt-2 text-center text-xs font-semibold text-dark-700">
+            Trenutno: {formatDate(currentPosition.recordedAt)}
           </div>
         </div>
 
@@ -276,7 +303,7 @@ export default function RouteReplayMap({ positions, driverName }: RouteReplayMap
         </div>
 
         {/* Current Stats */}
-        <div className="mt-4 grid grid-cols-4 gap-4 text-center text-sm">
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
           <div>
             <p className="text-dark-400">Vrijeme</p>
             <p className="font-semibold">{formatDate(currentPosition.recordedAt)}</p>

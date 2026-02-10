@@ -17,6 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
+import { formatDateDMY } from "@/lib/date";
 
 interface Driver {
   id: string;
@@ -514,7 +515,7 @@ export default function DriversPage() {
                             {driver.licenseNumber}
                           </p>
                           <p className="text-[10px] md:text-xs text-dark-500 truncate">
-                            {driver.licenseState} • Exp: {new Date(driver.licenseExpiry).toLocaleDateString('bs-BA')}
+                            {driver.licenseState} • Exp: {formatDateDMY(driver.licenseExpiry)}
                           </p>
                         </div>
                       </div>

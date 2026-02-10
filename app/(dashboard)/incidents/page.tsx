@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
+import { formatDateDMY } from "@/lib/date";
 
 type Option = { id: string; label: string };
 
@@ -235,7 +236,7 @@ export default function IncidentsPage() {
                     {i.severity} • {i.status}
                   </p>
                   <p className="text-xs text-dark-500">
-                    {new Date(i.occurredAt).toLocaleDateString("bs-BA")}
+                    {formatDateDMY(i.occurredAt)}
                   </p>
                 </div>
                 <p className="text-xs text-dark-600">

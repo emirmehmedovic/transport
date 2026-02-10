@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowLeft, UploadCloud } from "lucide-react";
+import { formatDateDMY } from "@/lib/date";
 
 type IncidentDetail = {
   id: string;
@@ -201,7 +202,7 @@ export default function IncidentDetailPage() {
             <div key={d.id} className="rounded-xl border border-dark-200 px-4 py-3 text-sm">
               <p className="font-semibold text-dark-900">{d.fileName}</p>
               <p className="text-xs text-dark-500">
-                {new Date(d.createdAt).toLocaleDateString("bs-BA")}
+                {formatDateDMY(d.createdAt)}
               </p>
               <div className="mt-2 flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => window.open(`/api/documents/${d.id}/download`)}>

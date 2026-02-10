@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, RefreshCw, Package, Truck, Navigation, Map, Users, X, ChevronRight, MapPin, Clock, TrendingUp } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 import { PageHeader } from "@/components/dashboard/PageHeader";
+import { formatDateDMY } from "@/lib/date";
 
 // Dynamic import for LiveMap (client-side only)
 const LiveMap = dynamic(() => import("@/components/maps/LiveMap"), {
@@ -505,9 +506,7 @@ export default function LiveMapFullScreenPage() {
                             </span>
                           </div>
                           <p className="text-xs text-dark-600">
-                            {new Date(
-                              load.scheduledPickupDate
-                            ).toLocaleDateString("bs-BA")}
+                            {formatDateDMY(load.scheduledPickupDate)}
                           </p>
                           {load.distance && (
                             <p className="text-xs text-dark-500 mt-1">

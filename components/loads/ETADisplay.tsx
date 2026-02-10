@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Clock, TrendingUp, MapPin, AlertCircle } from "lucide-react";
+import { formatDateTimeDMY } from "@/lib/date";
 
 interface ETAData {
   pickup?: {
@@ -95,13 +96,7 @@ export default function ETADisplay({
   }
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('bs-BA', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDateTimeDMY(dateStr);
   };
 
   const formatDuration = (minutes: number) => {

@@ -15,6 +15,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { formatDateDMY } from "@/lib/date";
 
 interface TimeSeriesData {
   date: string;
@@ -32,8 +33,7 @@ interface PerformanceChartsProps {
 export function PerformanceCharts({ timeSeriesData, type }: PerformanceChartsProps) {
   // Format date for display
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('bs-BA', { month: 'short', day: 'numeric' });
+    return formatDateDMY(dateStr);
   };
 
   // Format currency

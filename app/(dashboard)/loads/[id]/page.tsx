@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { LoadTimeline } from "@/components/loads/load-timeline";
 import { LoadStatusBadge } from "@/components/loads/LoadStatusBadge";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date";
 
 // Dynamic import for DriverLoadMap (client-side only)
 const DriverLoadMap = dynamic(
@@ -457,13 +458,7 @@ export default function LoadDetailPage() {
   };
 
   const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDateTimeDMY(dateString);
   };
 
   const formatCurrency = (value: number) => {
@@ -1505,10 +1500,7 @@ export default function LoadDetailPage() {
                                 </p>
                                 <div className="flex items-center gap-1.5 text-[10px] text-dark-500 mb-3">
                                   <span>
-                                    {new Date(doc.createdAt).toLocaleDateString("bs-BA", {
-                                      day: "numeric",
-                                      month: "short"
-                                    })}
+                                    {formatDateDMY(doc.createdAt)}
                                   </span>
                                   <span>•</span>
                                   <span>{(doc.fileSize / 1024).toFixed(0)} KB</span>

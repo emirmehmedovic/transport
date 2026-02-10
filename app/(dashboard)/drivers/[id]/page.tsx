@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/authContext";
+import { formatDateDMY } from "@/lib/date";
 import {
   ArrowLeft,
   Pencil,
@@ -573,11 +574,7 @@ export default function DriverDetailPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatDateDMY(dateString);
   };
 
   const statusOptions = useMemo(

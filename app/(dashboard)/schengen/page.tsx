@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, Shield, Loader2 } from "lucide-react";
+import { formatDateDMY } from "@/lib/date";
 
 interface SchengenDriverRow {
   driverId: string;
@@ -137,7 +138,7 @@ export default function SchengenOverviewPage() {
                       </span>
                       {row.manual && (
                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
-                          Ručni unos ({new Date(row.manual.asOf).toLocaleDateString("bs-BA")})
+                          Ručni unos ({formatDateDMY(row.manual.asOf)})
                         </span>
                       )}
                     </div>
@@ -188,7 +189,7 @@ export default function SchengenOverviewPage() {
                         <td className="px-4 py-3">{row.status}</td>
                         <td className="px-4 py-3 text-xs text-dark-500">
                           {row.manual
-                            ? `Ručni unos (${new Date(row.manual.asOf).toLocaleDateString("bs-BA")})`
+                            ? `Ručni unos (${formatDateDMY(row.manual.asOf)})`
                             : ""}
                         </td>
                       </tr>

@@ -6,6 +6,7 @@ import { FileText, Upload, AlertCircle } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { formatDateDMY } from "@/lib/date";
 
 /**
  * Admin Documents Page
@@ -220,11 +221,7 @@ function DocumentCard({ doc, urgency }: { doc: any; urgency: 'urgent' | 'warning
   }[urgency];
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatDateDMY(dateString);
   };
 
   return (

@@ -11,6 +11,7 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
+import { formatDateDMY } from "@/lib/date";
 
 interface Document {
   id: string;
@@ -146,11 +147,7 @@ export default function DocumentList({
   };
 
   const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatDateDMY(dateString);
   };
 
   const isExpiring = (expiryDate: string | null): boolean => {

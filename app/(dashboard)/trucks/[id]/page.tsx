@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatDateDMY } from "@/lib/date";
 import {
   ArrowLeft,
   Truck as TruckIcon,
@@ -334,12 +335,7 @@ export default function TruckDetailPage() {
     }
   };
 
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+  const formatDate = (dateString: string) => formatDateDMY(dateString);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("bs-BA", {

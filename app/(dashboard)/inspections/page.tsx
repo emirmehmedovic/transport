@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Clipboard } from "lucide-react";
+import { formatDateDMY } from "@/lib/date";
 
 type Option = { id: string; label: string };
 
@@ -219,7 +220,7 @@ export default function InspectionsPage() {
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-dark-900">{i.type} • {i.status}</p>
                   <p className="text-xs text-dark-500">
-                    {new Date(i.createdAt).toLocaleDateString("bs-BA")}
+                    {formatDateDMY(i.createdAt)}
                   </p>
                 </div>
                 <p className="text-xs text-dark-600">

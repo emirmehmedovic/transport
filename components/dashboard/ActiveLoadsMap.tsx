@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { formatDateDMY } from "@/lib/date";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapPin, Flag, Truck } from "lucide-react";
@@ -206,7 +207,7 @@ export default function ActiveLoadsMap({ loads }: ActiveLoadsMapProps) {
                       {load.scheduledPickupDate && (
                         <p className="text-xs text-dark-600">
                           <strong>Planirano:</strong>{" "}
-                          {new Date(load.scheduledPickupDate).toLocaleDateString("bs-BA")}
+                          {formatDateDMY(load.scheduledPickupDate)}
                         </p>
                       )}
                     </div>
@@ -238,7 +239,7 @@ export default function ActiveLoadsMap({ loads }: ActiveLoadsMapProps) {
                       {load.scheduledDeliveryDate && (
                         <p className="text-xs text-dark-600">
                           <strong>Planirano:</strong>{" "}
-                          {new Date(load.scheduledDeliveryDate).toLocaleDateString("bs-BA")}
+                          {formatDateDMY(load.scheduledDeliveryDate)}
                         </p>
                       )}
                     </div>

@@ -38,13 +38,24 @@ export default function DriverReplayPage() {
   const [statistics, setStatistics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [limit, setLimit] = useState(5000);
+  const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
+  const [limited, setLimited] = useState(false);
+  const [fullScreen, setFullScreen] = useState(false);
 
   // Date range (default: last 24 hours)
-  const [startDate, setStartDate] = useState(
-    new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+  const toLocalInputValue = (date: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+      date.getHours()
+    )}:${pad(date.getMinutes())}`;
+  };
+
+  const [startDateTime, setStartDateTime] = useState(
+    toLocalInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000))
   );
-  const [endDate, setEndDate] = useState(
-    new Date().toISOString().split("T")[0]
+  const [endDateTime, setEndDateTime] = useState(
+    toLocalInputValue(new Date())
   );
 
   const fetchPositions = async () => {
@@ -52,11 +63,11 @@ export default function DriverReplayPage() {
       setLoading(true);
       setError("");
 
-      const startDateTime = new Date(startDate + "T00:00:00").toISOString();
-      const endDateTime = new Date(endDate + "T23:59:59").toISOString();
+      const startIso = new Date(startDateTime).toISOString();
+      const endIso = new Date(endDateTime).toISOString();
 
       const response = await fetch(
-        `/api/drivers/${driverId}/positions?startDate=${startDateTime}&endDate=${endDateTime}&limit=1000`
+        `/api/drivers/${driverId}/positions?startDate=${startIso}&endDate=${endIso}&limit=${limit}`
       );
 
       if (!response.ok) {
@@ -67,6 +78,8 @@ export default function DriverReplayPage() {
       setDriver(data.driver);
       setPositions(data.positions);
       setStatistics(data.statistics);
+      setTotalAvailable(data.totalAvailable ?? null);
+      setLimited(Boolean(data.limited));
     } catch (err: any) {
       setError(err.message || "Error loading data");
     } finally {
@@ -113,7 +126,7 @@ ${positions
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${driver?.name}_${startDate}_${endDate}.gpx`;
+    a.download = `${driver?.name}_${startDateTime}_${endDateTime}.gpx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -121,51 +134,78 @@ ${positions
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Route Replay: ${driver?.name || "Loading..."}`}
-        subtitle="Pregledaj historiju kretanja vozača"
-        actions={
-          <button
-            onClick={() => router.push(`/drivers/${driverId}`)}
-            className="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Nazad
-          </button>
-        }
-      />
+    <div className={fullScreen ? "fixed inset-0 z-50 bg-dark-900/80" : "space-y-6"}>
+      {!fullScreen && (
+        <PageHeader
+          title={`Route Replay: ${driver?.name || "Loading..."}`}
+          subtitle="Pregledaj historiju kretanja vozača"
+          actions={
+            <button
+              onClick={() => router.push(`/drivers/${driverId}`)}
+              className="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Nazad
+            </button>
+          }
+        />
+      )}
 
       {/* Date Range Filter */}
-      <div className="bg-white rounded-xl p-4 border border-dark-200">
-        <div className="flex items-center gap-4">
+      <div
+        className={`${
+          fullScreen
+            ? "bg-white/95 border-b border-dark-100 rounded-t-2xl"
+            : "bg-white rounded-xl border border-dark-200"
+        } p-4`}
+      >
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-dark-400" />
             <span className="text-sm font-semibold">Period:</span>
           </div>
           <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            type="datetime-local"
+            value={startDateTime}
+            onChange={(e) => setStartDateTime(e.target.value)}
             className="px-3 py-2 rounded-lg border border-dark-200"
           />
           <span className="text-dark-400">do</span>
           <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            type="datetime-local"
+            value={endDateTime}
+            onChange={(e) => setEndDateTime(e.target.value)}
             className="px-3 py-2 rounded-lg border border-dark-200"
           />
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">Limit:</span>
+            <select
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="px-3 py-2 rounded-lg border border-dark-200"
+            >
+              <option value={1000}>1,000</option>
+              <option value={5000}>5,000</option>
+              <option value={10000}>10,000</option>
+              <option value={20000}>20,000</option>
+            </select>
+          </div>
           <button
             onClick={handleSearch}
             className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
           >
             Pretraži
           </button>
+          <button
+            onClick={() => setFullScreen((prev) => !prev)}
+            className="ml-auto px-4 py-2 bg-dark-100 rounded-lg hover:bg-dark-200"
+          >
+            {fullScreen ? "Izađi iz full screen" : "Full screen"}
+          </button>
           {positions.length > 0 && (
             <button
               onClick={handleExportGPX}
-              className="ml-auto px-4 py-2 bg-dark-100 rounded-lg hover:bg-dark-200 flex items-center gap-2"
+              className="px-4 py-2 bg-dark-100 rounded-lg hover:bg-dark-200 flex items-center gap-2"
               title="Export GPX"
             >
               <Download className="w-4 h-4" />
@@ -175,39 +215,65 @@ ${positions
         </div>
       </div>
 
-      {/* Statistics */}
-      {statistics && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl p-4 border border-dark-200">
-            <p className="text-sm text-dark-400">Ukupno Pozicija</p>
-            <p className="text-2xl font-bold">{statistics.totalPositions}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-dark-200">
-            <p className="text-sm text-dark-400">Prosječna Brzina</p>
-            <p className="text-2xl font-bold">{statistics.avgSpeed} km/h</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-dark-200">
-            <p className="text-sm text-dark-400">Ukupna Distanca</p>
-            <p className="text-2xl font-bold">{statistics.totalDistance} km</p>
-          </div>
-        </div>
+      {!fullScreen && (
+        <>
+          {/* Statistics */}
+          {statistics && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl p-4 border border-dark-200">
+                <p className="text-sm text-dark-400">Ukupno Pozicija</p>
+                <p className="text-2xl font-bold">{statistics.totalPositions}</p>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-dark-200">
+                <p className="text-sm text-dark-400">Prosječna Brzina</p>
+                <p className="text-2xl font-bold">{statistics.avgSpeed} km/h</p>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-dark-200">
+                <p className="text-sm text-dark-400">Ukupna Distanca</p>
+                <p className="text-2xl font-bold">{statistics.totalDistance} km</p>
+              </div>
+            </div>
+          )}
+
+          {limited && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Prikazano je {positions.length} od {totalAvailable} pozicija. Povećaj limit ili suzi period.
+            </div>
+          )}
+        </>
       )}
 
       {/* Map */}
       {loading && (
-        <div className="h-96 flex items-center justify-center bg-dark-50 rounded-xl">
+        <div
+          className={`flex items-center justify-center bg-dark-50 ${
+            fullScreen ? "flex-1 rounded-b-2xl" : "h-96 rounded-xl"
+          }`}
+        >
           <p className="text-dark-400">Učitavanje...</p>
         </div>
       )}
 
       {error && (
-        <div className="h-96 flex items-center justify-center bg-red-50 rounded-xl">
+        <div
+          className={`flex items-center justify-center bg-red-50 ${
+            fullScreen ? "flex-1 rounded-b-2xl" : "h-96 rounded-xl"
+          }`}
+        >
           <p className="text-red-600">{error}</p>
         </div>
       )}
 
       {!loading && !error && driver && (
-        <RouteReplayMap positions={positions} driverName={driver.name} />
+        <div
+          className={
+            fullScreen
+              ? "flex flex-col h-[calc(100vh-140px)] bg-white rounded-b-2xl overflow-hidden"
+              : ""
+          }
+        >
+          <RouteReplayMap positions={positions} driverName={driver.name} fullScreen={fullScreen} />
+        </div>
       )}
     </div>
   );

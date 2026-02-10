@@ -9,7 +9,7 @@ import { verifyToken } from '@/lib/auth';
  * Query params:
  * - startDate: ISO date string (default: last 24 hours)
  * - endDate: ISO date string (default: now)
- * - limit: Number of records to return (default: 100, max: 1000)
+ * - limit: Number of records to return (default: 5000, max: 20000)
  */
 export async function GET(
   request: NextRequest,
@@ -43,7 +43,7 @@ export async function GET(
       ? new Date(startDateParam)
       : new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const limit = limitParam ? Math.min(parseInt(limitParam), 1000) : 100;
+    const limit = limitParam ? Math.min(parseInt(limitParam), 20000) : 5000;
 
     // Verify driver exists
     const driver = await prisma.driver.findUnique({
@@ -83,6 +83,16 @@ export async function GET(
     if (latestPosition) {
       console.log(`[Positions] Latest position recordedAt: ${latestPosition.recordedAt.toISOString()}`);
     }
+
+    const totalAvailable = await prisma.position.count({
+      where: {
+        driverId: params.id,
+        recordedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
 
     // Fetch position history
     const positions = await prisma.position.findMany({
@@ -149,6 +159,8 @@ export async function GET(
         avgSpeed: Math.round(avgSpeed * 10) / 10,
         totalDistance: Math.round(totalDistance * 10) / 10, // km
       },
+      totalAvailable,
+      limited: totalAvailable > positions.length,
       positions: positions.reverse(), // Return chronologically
     });
   } catch (error: any) {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { FileText } from "lucide-react";
+import { formatDateDMY } from "@/lib/date";
 
 type TotalsItem = {
   status: string;
@@ -80,7 +81,7 @@ export default function ArApReportPage() {
                     {o.invoiceNumber} • {o.status}
                   </p>
                   <p className="text-xs text-dark-500">
-                    {new Date(o.dueDate).toLocaleDateString("bs-BA")}
+                    {formatDateDMY(o.dueDate)}
                   </p>
                 </div>
                 <p className="text-xs text-dark-600">

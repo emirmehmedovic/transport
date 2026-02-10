@@ -3,6 +3,7 @@
 import { Bell, Search, Calendar, ChevronDown, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/authContext";
+import { formatDateDMY } from "@/lib/date";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -11,11 +12,7 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const { user } = useAuth();
   const [alertCount, setAlertCount] = useState(0);
-  const today = new Date().toLocaleDateString("bs-BA", {
-    weekday: "short",
-    day: "numeric",
-    month: "long",
-  });
+  const today = formatDateDMY(new Date());
 
   useEffect(() => {
     const fetchAlertCount = async () => {
@@ -66,11 +63,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="ml-auto md:ml-0 flex items-center gap-3 md:gap-4">
         {/* Date Display */}
         <div className="hidden md:flex items-center gap-3 px-4 py-3 bg-white rounded-2xl shadow-soft text-sm font-medium text-dark-700">
-          <span className="text-xl font-bold text-dark-900">{new Date().getDate()}</span>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[10px] uppercase tracking-wider text-dark-400">{today.split(',')[0]}</span>
-            <span>{today.split(',')[1]?.trim() || new Date().toLocaleString('default', { month: 'long' })}</span>
-          </div>
+          <span className="text-lg font-bold text-dark-900">{today}</span>
           <Calendar className="w-5 h-5 text-dark-400 ml-2" />
         </div>
 

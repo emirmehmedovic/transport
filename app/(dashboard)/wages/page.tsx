@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { DollarSign, Download, FileText, CheckCircle, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatDateDMY } from "@/lib/date";
 
 interface PayStub {
   id: string;
@@ -160,11 +161,7 @@ export default function WagesPage() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('bs-BA', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return formatDateDMY(dateStr);
   };
 
   const unpaid = payStubs.filter((s) => !s.isPaid).length;

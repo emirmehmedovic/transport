@@ -39,6 +39,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/lib/authContext";
 import AlertsPanel from "@/components/dashboard/AlertsPanel";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date";
 
 // Dynamic import for Leaflet map (no SSR)
 const ActiveLoadsMap = dynamic(
@@ -193,12 +194,7 @@ const DRIVER_STATUS_FLOW: Record<string, string[]> = {
 };
 
 const formatDate = (value: string | null | undefined) => {
-  if (!value) return "N/A";
-  return new Date(value).toLocaleDateString("bs-BA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  return formatDateDMY(value);
 };
 
 export default function DashboardPage() {
@@ -291,10 +287,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
       const [year, month] = item.month.split("-").map(Number);
       const date = new Date(year, (month || 1) - 1);
       return {
-        label: date.toLocaleDateString("bs-BA", {
-          month: "short",
-          year: "numeric",
-        }),
+        label: formatDateDMY(date),
         revenue: item.revenue,
       };
     });
@@ -539,7 +532,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
                              : "text-emerald-700"
                          }`}
                        >
-                         ističe {new Date(item.validTo).toLocaleDateString("bs-BA")}
+                         ističe {formatDateDMY(item.validTo)}
                        </span>
                      </div>
                      <p
@@ -572,7 +565,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
                          {doc.type} • {doc.driver?.user?.firstName || ""} {doc.driver?.user?.lastName || ""}
                        </p>
                        <span className="text-[10px] md:text-xs text-red-700 whitespace-nowrap">
-                         ističe {new Date(doc.expiryDate).toLocaleDateString("bs-BA")}
+                         ističe {formatDateDMY(doc.expiryDate)}
                        </span>
                      </div>
                      {doc.load?.loadNumber && (
@@ -787,22 +780,11 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
   }, [data?.currentLoad?.status]);
 
   const formatDate = (value: string | null | undefined) => {
-    if (!value) return "N/A";
-    return new Date(value).toLocaleDateString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatDateDMY(value);
   };
 
   const formatDateTime = (value: string | null | undefined) => {
-    if (!value) return "N/A";
-    return new Date(value).toLocaleString("bs-BA", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDateTimeDMY(value);
   };
 
   const formatCurrency = (value: number) =>

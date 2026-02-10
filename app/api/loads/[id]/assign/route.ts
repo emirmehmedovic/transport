@@ -7,6 +7,7 @@ import {
   sendTelegramNotification,
   createLoadAssignedNotification,
 } from "@/lib/telegram";
+import { formatDateTimeDMY } from "@/lib/date";
 
 // PATCH /api/loads/[id]/assign - Dodjela drivera i trucka loadu
 export async function PATCH(
@@ -167,15 +168,7 @@ export async function PATCH(
             pickupState: assignedLoad.pickupState,
             deliveryCity: assignedLoad.deliveryCity,
             deliveryState: assignedLoad.deliveryState,
-            scheduledPickupDate: new Date(
-              assignedLoad.scheduledPickupDate
-            ).toLocaleDateString("bs-BA", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            scheduledPickupDate: formatDateTimeDMY(assignedLoad.scheduledPickupDate),
           });
 
           // Pošalji notifikaciju adminu

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { FileText, Plus, Trash2 } from "lucide-react";
+import { formatDateDMY } from "@/lib/date";
 
 type Customer = { id: string; name: string };
 
@@ -256,7 +257,7 @@ export default function InvoicesPage() {
                     {i.invoiceNumber} • {i.status}
                   </p>
                   <p className="text-xs text-dark-500">
-                    {new Date(i.issueDate).toLocaleDateString("bs-BA")}
+                    {formatDateDMY(i.issueDate)}
                   </p>
                 </div>
                 <p className="text-xs text-dark-600">

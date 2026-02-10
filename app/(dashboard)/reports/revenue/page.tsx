@@ -14,6 +14,7 @@ import {
   Calendar as CalendarIcon,
   BarChart3,
 } from "lucide-react";
+import { formatDateDMY } from "@/lib/date";
 import {
   BarChart,
   Bar,
@@ -116,8 +117,7 @@ export default function RevenueReportPage() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return new Intl.DateTimeFormat("bs-BA").format(date);
+    return formatDateDMY(dateStr);
   };
 
   if (loading && !data) {

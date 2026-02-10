@@ -64,16 +64,19 @@ export default function EditDriverPage() {
       }
 
       const driver: Driver = data.driver;
+      const toDateInput = (value?: string | null) => {
+        if (!value) return "";
+        const safe = String(value);
+        return safe.includes("T") ? safe.split("T")[0] : safe;
+      };
       setDriver(driver);
       setFormData({
         licenseNumber: driver.licenseNumber,
         licenseState: driver.licenseState,
-        licenseExpiry: driver.licenseExpiry.split("T")[0],
+        licenseExpiry: toDateInput(driver.licenseExpiry),
         endorsements: driver.endorsements || [],
-        medicalCardExpiry: driver.medicalCardExpiry
-          ? driver.medicalCardExpiry.split("T")[0]
-          : "",
-        hireDate: driver.hireDate.split("T")[0],
+        medicalCardExpiry: toDateInput(driver.medicalCardExpiry),
+        hireDate: toDateInput(driver.hireDate),
         emergencyContact: driver.emergencyContact || "",
         emergencyPhone: driver.emergencyPhone || "",
         ratePerMile: driver.ratePerMile?.toString() || "",

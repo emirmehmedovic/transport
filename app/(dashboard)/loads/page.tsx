@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { LoadStatusBadge } from "@/components/loads/LoadStatusBadge";
 import { DataTable } from "@/components/ui/data-table";
 import { useAuth } from "@/lib/authContext";
+import { formatDateDMY } from "@/lib/date";
 
 interface Load {
   id: string;
@@ -114,14 +115,7 @@ export default function LoadsPage() {
 
 
   const formatDate = (value: string | null) => {
-    if (!value) return "-";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "-";
-    return d.toLocaleDateString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return formatDateDMY(value);
   };
 
   const totalLoads = loads.length;

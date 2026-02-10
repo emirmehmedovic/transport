@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Filter, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { formatDateTimeDMY } from "@/lib/date";
 
 type AuditAction =
   | "CREATE"
@@ -200,13 +201,7 @@ export default function AuditLogsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString("bs-BA", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDateTimeDMY(dateString);
   };
 
   const totalLogs = data?.pagination.total ?? 0;
