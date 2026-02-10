@@ -607,7 +607,53 @@ function AdminDashboard({ user }: { user: AuthUser }) {
               Prikaži sve
            </button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="md:hidden divide-y divide-dark-50">
+          {(data?.activeLoads ?? []).length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-dark-500">
+              Nema aktivnih loadova.
+            </div>
+          ) : (
+            (data?.activeLoads ?? []).map((load) => (
+              <div key={load.id} className="px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-dark-900 truncate">
+                      {load.routeName || load.loadNumber}
+                    </p>
+                    <p className="text-[11px] text-dark-500">
+                      {load.pickupCity}, {load.pickupState} → {load.deliveryCity}, {load.deliveryState}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${
+                      load.status === "IN_TRANSIT"
+                        ? "bg-blue-100 text-blue-700"
+                        : load.status === "PICKED_UP"
+                        ? "bg-purple-100 text-purple-700"
+                        : load.status === "DELIVERED"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-dark-100 text-dark-700"
+                    }`}
+                  >
+                    {STATUS_LABELS[load.status] || load.status}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-dark-600">
+                  <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                    Vozač: {load.driver?.user?.firstName} {load.driver?.user?.lastName}
+                  </span>
+                  <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                    Kamion: {load.truck?.truckNumber || "-"}
+                  </span>
+                  <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                    Pickup: {formatDate(load.scheduledPickupDate)}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-xs md:text-sm text-left">
             <thead className="bg-dark-50 text-dark-500 font-medium">
               <tr>
@@ -1378,7 +1424,44 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
               <p className="text-xs md:text-sm text-dark-500">Pregled zadnjih ruta i statusa</p>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="md:hidden divide-y divide-dark-50">
+            {data.recentLoads.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-dark-500">
+                Nema nedavnih aktivnosti.
+              </div>
+            ) : (
+              data.recentLoads.map((load) => (
+                <div key={load.id} className="px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-dark-900 truncate">
+                        {load.routeName || load.loadNumber}
+                      </p>
+                      <p className="text-[11px] text-dark-500">
+                        {load.pickupCity} → {load.deliveryCity}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ${
+                        load.status === "COMPLETED"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-dark-100 text-dark-700"
+                      }`}
+                    >
+                      {STATUS_LABELS[load.status] || load.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-dark-600">
+                    <span>{formatDate(load.actualPickupDate)}</span>
+                    <span className="font-mono">
+                      {load.loadRate ? formatCurrency(load.loadRate) : "-"}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs md:text-sm text-left">
               <thead className="bg-dark-50 text-dark-500 font-medium">
                 <tr>

@@ -101,58 +101,102 @@ export default function SchengenOverviewPage() {
           ) : rows.length === 0 ? (
             <div className="p-6 text-sm text-dark-500">Nema podataka.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-dark-50 text-dark-500 font-medium">
-                  <tr>
-                    <th className="px-4 py-3">Vozač</th>
-                    <th className="px-4 py-3">Kamion</th>
-                    <th className="px-4 py-3 text-right">Iskorišteno</th>
-                    <th className="px-4 py-3 text-right">Preostalo</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Napomena</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-dark-50">
-                  {rows.map((row) => (
-                    <tr
-                      key={row.driverId}
-                      className="hover:bg-dark-50/50 transition-colors cursor-pointer"
-                      onClick={() => router.push(`/drivers/${row.driverId}`)}
-                    >
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="font-semibold text-dark-900">{row.name}</p>
-                          <p className="text-xs text-dark-500">{row.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {row.truckNumber || "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right">{row.usedDays}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            row.warning
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-emerald-100 text-emerald-700"
-                          }`}
-                        >
-                          {row.remainingDays}
-                          {row.warning ? <AlertTriangle className="w-3 h-3" /> : null}
+            <>
+              <div className="md:hidden divide-y divide-dark-50">
+                {rows.map((row) => (
+                  <div
+                    key={row.driverId}
+                    className="px-4 py-4"
+                    onClick={() => router.push(`/drivers/${row.driverId}`)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-dark-900 truncate">{row.name}</p>
+                        <p className="text-[11px] text-dark-500 truncate">{row.email}</p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          row.warning
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}
+                      >
+                        {row.remainingDays}
+                        {row.warning ? <AlertTriangle className="w-3 h-3" /> : null}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-dark-600">
+                      <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                        Iskorišteno: {row.usedDays}
+                      </span>
+                      <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                        Kamion: {row.truckNumber || "-"}
+                      </span>
+                      <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                        Status: {row.status}
+                      </span>
+                      {row.manual && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
+                          Ručni unos ({new Date(row.manual.asOf).toLocaleDateString("bs-BA")})
                         </span>
-                      </td>
-                      <td className="px-4 py-3">{row.status}</td>
-                      <td className="px-4 py-3 text-xs text-dark-500">
-                        {row.manual
-                          ? `Ručni unos (${new Date(row.manual.asOf).toLocaleDateString("bs-BA")})`
-                          : ""}
-                      </td>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-dark-50 text-dark-500 font-medium">
+                    <tr>
+                      <th className="px-4 py-3">Vozač</th>
+                      <th className="px-4 py-3">Kamion</th>
+                      <th className="px-4 py-3 text-right">Iskorišteno</th>
+                      <th className="px-4 py-3 text-right">Preostalo</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Napomena</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-dark-50">
+                    {rows.map((row) => (
+                      <tr
+                        key={row.driverId}
+                        className="hover:bg-dark-50/50 transition-colors cursor-pointer"
+                        onClick={() => router.push(`/drivers/${row.driverId}`)}
+                      >
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-semibold text-dark-900">{row.name}</p>
+                            <p className="text-xs text-dark-500">{row.email}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {row.truckNumber || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-right">{row.usedDays}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              row.warning
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {row.remainingDays}
+                            {row.warning ? <AlertTriangle className="w-3 h-3" /> : null}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">{row.status}</td>
+                        <td className="px-4 py-3 text-xs text-dark-500">
+                          {row.manual
+                            ? `Ručni unos (${new Date(row.manual.asOf).toLocaleDateString("bs-BA")})`
+                            : ""}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -375,7 +375,89 @@ export default function DriversPage() {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div>
+            <div className="md:hidden divide-y divide-dark-50">
+              {drivers.map((driver) => (
+                <div
+                  key={driver.id}
+                  className="px-4 py-4"
+                  onClick={() => router.push(`/drivers/${driver.id}`)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        {driver.user.firstName[0]}
+                        {driver.user.lastName[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-dark-900 truncate">
+                          {driver.user.firstName} {driver.user.lastName}
+                        </p>
+                        <p className="text-[11px] text-dark-500 truncate">
+                          {driver.user.email}
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadgeColor(
+                        driver.status
+                      )} whitespace-nowrap`}
+                    >
+                      {getStatusLabel(driver.status)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-dark-600">
+                    <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                      Telefon: {driver.user.phone || "-"}
+                    </span>
+                    <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                      Kamion: {driver.primaryTruck?.truckNumber || "Nije dodijeljen"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-end gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/drivers/${driver.id}/edit`);
+                      }}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-dark-100 text-dark-600 hover:text-primary-600 hover:border-primary-200"
+                    >
+                      Uredi
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm(driver.id);
+                      }}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-100 text-red-600 hover:bg-red-50"
+                    >
+                      Obriši
+                    </button>
+                  </div>
+                  {deleteConfirm === driver.id && (
+                    <div
+                      className="mt-2 flex items-center gap-2 bg-red-50 p-2 rounded-lg"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => handleDelete(driver.id)}
+                        className="px-2.5 py-1 text-[10px] font-bold rounded-md bg-red-600 text-white"
+                      >
+                        Potvrdi
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        className="px-2.5 py-1 text-[10px] font-semibold text-dark-600"
+                      >
+                        Odustani
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs md:text-sm text-left">
               <thead className="bg-dark-50 text-dark-500 font-medium">
                 <tr>
@@ -544,6 +626,7 @@ export default function DriversPage() {
                 </button>
               </div>
             </div>
+          </div>
           </div>
         )}
       </div>

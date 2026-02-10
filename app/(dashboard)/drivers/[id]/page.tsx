@@ -638,8 +638,8 @@ export default function DriverDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3 md:gap-4">
           <Button
             variant="outline"
             onClick={() => router.push("/drivers")}
@@ -649,13 +649,13 @@ export default function DriverDetailPage() {
             Nazad
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-dark-900">
+            <h1 className="text-2xl md:text-3xl font-bold text-dark-900">
               {driver.user.firstName} {driver.user.lastName}
             </h1>
             <p className="text-dark-500 mt-1">Detalji vozača</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <Button
             variant="outline"
             onClick={() => router.push(`/drivers/${driverId}/edit`)}
@@ -666,10 +666,14 @@ export default function DriverDetailPage() {
           </Button>
           {deleteConfirm ? (
             <>
-              <Button variant="danger" onClick={handleDelete}>
+              <Button variant="danger" onClick={handleDelete} className="w-full sm:w-auto">
                 Potvrdi brisanje
               </Button>
-              <Button variant="outline" onClick={() => setDeleteConfirm(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteConfirm(false)}
+                className="w-full sm:w-auto"
+              >
                 Odustani
               </Button>
             </>
@@ -687,8 +691,8 @@ export default function DriverDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-2xl shadow-soft px-4">
-        <nav className="flex gap-8">
+      <div className="bg-white rounded-2xl shadow-soft px-4 overflow-x-auto">
+        <nav className="flex gap-6 whitespace-nowrap">
           <button
             onClick={() => setActiveTab("overview")}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
@@ -1337,51 +1341,90 @@ export default function DriverDetailPage() {
             ) : historyLoads.length === 0 ? (
               <div className="text-sm text-dark-500">Nema loadova za odabrane filtere.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-left text-dark-600">
-                      <th className="py-2 pr-3">Load #</th>
-                      <th className="py-2 pr-3">Status</th>
-                      <th className="py-2 pr-3">Pickup</th>
-                      <th className="py-2 pr-3">Delivery</th>
-                      <th className="py-2 pr-3 text-right">Km</th>
-                      <th className="py-2 pr-3 text-right">Cijena</th>
-                      <th className="py-2 pr-3">Kamion</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyLoads.map((load) => (
-                      <tr key={load.id} className="border-b border-gray-100">
-                        <td className="py-2 pr-3">
+              <>
+                <div className="md:hidden divide-y divide-dark-50">
+                  {historyLoads.map((load) => (
+                    <div key={load.id} className="py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
                           <button
-                            className="text-primary-600 hover:underline"
+                            className="text-sm font-semibold text-dark-900 hover:text-primary-600 truncate"
                             onClick={() => router.push(`/loads/${load.id}`)}
                           >
                             {load.loadNumber}
                           </button>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getLoadStatusBadge(load.status)}`}>
-                            {load.status}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-3">{formatDate(load.scheduledPickupDate)}</td>
-                        <td className="py-2 pr-3">{formatDate(load.scheduledDeliveryDate)}</td>
-                        <td className="py-2 pr-3 text-right">
-                          {load.distance ? load.distance.toLocaleString() : "-"}
-                        </td>
-                        <td className="py-2 pr-3 text-right">
-                          {formatCurrency(load.loadRate)}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {load.truck ? load.truck.truckNumber : "-"}
-                        </td>
+                          <p className="text-[11px] text-dark-500">
+                            {formatDate(load.scheduledPickupDate)} → {formatDate(load.scheduledDeliveryDate)}
+                          </p>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${getLoadStatusBadge(
+                            load.status
+                          )}`}
+                        >
+                          {load.status}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dark-600">
+                        <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                          Km: {load.distance ? load.distance.toLocaleString() : "-"}
+                        </span>
+                        <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                          Cijena: {formatCurrency(load.loadRate)}
+                        </span>
+                        <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                          Kamion: {load.truck ? load.truck.truckNumber : "-"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-dark-600">
+                        <th className="py-2 pr-3">Load #</th>
+                        <th className="py-2 pr-3">Status</th>
+                        <th className="py-2 pr-3">Pickup</th>
+                        <th className="py-2 pr-3">Delivery</th>
+                        <th className="py-2 pr-3 text-right">Km</th>
+                        <th className="py-2 pr-3 text-right">Cijena</th>
+                        <th className="py-2 pr-3">Kamion</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {historyLoads.map((load) => (
+                        <tr key={load.id} className="border-b border-gray-100">
+                          <td className="py-2 pr-3">
+                            <button
+                              className="text-primary-600 hover:underline"
+                              onClick={() => router.push(`/loads/${load.id}`)}
+                            >
+                              {load.loadNumber}
+                            </button>
+                          </td>
+                          <td className="py-2 pr-3">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getLoadStatusBadge(load.status)}`}>
+                              {load.status}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-3">{formatDate(load.scheduledPickupDate)}</td>
+                          <td className="py-2 pr-3">{formatDate(load.scheduledDeliveryDate)}</td>
+                          <td className="py-2 pr-3 text-right">
+                            {load.distance ? load.distance.toLocaleString() : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-right">
+                            {formatCurrency(load.loadRate)}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {load.truck ? load.truck.truckNumber : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
 
             {historyPagination && historyPagination.totalPages > 1 && (

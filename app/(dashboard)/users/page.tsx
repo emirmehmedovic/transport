@@ -229,7 +229,77 @@ export default function UsersPage() {
           <CardTitle className="text-2xl">Svi korisnici ({users.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="md:hidden divide-y divide-dark-50">
+            {users.map((user) => (
+              <div key={user.id} className="py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-semibold flex-shrink-0">
+                      {user.firstName[0]}
+                      {user.lastName[0]}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-dark-900 truncate">
+                        {user.firstName} {user.lastName}
+                      </p>
+                      <p className="text-[11px] text-dark-500 truncate">{user.email}</p>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${getRoleBadgeColor(
+                      user.role
+                    )}`}
+                  >
+                    {getRoleLabel(user.role)}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-dark-600">
+                  <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                    Telefon: {user.phone || "-"}
+                  </span>
+                  <span className="rounded-full bg-dark-50 px-2 py-0.5">
+                    Vozač: {user.driver ? user.driver.status : "-"}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/users/${user.id}/edit`)}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  {deleteConfirm === user.id ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDelete(user.id)}
+                      >
+                        Potvrdi
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteConfirm(null)}
+                      >
+                        Odustani
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setDeleteConfirm(user.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-dark-200">
