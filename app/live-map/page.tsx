@@ -75,6 +75,21 @@ function getGPSStatus(lastLocationUpdate: Date | null): 'active' | 'warning' | '
   return 'offline'; // 60+ minutes
 }
 
+function getLoadStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    AVAILABLE: "Dostupan",
+    ASSIGNED: "Dodijeljen",
+    ACCEPTED: "Prihvaćen",
+    PICKED_UP: "Preuzet",
+    IN_TRANSIT: "U transportu",
+    DELIVERED: "Isporučen",
+    COMPLETED: "Završen",
+    CANCELLED: "Otkazan",
+  };
+
+  return labels[status] || status;
+}
+
 export default function LiveMapFullScreenPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -90,6 +105,7 @@ export default function LiveMapFullScreenPage() {
   const [driverHistory, setDriverHistory] = useState<any>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const mapRef = useRef<any>(null);
+  const loadsFetchInFlightRef = useRef(false);
 
   // Set mounted state to avoid hydration mismatch
   useEffect(() => {
@@ -100,7 +116,7 @@ export default function LiveMapFullScreenPage() {
   useEffect(() => {
     // Check if user has permission
     if (user && user.role !== "ADMIN" && user.role !== "DISPATCHER") {
-      router.push("/");
+      router.push("/dashboard");
       return;
     }
 
@@ -116,6 +132,12 @@ export default function LiveMapFullScreenPage() {
   }, [user, autoRefresh]);
 
   const fetchLoads = async () => {
+    if (loadsFetchInFlightRef.current) {
+      return;
+    }
+
+    loadsFetchInFlightRef.current = true;
+
     try {
       const res = await fetch("/api/loads?status=ASSIGNED,PICKED_UP,IN_TRANSIT");
       const data = await res.json();
@@ -133,6 +155,8 @@ export default function LiveMapFullScreenPage() {
       }
     } catch (error) {
       console.error("Error fetching loads:", error);
+    } finally {
+      loadsFetchInFlightRef.current = false;
     }
   };
 
@@ -216,6 +240,17 @@ export default function LiveMapFullScreenPage() {
     fetchDriverHistory(driverId);
   };
 
+  const openReplayWindow = (driverId: string, hours: number) => {
+    const end = new Date();
+    const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
+    const params = new URLSearchParams({
+      start: start.toISOString(),
+      end: end.toISOString(),
+      limit: "2000",
+    });
+    router.push(`/drivers/${driverId}/replay?${params.toString()}`);
+  };
+
   const activeLoadsCount = loads.length;
   const driversOnRoadCount = loads.filter((l) => l.driver).length;
   const inTransitCount = loads.filter((l) => l.status === "IN_TRANSIT").length;
@@ -227,7 +262,7 @@ export default function LiveMapFullScreenPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/dashboard")}
               className="h-9 flex items-center gap-2 rounded-full px-3 border border-white/15 bg-white/5 text-dark-50 font-semibold text-xs hover:bg-white/10 hover:border-white/25 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -502,7 +537,7 @@ export default function LiveMapFullScreenPage() {
                                   : "bg-gray-100 text-gray-700"
                               }`}
                             >
-                              {load.status}
+                              {getLoadStatusLabel(load.status)}
                             </span>
                           </div>
                           <p className="text-xs text-dark-600">
@@ -528,13 +563,25 @@ export default function LiveMapFullScreenPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1, 3, 6].map((hours) => (
+                        <button
+                          key={hours}
+                          onClick={() => openReplayWindow(expandedDriver, hours)}
+                          className="px-4 py-2 bg-white border border-dark-200 hover:bg-dark-50 text-dark-800 rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          Replay {hours}h
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
                     <button
                       onClick={() => router.push(`/drivers/${expandedDriver}/replay`)}
                       className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                     >
                       <Navigation className="w-4 h-4" />
-                      Route Replay
+                      Cijeli replay
                     </button>
                     <button
                       onClick={() => router.push(`/drivers/${expandedDriver}`)}
@@ -542,6 +589,7 @@ export default function LiveMapFullScreenPage() {
                     >
                       Vidi sve detalje
                     </button>
+                  </div>
                   </div>
                 </>
               ) : (

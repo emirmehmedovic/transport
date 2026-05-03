@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateRefreshToken, generateToken, verifyRefreshToken } from "@/lib/auth";
+import { generateRefreshToken, generateToken } from "@/lib/auth";
+import { getRefreshAuthUserFromRequest, getRefreshTokenFromRequest } from "@/lib/api-auth";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const refreshToken = request.cookies.get("refreshToken")?.value;
+    const refreshToken = getRefreshTokenFromRequest(request);
 
     if (!refreshToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const decoded = verifyRefreshToken(refreshToken);
+    const decoded = getRefreshAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid refresh token" }, { status: 401 });
     }
@@ -24,11 +28,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    if ((decoded.tokenVersion ?? 0) !== user.refreshTokenVersion) {
+      return NextResponse.json({ error: "Refresh token više nije važeći" }, { status: 401 });
+    }
+
     const tokenPayload = {
       userId: user.id,
       email: user.email,
       role: user.role,
       driverId: user.driver?.id || null,
+      tokenVersion: user.refreshTokenVersion,
     };
 
     const newToken = generateToken(tokenPayload);

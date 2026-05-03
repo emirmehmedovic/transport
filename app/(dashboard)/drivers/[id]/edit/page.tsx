@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Truck, MapPin } from "lucide-react";
 
 interface Driver {
   id: string;
@@ -158,8 +158,8 @@ export default function EditDriverPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="text-4xl mb-4">🚗</div>
-          <p className="text-dark-500">Učitavanje...</p>
+          <Truck className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-pulse" />
+          <p className="text-slate-500">Učitavanje...</p>
         </div>
       </div>
     );
@@ -168,29 +168,28 @@ export default function EditDriverPage() {
   if (error && !driver) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <p className="text-red-600">{error}</p>
+        <div className="rounded-2xl bg-red-50 border border-red-200 p-6 max-w-md mx-auto">
+          <p className="text-sm text-red-700 font-medium">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 md:space-y-8 pb-8">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button
-          variant="outline"
+        <button
           onClick={() => router.push("/drivers")}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
         >
           <ArrowLeft className="w-4 h-4" />
-          Nazad
-        </Button>
+          <span className="font-medium">Nazad</span>
+        </button>
         <div>
-          <h1 className="text-3xl font-bold text-dark-900">Uredi vozača</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Uredi vozača</h1>
           {driver && (
-            <p className="text-dark-500 mt-2">
+            <p className="text-slate-500 mt-1">
               {driver.user.firstName} {driver.user.lastName}
             </p>
           )}
@@ -198,15 +197,15 @@ export default function EditDriverPage() {
       </div>
 
       {/* Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Osnovni podaci</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-900">Osnovni podaci</h3>
+        </div>
+        <div className="p-6 md:p-8">
+          <form onSubmit={handleSubmit} className="space-y-8">
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-600">{error}</p>
+              <div className="p-5 bg-red-50 border border-red-200 rounded-2xl animate-shake">
+                <p className="text-sm text-red-700 font-medium">{error}</p>
               </div>
             )}
 
@@ -305,14 +304,14 @@ export default function EditDriverPage() {
 
               {/* Status */}
               <div>
-                <label className="block text-sm font-medium text-dark-700 mb-2">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                   Status *
                 </label>
                 <select
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   required
                 >
                   <option value="ACTIVE">Aktivan</option>
@@ -323,13 +322,25 @@ export default function EditDriverPage() {
             </div>
 
             {/* GPS Tracking Section */}
-            <div className="pt-6 border-t border-dark-200">
-              <h3 className="text-lg font-semibold text-dark-900 mb-4">📍 GPS Praćenje (Traccar)</h3>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-blue-800 mb-2">
-                  <strong>Traccar Device ID</strong> - Jedinstveni identifikator za GPS praćenje preko Traccar Client aplikacije
+            <div className="pt-6 border-t border-slate-200">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                  <MapPin className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">GPS Praćenje (Traccar)</h3>
+                  <p className="text-sm text-slate-600">Konfiguracija GPS tracking-a za vozača</p>
+                </div>
+              </div>
+
+              <div className="p-5 bg-gradient-to-br from-blue-50 to-slate-50/50 border border-blue-200/60 rounded-2xl mb-6">
+                <p className="text-sm font-semibold text-blue-900 mb-2">
+                  Traccar Device ID
                 </p>
-                <p className="text-xs text-blue-600">
+                <p className="text-sm text-blue-800 mb-3">
+                  Jedinstveni identifikator za GPS praćenje preko Traccar Client aplikacije
+                </p>
+                <p className="text-xs text-blue-600 font-medium">
                   Format: KAMION-01, KAMION-02, itd. (mora biti jedinstveno)
                 </p>
               </div>
@@ -346,42 +357,86 @@ export default function EditDriverPage() {
                 />
 
                 <div className="flex items-center">
-                  <div className="text-sm text-dark-500">
+                  <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 w-full">
                     {formData.traccarDeviceId ? (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                        <span>GPS praćenje konfigurisano</span>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex-shrink-0">
+                          <span className="flex w-3 h-3 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-emerald-700">GPS praćenje konfigurisano</p>
+                          <p className="text-xs text-slate-600 mt-1">
+                            Device ID: <span className="font-mono font-medium">{formData.traccarDeviceId}</span>
+                          </p>
+                        </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                        <span>GPS praćenje nije konfigurisano</span>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex-shrink-0 w-3 h-3 bg-amber-500 rounded-full"></div>
+                        <div>
+                          <p className="text-sm font-semibold text-amber-700">GPS praćenje nije konfigurisano</p>
+                          <p className="text-xs text-slate-600 mt-1">
+                            Postavite Device ID za aktiviranje
+                          </p>
+                        </div>
                       </div>
                     )}
-                    <p className="text-xs text-dark-400 mt-2">
-                      Nakon spremanja, postavite isti ID u Traccar Client aplikaciji na telefonu vozača.
-                    </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+                <p className="text-xs font-medium text-slate-600">
+                  💡 Nakon spremanja, postavite isti ID u Traccar Client aplikaciji na telefonu vozača za aktiviranje GPS praćenja.
+                </p>
+                <p className="text-xs text-slate-500 mt-2">
+                  U Traccar aplikaciji koristi se i kompletan telemetry URL koji uključuje sigurnosni <span className="font-mono">key</span>, npr. <span className="font-mono">/api/telemetry?key=...</span>.
+                </p>
               </div>
             </div>
 
             {/* Buttons */}
-            <div className="flex items-center gap-4 pt-4">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Spremanje..." : "Sačuvaj promjene"}
-              </Button>
-              <Button
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-6 border-t border-slate-100">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+              >
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Spremanje...
+                  </span>
+                ) : (
+                  "Sačuvaj promjene"
+                )}
+              </button>
+              <button
                 type="button"
-                variant="outline"
                 onClick={() => router.push("/drivers")}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
               >
                 Odustani
-              </Button>
+              </button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-10px); }
+          75% { transform: translateX(10px); }
+        }
+
+        .animate-shake {
+          animation: shake 0.4s ease-in-out;
+        }
+      `}</style>
     </div>
   );
 }

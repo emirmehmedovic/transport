@@ -177,14 +177,14 @@ const stepsConfig: {
   },
   {
     id: 3,
-    badge: "Pickup",
-    headline: "Korak 3: Pickup stopovi",
-    description: "Prvi stop je glavni pickup, a po potrebi dodajte dodatne pickup lokacije.",
+    badge: "Preuzimanje",
+    headline: "Korak 3: Tačke preuzimanja",
+    description: "Prva tačka je glavno preuzimanje, a po potrebi dodajte dodatne lokacije preuzimanja.",
   },
   {
     id: 4,
-    badge: "Delivery",
-    headline: "Korak 4: Delivery detalji",
+    badge: "Isporuka",
+    headline: "Korak 4: Detalji isporuke",
     description: "Unesite destinaciju isporuke i kontakt informacije za dostavu.",
   },
   {
@@ -195,7 +195,7 @@ const stepsConfig: {
   },
   {
     id: 6,
-    badge: "Assignment",
+    badge: "Dodjela",
     headline: "Korak 6: Dodjela",
     description: "Po želji povežite load sa vozačem i kamionom.",
   },
@@ -433,22 +433,22 @@ export default function CreateLoadPage() {
         errors.routeName = "Naziv rute je obavezan";
       }
       if (!form.scheduledPickupDate) {
-        errors.scheduledPickupDate = "Planirani pickup datum/vrijeme je obavezan";
+        errors.scheduledPickupDate = "Planirani datum/vrijeme preuzimanja je obavezan";
       }
       if (!form.scheduledDeliveryDate) {
-        errors.scheduledDeliveryDate = "Planirani delivery datum/vrijeme je obavezan";
+        errors.scheduledDeliveryDate = "Planirani datum/vrijeme isporuke je obavezan";
       }
     }
 
     if (currentStep === 3) {
-      if (!form.pickupAddress) errors.pickupAddress = "Pickup adresa je obavezna";
-      if (!form.pickupCity) errors.pickupCity = "Pickup grad je obavezan";
-      if (!form.pickupState) errors.pickupState = "Pickup država je obavezna";
-      if (!form.pickupZip) errors.pickupZip = "Pickup ZIP je obavezan";
+      if (!form.pickupAddress) errors.pickupAddress = "Adresa preuzimanja je obavezna";
+      if (!form.pickupCity) errors.pickupCity = "Grad preuzimanja je obavezan";
+      if (!form.pickupState) errors.pickupState = "Država preuzimanja je obavezna";
+      if (!form.pickupZip) errors.pickupZip = "Poštanski broj preuzimanja je obavezan";
       if (!form.pickupContactName)
-        errors.pickupContactName = "Kontakt osoba za pickup je obavezna";
+        errors.pickupContactName = "Kontakt osoba za preuzimanje je obavezna";
       if (!form.pickupContactPhone)
-        errors.pickupContactPhone = "Telefon kontakt osobe za pickup je obavezan";
+        errors.pickupContactPhone = "Telefon kontakt osobe za preuzimanje je obavezan";
 
       if (intermediateStops.length > 0) {
         const invalidStop = intermediateStops.find(
@@ -461,7 +461,7 @@ export default function CreateLoadPage() {
             s.longitude === undefined
         );
         if (invalidStop) {
-          errors.intermediateStops = "Svi pickup stopovi moraju imati punu lokaciju";
+          errors.intermediateStops = "Sve tačke preuzimanja moraju imati punu lokaciju";
         }
       }
 
@@ -474,20 +474,20 @@ export default function CreateLoadPage() {
           (form.cargoType === "TERET" &&
             cargoItems.some((i) => !i.pickupStopSequence));
         if (missingAssignments) {
-          errors.stopAssignments = "Dodijelite teret na pickup stopove.";
+          errors.stopAssignments = "Dodijelite teret na tačke preuzimanja.";
         }
       }
     }
 
     if (currentStep === 4) {
-      if (!form.deliveryAddress) errors.deliveryAddress = "Delivery adresa je obavezna";
-      if (!form.deliveryCity) errors.deliveryCity = "Delivery grad je obavezan";
-      if (!form.deliveryState) errors.deliveryState = "Delivery država je obavezna";
-      if (!form.deliveryZip) errors.deliveryZip = "Delivery ZIP je obavezan";
+      if (!form.deliveryAddress) errors.deliveryAddress = "Adresa isporuke je obavezna";
+      if (!form.deliveryCity) errors.deliveryCity = "Grad isporuke je obavezan";
+      if (!form.deliveryState) errors.deliveryState = "Država isporuke je obavezna";
+      if (!form.deliveryZip) errors.deliveryZip = "Poštanski broj isporuke je obavezan";
       if (!form.deliveryContactName)
-        errors.deliveryContactName = "Kontakt osoba za delivery je obavezna";
+        errors.deliveryContactName = "Kontakt osoba za isporuku je obavezna";
       if (!form.deliveryContactPhone)
-        errors.deliveryContactPhone = "Telefon kontakt osobe za delivery je obavezan";
+        errors.deliveryContactPhone = "Telefon kontakt osobe za isporuku je obavezan";
     }
 
     if (currentStep === 5) {

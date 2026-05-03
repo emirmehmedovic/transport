@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { AuditAction, AuditEntity } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +21,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Only admins can view audit logs" },

@@ -26,6 +26,47 @@ function dayStart(date: Date): Date {
   return new Date(`${toDayKey(date)}T00:00:00.000Z`);
 }
 
+export async function countSchengenDaysWithFallback(
+  driverId: string,
+  from: Date
+): Promise<number> {
+  const aggregated = await prisma.schengenDay.findMany({
+    where: {
+      driverId,
+      date: { gte: from },
+    },
+    select: { date: true, inSchengen: true },
+    orderBy: { date: "asc" },
+  });
+
+  if (aggregated.length > 0) {
+    return aggregated.filter((d) => d.inSchengen).length;
+  }
+
+  const positions = await prisma.position.findMany({
+    where: {
+      driverId,
+      recordedAt: { gte: from },
+    },
+    select: {
+      latitude: true,
+      longitude: true,
+      recordedAt: true,
+    },
+    orderBy: { recordedAt: "asc" },
+  });
+
+  const daysInSchengen = new Set<string>();
+  for (const pos of positions) {
+    if (pos.latitude === null || pos.longitude === null) continue;
+    if (!isInSchengen(pos.latitude, pos.longitude)) continue;
+    const dayKey = toDayKeyInTimeZone(new Date(pos.recordedAt));
+    daysInSchengen.add(dayKey);
+  }
+
+  return daysInSchengen.size;
+}
+
 export async function aggregateSchengenDaysForDriver(
   driverId: string,
   from: Date,

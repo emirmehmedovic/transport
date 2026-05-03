@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
+import { hasProofOfDelivery } from "@/lib/load-pod";
 import {
   sendAdminNotification,
   sendTelegramNotification,
   createLoadStatusChangedNotification,
 } from "@/lib/telegram";
+import {
+  createLoadCompletedNotification,
+  createLoadPickedUpNotification,
+} from "@/lib/client-notifications";
 
 const ALLOWED_STATUSES = [
   "AVAILABLE",
@@ -38,16 +43,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -74,6 +70,13 @@ export async function PATCH(
       );
     }
 
+    if (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER" && decoded.role !== "DRIVER") {
+      return NextResponse.json(
+        { error: "Nemate dozvolu da mijenjate status ovog loada" },
+        { status: 403 }
+      );
+    }
+
     // Driver može mijenjati status samo svojih loadova
     if (decoded.role === "DRIVER" && load.driverId !== decoded.driverId) {
       return NextResponse.json(
@@ -92,6 +95,16 @@ export async function PATCH(
       );
     }
 
+    if (status === "COMPLETED") {
+      const podExists = await hasProofOfDelivery(params.id);
+      if (!podExists) {
+        return NextResponse.json(
+          { error: "Load ne može biti završen bez uploadovanog POD dokumenta." },
+          { status: 400 }
+        );
+      }
+    }
+
     const updateData: any = { status };
     if (status === "ASSIGNED" && !load.assignedAt) {
       updateData.assignedAt = new Date();
@@ -107,6 +120,13 @@ export async function PATCH(
       where: { id: params.id },
       data: updateData,
     });
+
+    if (status === "PICKED_UP") {
+      await createLoadPickedUpNotification(updated.id);
+    }
+    if (status === "DELIVERED" || status === "COMPLETED") {
+      await createLoadCompletedNotification(updated.id);
+    }
 
     await prisma.auditLog.create({
       data: {

@@ -35,7 +35,7 @@ export default function DocumentViewer({
   const handleDownload = async () => {
     try {
       const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error('Download failed');
+      if (!response.ok) throw new Error('Preuzimanje nije uspjelo');
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -48,7 +48,7 @@ export default function DocumentViewer({
       document.body.removeChild(a);
     } catch (error) {
       console.error('Download error:', error);
-      alert('Failed to download document');
+      alert('Neuspjelo preuzimanje dokumenta');
     }
   };
 
@@ -71,7 +71,7 @@ export default function DocumentViewer({
                 <button
                   onClick={handleZoomOut}
                   className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Zoom Out"
+                  title="Umanji"
                 >
                   <ZoomOut className="w-5 h-5" />
                 </button>
@@ -81,7 +81,7 @@ export default function DocumentViewer({
                 <button
                   onClick={handleZoomIn}
                   className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Zoom In"
+                  title="Uvećaj"
                 >
                   <ZoomIn className="w-5 h-5" />
                 </button>
@@ -92,7 +92,7 @@ export default function DocumentViewer({
             <button
               onClick={handleDownload}
               className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-              title="Download"
+              title="Preuzmi"
             >
               <Download className="w-5 h-5" />
             </button>
@@ -101,7 +101,7 @@ export default function DocumentViewer({
             <button
               onClick={onClose}
               className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Close"
+              title="Zatvori"
             >
               <X className="w-5 h-5" />
             </button>
@@ -111,7 +111,7 @@ export default function DocumentViewer({
         {/* Content */}
         <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-6">
           {loading && (
-            <div className="text-gray-500">Loading document...</div>
+            <div className="text-gray-500">Učitavanje dokumenta...</div>
           )}
 
           {/* Image Viewer */}
@@ -127,7 +127,7 @@ export default function DocumentViewer({
                 onLoad={() => setLoading(false)}
                 onError={() => {
                   setLoading(false);
-                  alert('Failed to load image');
+                  alert('Greška pri učitavanju slike');
                 }}
               />
             </div>
@@ -141,22 +141,22 @@ export default function DocumentViewer({
               onLoad={() => setLoading(false)}
               onError={() => {
                 setLoading(false);
-                alert('Failed to load PDF');
+                alert('Greška pri učitavanju PDF-a');
               }}
             />
           )}
 
-          {/* Other Document Types */}
+          {/* Ostale vrste dokumenata */}
           {!isImage && !isPDF && (
             <div className="text-center">
               <p className="text-gray-600 mb-4">
-                Preview not available for this file type
+                Pregled nije dostupan za ovu vrstu fajla
               </p>
               <button
                 onClick={handleDownload}
                 className="px-6 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
               >
-                Download File
+                Preuzmi fajl
               </button>
             </div>
           )}

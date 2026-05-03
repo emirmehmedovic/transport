@@ -3,6 +3,8 @@ import {
   sendAdminNotification,
   createComplianceExpiringNotification,
 } from "../lib/telegram";
+import { sendDriverComplianceReminderPush } from "../lib/compliance";
+import { sendDriverSchengenReminderNotifications } from "../lib/driver-schengen-push";
 
 const COMPLIANCE_THRESHOLDS = new Set([30, 15, 7]);
 
@@ -17,7 +19,10 @@ async function sendComplianceAlerts() {
   const now = new Date();
 
   const drivers = await prisma.driver.findMany({
-    include: {
+    select: {
+      userId: true,
+      cdlExpiry: true,
+      medicalCardExpiry: true,
       user: {
         select: { firstName: true, lastName: true },
       },
@@ -38,6 +43,12 @@ async function sendComplianceAlerts() {
             daysUntilExpiry: daysUntil,
           })
         );
+        await sendDriverComplianceReminderPush(
+          driver.userId,
+          "CDL licenca",
+          driver.cdlExpiry,
+          daysUntil
+        );
       }
     }
 
@@ -54,6 +65,12 @@ async function sendComplianceAlerts() {
             expiryDate: formatDate(driver.medicalCardExpiry),
             daysUntilExpiry: daysUntil,
           })
+        );
+        await sendDriverComplianceReminderPush(
+          driver.userId,
+          "Medicinska kartica",
+          driver.medicalCardExpiry,
+          daysUntil
         );
       }
     }
@@ -96,6 +113,49 @@ async function sendComplianceAlerts() {
           `${daysUntil <= 7 ? "🔴" : daysUntil <= 15 ? "⚠️" : "📋"} Insurance ističe`,
           `🚛 Kamion: ${truck.truckNumber}`,
           `📅 Ističe: ${formatDate(truck.insuranceExpiry)}`,
+          `⏰ Preostalo: ${daysUntil} dana`,
+        ].join("\n");
+        await sendAdminNotification(message);
+      }
+    }
+  }
+
+  const trailers = await prisma.trailer.findMany({
+    where: { isActive: true },
+    select: {
+      trailerNumber: true,
+      registrationExpiry: true,
+      insuranceExpiry: true,
+    },
+  });
+
+  for (const trailer of trailers) {
+    if (trailer.registrationExpiry) {
+      const daysUntil = Math.ceil(
+        (trailer.registrationExpiry.getTime() - now.getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      if (COMPLIANCE_THRESHOLDS.has(daysUntil)) {
+        const message = [
+          `${daysUntil <= 7 ? "🔴" : daysUntil <= 15 ? "⚠️" : "📋"} Registracija prikolice ističe`,
+          `🚛 Prikolica: ${trailer.trailerNumber}`,
+          `📅 Ističe: ${formatDate(trailer.registrationExpiry)}`,
+          `⏰ Preostalo: ${daysUntil} dana`,
+        ].join("\n");
+        await sendAdminNotification(message);
+      }
+    }
+
+    if (trailer.insuranceExpiry) {
+      const daysUntil = Math.ceil(
+        (trailer.insuranceExpiry.getTime() - now.getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      if (COMPLIANCE_THRESHOLDS.has(daysUntil)) {
+        const message = [
+          `${daysUntil <= 7 ? "🔴" : daysUntil <= 15 ? "⚠️" : "📋"} Osiguranje prikolice ističe`,
+          `🚛 Prikolica: ${trailer.trailerNumber}`,
+          `📅 Ističe: ${formatDate(trailer.insuranceExpiry)}`,
           `⏰ Preostalo: ${daysUntil} dana`,
         ].join("\n");
         await sendAdminNotification(message);
@@ -150,6 +210,7 @@ export async function runNotificationJobs() {
   try {
     await sendComplianceAlerts();
     await sendMaintenanceAlerts();
+    await sendDriverSchengenReminderNotifications();
   } catch (error) {
     console.error("[Notifications] Error:", error);
     throw error;

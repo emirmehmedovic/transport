@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
 import { readFile } from 'fs/promises';
 import path from 'path';
 
@@ -14,12 +14,7 @@ export async function GET(
 ) {
   try {
     // Autentifikacija
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
@@ -28,6 +23,7 @@ export async function GET(
     const document = await prisma.document.findUnique({
       where: { id: params.id },
       include: {
+        load: { select: { id: true, driverId: true, requestedByUserId: true } },
         inspection: { select: { id: true, driverId: true } },
         incident: { select: { id: true, driverId: true } },
       },
@@ -52,13 +48,8 @@ export async function GET(
       if (document.driverId === driver?.id) {
         // Dokument je direktno vezan za vozača
         hasAccess = true;
-      } else if (document.loadId) {
-        // Provjerite da li je load dodijeljen ovom vozaču
-        const load = await prisma.load.findUnique({
-          where: { id: document.loadId },
-        });
-
-        if (load && load.driverId === driver?.id) {
+      } else if (document.load) {
+        if (document.load.driverId === driver?.id) {
           hasAccess = true;
         }
       } else if (document.inspection && document.inspection.driverId === driver?.id) {
@@ -72,11 +63,27 @@ export async function GET(
       }
     }
 
+    if (decoded.role === 'CLIENT') {
+      const hasAccess = document.load?.requestedByUserId === decoded.userId;
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     // Pročitaj file sa diska
     const uploadDir = path.join(process.cwd(), 'uploads');
     const filePath = path.join(uploadDir, document.filePath);
 
-    const fileBuffer = await readFile(filePath);
+    const normalizedUploadDir = path.resolve(uploadDir);
+    const normalizedFilePath = path.resolve(filePath);
+    if (!normalizedFilePath.startsWith(normalizedUploadDir + path.sep)) {
+      return NextResponse.json(
+        { error: 'Nevažeća putanja dokumenta' },
+        { status: 400 }
+      );
+    }
+
+    const fileBuffer = await readFile(normalizedFilePath);
 
     // Return file kao response
     return new NextResponse(fileBuffer, {

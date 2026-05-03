@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { BORDER_CROSSINGS } from '../data/border-crossings';
 
 const prisma = new PrismaClient();
 
@@ -77,6 +78,48 @@ async function main() {
   });
 
   console.log('✅ Driver user and profile created:', driverUser.email);
+
+  // Seed border crossing zones
+  for (const crossing of BORDER_CROSSINGS) {
+    const existingZone = await prisma.zone.findFirst({
+      where: {
+        name: crossing.name,
+        type: 'BORDER_CROSSING',
+      },
+      select: { id: true },
+    });
+
+    if (existingZone) {
+      await prisma.zone.update({
+        where: { id: existingZone.id },
+        data: {
+          description: crossing.description,
+          centerLat: crossing.centerLat,
+          centerLon: crossing.centerLon,
+          radius: crossing.radius,
+          isActive: true,
+          notifyOnEntry: false,
+          notifyOnExit: false,
+        },
+      });
+    } else {
+      await prisma.zone.create({
+        data: {
+          name: crossing.name,
+          description: crossing.description,
+          centerLat: crossing.centerLat,
+          centerLon: crossing.centerLon,
+          radius: crossing.radius,
+          type: 'BORDER_CROSSING',
+          isActive: true,
+          notifyOnEntry: false,
+          notifyOnExit: false,
+        },
+      });
+    }
+  }
+
+  console.log(`✅ Border crossing zones seeded: ${BORDER_CROSSINGS.length}`);
 
   console.log('');
   console.log('🎉 Seeding completed!');

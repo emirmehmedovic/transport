@@ -1,8 +1,44 @@
+import { AppNotificationType, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
-import { isInSchengen } from "@/lib/schengen";
-import { toDayKeyInTimeZone } from "@/lib/schengen-aggregate";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
+import { countSchengenDaysWithFallback } from "@/lib/schengen-aggregate";
 import { prisma } from "@/lib/prisma";
+import {
+  detectBorderCrossings,
+  getNearestBorderCrossing,
+} from "@/lib/schengen-border";
+
+function getCrossingConfidence(params: {
+  nearestDistanceMeters: number | null;
+  hasSegment: boolean;
+  driverConfirmed: boolean;
+  adminReviewed: boolean;
+}) {
+  if (params.driverConfirmed || params.adminReviewed) {
+    return { score: 95, label: "Vrlo visoka" };
+  }
+
+  if (
+    params.hasSegment &&
+    params.nearestDistanceMeters !== null &&
+    params.nearestDistanceMeters <= 1000
+  ) {
+    return { score: 88, label: "Visoka" };
+  }
+
+  if (
+    params.hasSegment &&
+    params.nearestDistanceMeters !== null &&
+    params.nearestDistanceMeters <= 5000
+  ) {
+    return { score: 72, label: "Srednja" };
+  }
+
+  return { score: 55, label: "Niža" };
+}
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/drivers/[id]/schengen
 // Returns Schengen 90/180 stats based on Position records
@@ -11,12 +47,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
@@ -30,6 +61,7 @@ export async function GET(
 
     const now = new Date();
     const windowFrom = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    const borderWindowFrom = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
     const driver = await prisma.driver.findUnique({
       where: { id: params.id },
@@ -44,47 +76,168 @@ export async function GET(
       return NextResponse.json({ error: "Vozač nije pronađen" }, { status: 404 });
     }
 
-    const countSchengenDays = async (from: Date) => {
-      const aggregated = await prisma.schengenDay.findMany({
-        where: {
-          driverId: params.id,
-          date: { gte: from },
-        },
-        select: { date: true, inSchengen: true },
-        orderBy: { date: "asc" },
-      });
+    const positionsForTransitions = await prisma.position.findMany({
+      where: {
+        driverId: params.id,
+        recordedAt: { gte: borderWindowFrom },
+      },
+      select: {
+        latitude: true,
+        longitude: true,
+        accuracy: true,
+        recordedAt: true,
+      },
+      orderBy: { recordedAt: "asc" },
+    });
+    const borderZones = await prisma.zone.findMany({
+      where: {
+        isActive: true,
+        type: "BORDER_CROSSING",
+      },
+      select: {
+        id: true,
+        name: true,
+        centerLat: true,
+        centerLon: true,
+      },
+    });
 
-      if (aggregated.length > 0) {
-        return aggregated.filter((d) => d.inSchengen).length;
+    const detectedCrossings = detectBorderCrossings(positionsForTransitions);
+    const borderCrossings = detectedCrossings.map((crossing) => {
+      const nearestBorderCrossing =
+        getNearestBorderCrossing(crossing, borderZones);
+
+      return {
+        ...crossing,
+        nearestBorderCrossing,
+      };
+    });
+
+    const confirmationNotifications = await prisma.appNotification.findMany({
+      where: {
+        driverId: params.id,
+        type: {
+          in: [
+            AppNotificationType.DRIVER_BORDER_EXIT_EU,
+            AppNotificationType.DRIVER_BORDER_RETURN_BIH,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        data: true,
+        createdAt: true,
+        confirmedAt: true,
+        requiresConfirmation: true,
+        pushSentAt: true,
+        pushStatus: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const notificationsByCrossing = new Map<
+      string,
+      {
+        notificationId: string;
+        status: "AUTO_ONLY" | "PENDING_DRIVER_CONFIRMATION" | "DRIVER_CONFIRMED";
+        notificationCreatedAt: string;
+        confirmedAt: string | null;
+        pushSentAt: string | null;
+        pushStatus: string | null;
+        timeline: {
+          detectedAt: string;
+          notificationCreatedAt: string;
+          pushSentAt: string | null;
+          confirmationQueuedAt: string | null;
+          confirmationSyncedAt: string | null;
+          confirmedAt: string | null;
+          reviewedAt: string | null;
+        };
+        review: {
+          status: "APPROVED" | "REJECTED" | null;
+          note: string | null;
+          reviewedAt: string | null;
+          reviewedByUserId: string | null;
+        } | null;
       }
+    >();
 
-      const positions = await prisma.position.findMany({
-        where: {
-          driverId: params.id,
-          recordedAt: { gte: from },
+    for (const notification of confirmationNotifications) {
+      const data =
+        notification.data &&
+        typeof notification.data === "object" &&
+        !Array.isArray(notification.data)
+          ? (notification.data as Prisma.JsonObject)
+          : null;
+
+      const crossingAt = typeof data?.crossingAt === "string" ? data.crossingAt : null;
+      const crossingType =
+        typeof data?.crossingType === "string" ? data.crossingType : null;
+      const reviewStatus =
+        data?.reviewStatus === "APPROVED" || data?.reviewStatus === "REJECTED"
+          ? data.reviewStatus
+          : null;
+
+      if (!crossingAt || !crossingType) continue;
+
+      const key = `${crossingType}:${crossingAt}`;
+      if (notificationsByCrossing.has(key)) continue;
+
+      notificationsByCrossing.set(key, {
+        notificationId: notification.id,
+        status: notification.confirmedAt
+          ? "DRIVER_CONFIRMED"
+          : notification.requiresConfirmation
+          ? "PENDING_DRIVER_CONFIRMATION"
+          : "AUTO_ONLY",
+        notificationCreatedAt: notification.createdAt.toISOString(),
+        confirmedAt: notification.confirmedAt?.toISOString() ?? null,
+        pushSentAt: notification.pushSentAt?.toISOString() ?? null,
+        pushStatus: notification.pushStatus ?? null,
+        timeline: {
+          detectedAt: crossingAt,
+          notificationCreatedAt: notification.createdAt.toISOString(),
+          pushSentAt: notification.pushSentAt?.toISOString() ?? null,
+          confirmationQueuedAt:
+            typeof data?.confirmationQueuedAt === "string" ? data.confirmationQueuedAt : null,
+          confirmationSyncedAt:
+            typeof data?.confirmationSyncedAt === "string" ? data.confirmationSyncedAt : null,
+          confirmedAt: notification.confirmedAt?.toISOString() ?? null,
+          reviewedAt: typeof data?.reviewedAt === "string" ? data.reviewedAt : null,
         },
-        select: {
-          latitude: true,
-          longitude: true,
-          recordedAt: true,
-        },
-        orderBy: { recordedAt: "asc" },
+        review: reviewStatus
+          ? {
+              status: reviewStatus,
+              note: typeof data?.reviewNote === "string" ? data.reviewNote : null,
+              reviewedAt: typeof data?.reviewedAt === "string" ? data.reviewedAt : null,
+              reviewedByUserId:
+                typeof data?.reviewedByUserId === "string" ? data.reviewedByUserId : null,
+            }
+          : null,
       });
+    }
 
-      const daysInSchengen = new Set<string>();
-      for (const pos of positions) {
-        if (pos.latitude === null || pos.longitude === null) continue;
-        if (!isInSchengen(pos.latitude, pos.longitude)) continue;
-        const dayKey = toDayKeyInTimeZone(new Date(pos.recordedAt));
-        daysInSchengen.add(dayKey);
-      }
-      return daysInSchengen.size;
-    };
+    const enrichedBorderCrossings = borderCrossings.map((crossing) => {
+      const confirmation =
+        notificationsByCrossing.get(`${crossing.type}:${crossing.recordedAt}`) ?? null;
+      return {
+        ...crossing,
+        confirmation,
+        confidence: getCrossingConfidence({
+          nearestDistanceMeters: crossing.nearestBorderCrossing?.distanceMeters ?? null,
+          hasSegment: Boolean(crossing.segmentStart && crossing.segmentEnd),
+          driverConfirmed: confirmation?.status === "DRIVER_CONFIRMED",
+          adminReviewed: confirmation?.review?.status === "APPROVED",
+        }),
+      };
+    });
 
     // Manual override: remaining days as of a date, then decrement with new Schengen days
     if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
       const manualFrom = new Date(driver.schengenManualAsOf);
-      const daysSinceManual = await countSchengenDays(manualFrom);
+      const daysSinceManual = await countSchengenDaysWithFallback(params.id, manualFrom);
       const remainingDays = Math.max(0, driver.schengenManualRemainingDays - daysSinceManual);
       const usedDays = Math.min(90, 90 - remainingDays);
 
@@ -99,6 +252,8 @@ export async function GET(
           asOf: manualFrom.toISOString(),
           daysSinceManual,
         },
+        borderCrossings: enrichedBorderCrossings,
+        borderWindowFrom: borderWindowFrom.toISOString(),
       });
     }
 
@@ -114,7 +269,7 @@ export async function GET(
     let usedDays = aggregated.filter((d) => d.inSchengen).length;
 
     if (aggregated.length === 0) {
-      usedDays = await countSchengenDays(windowFrom);
+      usedDays = await countSchengenDaysWithFallback(params.id, windowFrom);
     }
     const remainingDays = Math.max(0, 90 - usedDays);
 
@@ -124,6 +279,8 @@ export async function GET(
       remainingDays,
       from: windowFrom.toISOString(),
       to: now.toISOString(),
+      borderCrossings: enrichedBorderCrossings,
+      borderWindowFrom: borderWindowFrom.toISOString(),
     });
   } catch (error: any) {
     console.error("Schengen calc error:", error);

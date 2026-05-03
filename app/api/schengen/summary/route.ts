@@ -1,17 +1,17 @@
+import { AppNotificationType, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
+import { countSchengenDaysWithFallback } from "@/lib/schengen-aggregate";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/schengen/summary
 // Returns list of drivers with Schengen remaining days, sorted ascending.
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
     }
@@ -34,28 +34,14 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const schengenDays = await prisma.schengenDay.findMany({
-      where: { date: { gte: windowFrom } },
-      select: { driverId: true, date: true, inSchengen: true },
-    });
-
-    const byDriver = new Map<string, { inDays: Date[] }>();
-    for (const day of schengenDays) {
-      if (!day.inSchengen) continue;
-      const entry = byDriver.get(day.driverId) || { inDays: [] };
-      entry.inDays.push(day.date);
-      byDriver.set(day.driverId, entry);
-    }
-
-    const rows = drivers.map((driver) => {
-      const inDays = byDriver.get(driver.id)?.inDays || [];
+    const rows = await Promise.all(drivers.map(async (driver) => {
       let remainingDays: number;
       let usedDays: number;
       let manual = null as null | { remainingDays: number; asOf: string; daysSinceManual: number };
 
       if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
         const manualFrom = driver.schengenManualAsOf;
-        const daysSinceManual = inDays.filter((d) => d >= manualFrom).length;
+        const daysSinceManual = await countSchengenDaysWithFallback(driver.id, manualFrom);
         remainingDays = Math.max(0, driver.schengenManualRemainingDays - daysSinceManual);
         usedDays = Math.min(90, 90 - remainingDays);
         manual = {
@@ -64,7 +50,7 @@ export async function GET(req: NextRequest) {
           daysSinceManual,
         };
       } else {
-        usedDays = inDays.length;
+        usedDays = await countSchengenDaysWithFallback(driver.id, windowFrom);
         remainingDays = Math.max(0, 90 - usedDays);
       }
 
@@ -79,14 +65,88 @@ export async function GET(req: NextRequest) {
         warning: remainingDays < 7,
         manual,
       };
-    });
+    }));
 
     rows.sort((a, b) => a.remainingDays - b.remainingDays);
+
+    const pendingBorderNotifications = await prisma.appNotification.findMany({
+      where: {
+        requiresConfirmation: true,
+        confirmedAt: null,
+        type: {
+          in: [
+            AppNotificationType.DRIVER_BORDER_EXIT_EU,
+            AppNotificationType.DRIVER_BORDER_RETURN_BIH,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        type: true,
+        createdAt: true,
+        data: true,
+        driver: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 25,
+    });
+
+    const pendingConfirmations = pendingBorderNotifications
+      .filter((notification) => notification.driver)
+      .map((notification) => {
+        const data =
+          notification.data &&
+          typeof notification.data === "object" &&
+          !Array.isArray(notification.data)
+            ? (notification.data as Prisma.JsonObject)
+            : null;
+
+        const crossingAt =
+          typeof data?.crossingAt === "string" ? data.crossingAt : notification.createdAt.toISOString();
+        const borderCrossingName =
+          typeof data?.borderCrossingName === "string" ? data.borderCrossingName : null;
+        const hoursPending = Math.ceil(
+          (now.getTime() - notification.createdAt.getTime()) / (1000 * 60 * 60)
+        );
+
+        return {
+          notificationId: notification.id,
+          driverId: notification.driver!.id,
+          driverName: `${notification.driver!.user.firstName} ${notification.driver!.user.lastName}`,
+          crossingType:
+            notification.type === AppNotificationType.DRIVER_BORDER_EXIT_EU
+              ? "EXIT_BIH"
+              : "ENTRY_BIH",
+          crossingAt,
+          borderCrossingName,
+          notificationCreatedAt: notification.createdAt.toISOString(),
+          hoursPending,
+          urgency: hoursPending >= 12 ? "urgent" : "warning",
+        };
+      });
 
     return NextResponse.json({
       windowDays: 180,
       generatedAt: now.toISOString(),
       drivers: rows,
+      pendingConfirmations,
+      pendingConfirmationCounts: {
+        total: pendingConfirmations.length,
+        urgent: pendingConfirmations.filter((item) => item.urgency === "urgent").length,
+        warning: pendingConfirmations.filter((item) => item.urgency === "warning").length,
+      },
     });
   } catch (error: any) {
     console.error("Schengen summary error:", error);

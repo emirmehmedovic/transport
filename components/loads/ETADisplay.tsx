@@ -24,12 +24,16 @@ interface ETAData {
 
 interface ETADisplayProps {
   loadId: string;
+  scheduledPickupDate?: string;
+  scheduledDeliveryDate?: string;
   autoRefresh?: boolean;
   refreshInterval?: number; // milliseconds
 }
 
 export default function ETADisplay({
   loadId,
+  scheduledPickupDate,
+  scheduledDeliveryDate,
   autoRefresh = true,
   refreshInterval = 60000, // 1 minute
 }: ETADisplayProps) {
@@ -125,10 +129,21 @@ export default function ETADisplay({
   };
 
   const activeData = eta.currentPhase === 'TO_PICKUP' ? eta.pickup : eta.delivery;
+  const scheduledTargetDate =
+    eta.currentPhase === 'TO_PICKUP' ? scheduledPickupDate : scheduledDeliveryDate;
 
   if (!activeData) {
     return null;
   }
+
+  const etaDate = new Date(activeData.etaDate);
+  const scheduledDate = scheduledTargetDate ? new Date(scheduledTargetDate) : null;
+  const isDelayWarning =
+    scheduledDate && !Number.isNaN(scheduledDate.getTime()) && etaDate.getTime() - scheduledDate.getTime() > 15 * 60 * 1000;
+  const delayMinutes = scheduledDate
+    ? Math.max(0, Math.round((etaDate.getTime() - scheduledDate.getTime()) / 60000))
+    : 0;
+  const delaySeverity = delayMinutes >= 60 ? 'critical' : delayMinutes >= 30 ? 'warning' : 'info';
 
   return (
     <div className="bg-white rounded-xl p-6 border border-dark-200 space-y-4">
@@ -138,6 +153,35 @@ export default function ETADisplay({
         </h3>
         {getConfidenceBadge(activeData.confidence)}
       </div>
+
+      {isDelayWarning && (
+        <div
+          className={`rounded-xl border p-4 ${
+            delaySeverity === 'critical'
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : delaySeverity === 'warning'
+              ? 'bg-amber-50 border-amber-200 text-amber-700'
+              : 'bg-blue-50 border-blue-200 text-blue-700'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 mt-0.5" />
+            <div>
+              <p className="font-semibold">
+                ETA probija planirano vrijeme
+              </p>
+              <p className="text-sm">
+                Procijenjeni dolazak kasni oko {formatDuration(delayMinutes)} u odnosu na planirani termin.
+              </p>
+              {scheduledDate && (
+                <p className="text-xs mt-1 opacity-80">
+                  Planirano: {formatDate(scheduledDate.toISOString())}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         {/* ETA Time */}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { FileText } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
+import { getInvoiceStatusLabel } from "@/lib/ui-labels";
 
 type TotalsItem = {
   status: string;
@@ -55,7 +56,7 @@ export default function ArApReportPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {totals.map((t) => (
               <div key={t.status} className="rounded-2xl border border-dark-100 p-4">
-                <p className="text-xs text-dark-500">{t.status}</p>
+                <p className="text-xs text-dark-500">{getInvoiceStatusLabel(t.status)}</p>
                 <p className="text-lg font-semibold text-dark-900">{t._count._all}</p>
                 <p className="text-xs text-dark-500">
                   {t._sum.totalAmount?.toFixed(2) || "0.00"} EUR
@@ -78,7 +79,7 @@ export default function ArApReportPage() {
               <div key={o.id} className="rounded-xl border border-dark-200 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-dark-900">
-                    {o.invoiceNumber} • {o.status}
+                    {o.invoiceNumber} • {getInvoiceStatusLabel(o.status)}
                   </p>
                   <p className="text-xs text-dark-500">
                     {formatDateDMY(o.dueDate)}

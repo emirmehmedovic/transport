@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
+import { getInvoiceStatusLabel } from "@/lib/ui-labels";
 
 type Customer = { id: string; name: string };
 
@@ -162,11 +163,11 @@ export default function InvoicesPage() {
             value={form.status}
             onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
           >
-            <option value="DRAFT">Draft</option>
-            <option value="SENT">Sent</option>
-            <option value="PAID">Paid</option>
-            <option value="OVERDUE">Overdue</option>
-            <option value="VOID">Void</option>
+            <option value="DRAFT">Nacrt</option>
+            <option value="SENT">Poslano</option>
+            <option value="PAID">Plaćeno</option>
+            <option value="OVERDUE">Dospjelo</option>
+            <option value="VOID">Stornirano</option>
           </select>
         </div>
         <textarea
@@ -254,7 +255,7 @@ export default function InvoicesPage() {
               <div key={i.id} className="rounded-xl border border-dark-200 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-dark-900">
-                    {i.invoiceNumber} • {i.status}
+                    {i.invoiceNumber} • {getInvoiceStatusLabel(i.status)}
                   </p>
                   <p className="text-xs text-dark-500">
                     {formatDateDMY(i.issueDate)}

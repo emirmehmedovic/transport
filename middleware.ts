@@ -12,7 +12,41 @@ const ALLOWED_ORIGINS = [
 
 // Rate limit config
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute
+const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute
+
+function getClientIdentifier(request: NextRequest): string {
+  return request.ip || request.headers.get("x-forwarded-for") || "unknown";
+}
+
+function getRateLimitPolicy(request: NextRequest) {
+  const { pathname, searchParams } = request.nextUrl;
+
+  if (pathname === "/api/auth/login") {
+    return { key: `login:${getClientIdentifier(request)}`, limit: 10 };
+  }
+
+  if (pathname === "/api/auth/refresh") {
+    return { key: `refresh:${getClientIdentifier(request)}`, limit: 30 };
+  }
+
+  if (pathname === "/api/telemetry") {
+    const deviceId =
+      searchParams.get("id") ||
+      searchParams.get("deviceid") ||
+      searchParams.get("device_id") ||
+      "unknown-device";
+
+    return {
+      key: `telemetry:${getClientIdentifier(request)}:${deviceId}`,
+      limit: 600,
+    };
+  }
+
+  return {
+    key: `api:${getClientIdentifier(request)}`,
+    limit: DEFAULT_RATE_LIMIT_MAX_REQUESTS,
+  };
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -45,15 +79,11 @@ export function middleware(request: NextRequest) {
 
   // 2. Rate Limiting (samo za API routes)
   if (pathname.startsWith("/api/")) {
-    // Skip rate limiting for auth endpoints to prevent lockouts on refresh
-    if (pathname.startsWith("/api/auth/")) {
-      return response;
-    }
-    const ip = request.ip || request.headers.get("x-forwarded-for") || "unknown";
     const now = Date.now();
+    const policy = getRateLimitPolicy(request);
 
     // Get ili create rate limit entry
-    let limitData = rateLimit.get(ip);
+    let limitData = rateLimit.get(policy.key);
 
     if (!limitData || now > limitData.resetTime) {
       // Reset counter
@@ -64,10 +94,10 @@ export function middleware(request: NextRequest) {
     }
 
     limitData.count++;
-    rateLimit.set(ip, limitData);
+    rateLimit.set(policy.key, limitData);
 
     // Check if limit exceeded
-    if (limitData.count > RATE_LIMIT_MAX_REQUESTS) {
+    if (limitData.count > policy.limit) {
       return NextResponse.json(
         {
           error: "Too many requests. Please try again later.",
@@ -76,7 +106,7 @@ export function middleware(request: NextRequest) {
           status: 429,
           headers: {
             "Retry-After": String(Math.ceil((limitData.resetTime - now) / 1000)),
-            "X-RateLimit-Limit": String(RATE_LIMIT_MAX_REQUESTS),
+            "X-RateLimit-Limit": String(policy.limit),
             "X-RateLimit-Remaining": "0",
             "X-RateLimit-Reset": String(limitData.resetTime),
           },
@@ -85,10 +115,10 @@ export function middleware(request: NextRequest) {
     }
 
     // Add rate limit headers
-    response.headers.set("X-RateLimit-Limit", String(RATE_LIMIT_MAX_REQUESTS));
+    response.headers.set("X-RateLimit-Limit", String(policy.limit));
     response.headers.set(
       "X-RateLimit-Remaining",
-      String(RATE_LIMIT_MAX_REQUESTS - limitData.count)
+      String(Math.max(policy.limit - limitData.count, 0))
     );
     response.headers.set("X-RateLimit-Reset", String(limitData.resetTime));
   }

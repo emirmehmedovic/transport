@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
+import { getIncidentSeverityLabel, getIncidentStatusLabel } from "@/lib/ui-labels";
 
 type Option = { id: string; label: string };
 
@@ -194,18 +195,18 @@ export default function IncidentsPage() {
             value={form.severity}
             onChange={(e) => setForm((p) => ({ ...p, severity: e.target.value }))}
           >
-            <option value="MINOR">Minor</option>
-            <option value="MAJOR">Major</option>
-            <option value="CRITICAL">Critical</option>
+            <option value="MINOR">Manji</option>
+            <option value="MAJOR">Veći</option>
+            <option value="CRITICAL">Kritičan</option>
           </select>
           <select
             className="rounded-xl border border-dark-200 px-3 py-2 text-sm"
             value={form.status}
             onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
           >
-            <option value="OPEN">Open</option>
-            <option value="IN_REVIEW">In review</option>
-            <option value="CLOSED">Closed</option>
+            <option value="OPEN">Otvoren</option>
+            <option value="IN_REVIEW">U obradi</option>
+            <option value="CLOSED">Zatvoren</option>
           </select>
         </div>
         <textarea
@@ -233,7 +234,7 @@ export default function IncidentsPage() {
               >
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-dark-900">
-                    {i.severity} • {i.status}
+                    {getIncidentSeverityLabel(i.severity)} • {getIncidentStatusLabel(i.status)}
                   </p>
                   <p className="text-xs text-dark-500">
                     {formatDateDMY(i.occurredAt)}

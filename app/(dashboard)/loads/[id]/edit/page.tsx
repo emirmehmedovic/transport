@@ -286,28 +286,28 @@ export default function EditLoadPage() {
     const errors: Record<string, string> = {};
 
     if (!form.routeName) errors.routeName = "Naziv rute je obavezan";
-    if (!form.pickupAddress) errors.pickupAddress = "Pickup adresa je obavezna";
-    if (!form.pickupCity) errors.pickupCity = "Pickup grad je obavezan";
-    if (!form.pickupState) errors.pickupState = "Pickup država je obavezna";
-    if (!form.pickupZip) errors.pickupZip = "Pickup ZIP je obavezan";
+    if (!form.pickupAddress) errors.pickupAddress = "Adresa preuzimanja je obavezna";
+    if (!form.pickupCity) errors.pickupCity = "Grad preuzimanja je obavezan";
+    if (!form.pickupState) errors.pickupState = "Država preuzimanja je obavezna";
+    if (!form.pickupZip) errors.pickupZip = "Poštanski broj preuzimanja je obavezan";
     if (!form.pickupContactName)
-      errors.pickupContactName = "Kontakt osoba za pickup je obavezna";
+      errors.pickupContactName = "Kontakt osoba za preuzimanje je obavezna";
     if (!form.pickupContactPhone)
-      errors.pickupContactPhone = "Telefon kontakt osobe za pickup je obavezan";
+      errors.pickupContactPhone = "Telefon kontakt osobe za preuzimanje je obavezan";
 
-    if (!form.deliveryAddress) errors.deliveryAddress = "Delivery adresa je obavezna";
-    if (!form.deliveryCity) errors.deliveryCity = "Delivery grad je obavezan";
-    if (!form.deliveryState) errors.deliveryState = "Delivery država je obavezna";
-    if (!form.deliveryZip) errors.deliveryZip = "Delivery ZIP je obavezan";
+    if (!form.deliveryAddress) errors.deliveryAddress = "Adresa isporuke je obavezna";
+    if (!form.deliveryCity) errors.deliveryCity = "Grad isporuke je obavezan";
+    if (!form.deliveryState) errors.deliveryState = "Država isporuke je obavezna";
+    if (!form.deliveryZip) errors.deliveryZip = "Poštanski broj isporuke je obavezan";
     if (!form.deliveryContactName)
-      errors.deliveryContactName = "Kontakt osoba za delivery je obavezna";
+      errors.deliveryContactName = "Kontakt osoba za isporuku je obavezna";
     if (!form.deliveryContactPhone)
-      errors.deliveryContactPhone = "Telefon kontakt osobe za delivery je obavezan";
+      errors.deliveryContactPhone = "Telefon kontakt osobe za isporuku je obavezan";
 
     if (!form.scheduledPickupDate)
-      errors.scheduledPickupDate = "Planirani pickup datum/vrijeme je obavezan";
+      errors.scheduledPickupDate = "Planirani datum/vrijeme preuzimanja je obavezan";
     if (!form.scheduledDeliveryDate)
-      errors.scheduledDeliveryDate = "Planirani delivery datum/vrijeme je obavezan";
+      errors.scheduledDeliveryDate = "Planirani datum/vrijeme isporuke je obavezan";
 
     if (!form.distance) errors.distance = "Udaljenost je obavezna";
     if (!form.loadRate) errors.loadRate = "Iznos loada je obavezan";

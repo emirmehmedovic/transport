@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 
 // GET /api/invoices
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
@@ -37,9 +35,7 @@ export async function GET(req: NextRequest) {
 // POST /api/invoices
 export async function POST(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }

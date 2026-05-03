@@ -1,4 +1,8 @@
 import { prisma } from './prisma';
+import {
+  createLoadCompletedNotification,
+  createLoadPickedUpNotification,
+} from './client-notifications';
 
 /**
  * Calculate distance between two coordinates using Haversine formula
@@ -182,13 +186,14 @@ async function autoUpdateLoadStatus(
 
     // Pickup zone entry: ASSIGNED → PICKED_UP
     if (zoneType === 'PICKUP' && load.status === 'ASSIGNED') {
-      await prisma.load.update({
+      const updatedLoad = await prisma.load.update({
         where: { id: loadId },
         data: {
           status: 'PICKED_UP',
           actualPickupDate: new Date(),
         },
       });
+      await createLoadPickedUpNotification(updatedLoad.id);
 
       console.log(
         `[Geofence] 🚛 Auto-updated load ${loadId}: ASSIGNED → PICKED_UP`
@@ -197,13 +202,14 @@ async function autoUpdateLoadStatus(
 
     // Delivery zone entry: IN_TRANSIT → DELIVERED
     if (zoneType === 'DELIVERY' && load.status === 'IN_TRANSIT') {
-      await prisma.load.update({
+      const updatedLoad = await prisma.load.update({
         where: { id: loadId },
         data: {
           status: 'DELIVERED',
           actualDeliveryDate: new Date(),
         },
       });
+      await createLoadCompletedNotification(updatedLoad.id);
 
       console.log(
         `[Geofence] 📦 Auto-updated load ${loadId}: IN_TRANSIT → DELIVERED`
@@ -274,13 +280,14 @@ export async function checkLoadProximity(
             });
 
             if (nextStop.type === 'PICKUP' && load.status === 'ASSIGNED') {
-              await prisma.load.update({
+              const updatedLoad = await prisma.load.update({
                 where: { id: load.id },
                 data: {
                   status: 'PICKED_UP',
                   actualPickupDate: new Date(),
                 },
               });
+              await createLoadPickedUpNotification(updatedLoad.id);
             } else if (nextStop.type === 'INTERMEDIATE') {
               if (load.status === 'PICKED_UP') {
                 await prisma.load.update({
@@ -290,13 +297,14 @@ export async function checkLoadProximity(
               }
             } else if (nextStop.type === 'DELIVERY') {
               if (load.status === 'IN_TRANSIT' || load.status === 'PICKED_UP') {
-                await prisma.load.update({
+                const updatedLoad = await prisma.load.update({
                   where: { id: load.id },
                   data: {
                     status: 'DELIVERED',
                     actualDeliveryDate: new Date(),
                   },
                 });
+                await createLoadCompletedNotification(updatedLoad.id);
               }
             }
 
@@ -322,13 +330,14 @@ export async function checkLoadProximity(
         );
 
         if (distanceToPickup <= radiusMeters) {
-          await prisma.load.update({
+          const updatedLoad = await prisma.load.update({
             where: { id: load.id },
             data: {
               status: 'PICKED_UP',
               actualPickupDate: new Date(),
             },
           });
+          await createLoadPickedUpNotification(updatedLoad.id);
 
           console.log(
             `[LoadProximity] 🚛 Auto-updated ${load.loadNumber}: ASSIGNED → PICKED_UP (${Math.round(distanceToPickup)}m from pickup)`
@@ -350,13 +359,14 @@ export async function checkLoadProximity(
         );
 
         if (distanceToDelivery <= radiusMeters) {
-          await prisma.load.update({
+          const updatedLoad = await prisma.load.update({
             where: { id: load.id },
             data: {
               status: 'DELIVERED',
               actualDeliveryDate: new Date(),
             },
           });
+          await createLoadCompletedNotification(updatedLoad.id);
 
           console.log(
             `[LoadProximity] 📦 Auto-updated ${load.loadNumber}: IN_TRANSIT → DELIVERED (${Math.round(distanceToDelivery)}m from delivery)`

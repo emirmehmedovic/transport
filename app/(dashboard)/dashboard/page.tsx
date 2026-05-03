@@ -27,7 +27,9 @@ import {
   ClipboardCheck,
   Loader2,
   CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 import {
   LineChart,
   Line,
@@ -40,6 +42,7 @@ import {
 import { useAuth } from "@/lib/authContext";
 import AlertsPanel from "@/components/dashboard/AlertsPanel";
 import { formatDateDMY, formatDateTimeDMY } from "@/lib/date";
+import { getDriverStatusLabel, getTrailerTypeLabel } from "@/lib/ui-labels";
 
 // Dynamic import for Leaflet map (no SSR)
 const ActiveLoadsMap = dynamic(
@@ -151,6 +154,11 @@ type DriverDashboardResponse = {
       make: string | null;
       model: string | null;
       licensePlate: string | null;
+      trailers: {
+        id: string;
+        trailerNumber: string;
+        type: string;
+      }[];
     } | null;
   };
   currentLoad: DriverLoad | null;
@@ -214,6 +222,28 @@ export default function DashboardPage() {
 
   if (user.role === "DRIVER" && user.driver?.id) {
     return <DriverDashboard user={user} driverId={user.driver.id} />;
+  }
+
+  if (user.role === "CLIENT") {
+    return (
+      <div className="p-6 md:p-8">
+        <div className="max-w-2xl rounded-3xl border border-dark-200 bg-white p-6 shadow-soft">
+          <p className="text-xs uppercase tracking-widest text-dark-400">Klijentski portal</p>
+          <h2 className="text-2xl font-bold text-dark-900 mt-2">
+            Dobrodošli u portal za zahtjeve ruta
+          </h2>
+          <p className="text-dark-600 mt-3">
+            Ovdje možete kreirati novu kalkulaciju i pratiti status odobrenja vaših zahtjeva.
+          </p>
+          <Link
+            href="/client"
+            className="inline-flex items-center gap-2 mt-5 rounded-2xl bg-dark-900 px-4 py-2 text-sm font-semibold text-white hover:bg-dark-700 transition-colors"
+          >
+            Otvori klijentski portal <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1518,7 +1548,7 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                    </div>
                    <div className="min-w-0">
                       <p className="font-bold text-dark-900 text-sm md:text-base truncate">{data.driver.user.firstName} {data.driver.user.lastName}</p>
-                      <p className="text-[10px] md:text-xs text-dark-500 uppercase">{data.driver.status}</p>
+                      <p className="text-[10px] md:text-xs text-dark-500 uppercase">{getDriverStatusLabel(data.driver.status)}</p>
                    </div>
                 </div>
                 <div className="space-y-2 text-xs md:text-sm">
@@ -1547,6 +1577,14 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                    </div>
                    <h4 className="text-lg md:text-xl font-bold text-dark-900">{data.driver.primaryTruck.truckNumber}</h4>
                    <p className="text-dark-500 text-sm md:text-base">{data.driver.primaryTruck.make} {data.driver.primaryTruck.model}</p>
+                   {data.driver.primaryTruck.trailers.length > 0 && (
+                      <p className="text-dark-500 text-xs md:text-sm mt-2">
+                         Prikolica: {data.driver.primaryTruck.trailers[0].trailerNumber} • {getTrailerTypeLabel(data.driver.primaryTruck.trailers[0].type)}
+                         {data.driver.primaryTruck.trailers.length > 1
+                           ? ` (+${data.driver.primaryTruck.trailers.length - 1})`
+                           : ""}
+                      </p>
+                   )}
                    <div className="mt-3 md:mt-4 inline-block bg-dark-100 px-2.5 md:px-3 py-1 rounded-lg text-[10px] md:text-xs font-mono text-dark-600">
                       {data.driver.primaryTruck.licensePlate || "NO PLATE"}
                    </div>

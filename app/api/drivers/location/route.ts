@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // POST /api/drivers/location - Update driver's GPS location
 export async function POST(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -75,16 +69,7 @@ export async function POST(req: NextRequest) {
 // GET /api/drivers/location - Get all active driver locations
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -122,6 +107,8 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             truckNumber: true,
+            make: true,
+            model: true,
           },
         },
         loads: {

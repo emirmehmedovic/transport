@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Truck, Package, Navigation, ChevronDown, ChevronUp } from "lucide-react";
+import { getLoadStatusLabel as getMappedLoadStatusLabel } from "@/lib/ui-labels";
 
 // Component to control map view
 function MapController({ focusedDriverId, driverLocations }: { focusedDriverId: string | null, driverLocations: DriverLocation[] }) {
@@ -230,6 +232,8 @@ interface DriverLocation {
   driverName: string;
   truckNumber: string | null;
   truckId: string | null;
+  truckMake: string | null;
+  truckModel: string | null;
   latitude: number;
   longitude: number;
   lastUpdate: string;
@@ -241,6 +245,7 @@ interface LiveMapProps {
 }
 
 export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDriverId: null }) {
+  const router = useRouter();
   const [loads, setLoads] = useState<LoadData[]>([]);
   const [driverLocations, setDriverLocations] = useState<DriverLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -257,6 +262,7 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
   const [legendMinimized, setLegendMinimized] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const fetchInFlightRef = useRef(false);
 
   useEffect(() => {
     fetchData();
@@ -266,6 +272,12 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
   }, []);
 
   const fetchData = async () => {
+    if (fetchInFlightRef.current) {
+      return;
+    }
+
+    fetchInFlightRef.current = true;
+
     try {
       setRefreshing(true);
 
@@ -320,6 +332,8 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
           driverName: `${driver.user.firstName} ${driver.user.lastName}`,
           truckNumber: driver.primaryTruck?.truckNumber || null,
           truckId: driver.primaryTruck?.id || null,
+          truckMake: driver.primaryTruck?.make || null,
+          truckModel: driver.primaryTruck?.model || null,
           latitude: driver.lastKnownLatitude,
           longitude: driver.lastKnownLongitude,
           lastUpdate: driver.lastLocationUpdate,
@@ -344,6 +358,7 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
       console.error("Error fetching map data:", error);
       setLoading(false);
     } finally {
+      fetchInFlightRef.current = false;
       setRefreshing(false);
     }
   };
@@ -492,13 +507,7 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
   };
 
   const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      ASSIGNED: "Dodijeljen",
-      PICKED_UP: "Preuzet",
-      IN_TRANSIT: "U transportu",
-      DELIVERED: "Isporučen",
-    };
-    return labels[status] || status;
+    return getMappedLoadStatusLabel(status);
   };
 
   const getStatusColor = (status: string) => {
@@ -549,6 +558,17 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
   };
 
   const center = calculateCenter();
+
+  const openReplayWindow = (driverId: string, hours: number) => {
+    const end = new Date();
+    const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
+    const params = new URLSearchParams({
+      start: start.toISOString(),
+      end: end.toISOString(),
+      limit: "2000",
+    });
+    router.push(`/drivers/${driverId}/replay?${params.toString()}`);
+  };
 
   return (
     <div className="h-full w-full relative">
@@ -796,12 +816,54 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                   <div className="flex-1">
                     <p className="text-base font-bold">{driver.driverName}</p>
                     <p className="text-xs text-dark-200">
-                      {driver.truckNumber ? `Kamion ${driver.truckNumber}` : "Bez dodijeljenog kamiona"}
+                      {driver.truckNumber
+                        ? `Kamion ${driver.truckNumber}${driver.truckMake ? ` • ${driver.truckMake} ${driver.truckModel || ""}` : ""}`
+                        : "Bez dodijeljenog kamiona"}
                     </p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide ${driverActive ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/40' : 'bg-electric-500/15 text-electric-100 border border-electric-500/40'}`}>
                     {driverActive ? 'Aktivan' : 'Dostupan'}
                   </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-3 mb-3 border-b border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/drivers/${driver.driverId}`)}
+                    className="px-3 py-2 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
+                  >
+                    Detalji vozača
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (driver.truckId) {
+                        router.push(`/trucks/${driver.truckId}`);
+                      }
+                    }}
+                    disabled={!driver.truckId}
+                    className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+                  >
+                    Detalji kamiona
+                  </button>
+                </div>
+
+                <div className="pb-3 mb-3 border-b border-white/10">
+                  <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide mb-2">
+                    Brzi replay
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[1, 3, 6].map((hours) => (
+                      <button
+                        key={hours}
+                        type="button"
+                        onClick={() => openReplayWindow(driver.driverId, hours)}
+                        className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
+                      >
+                        {hours}h
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Current Loads */}
@@ -847,7 +909,7 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                             <div>
                               <p className="text-sm font-semibold text-white">{load.loadNumber}</p>
                               <p className="text-xs text-dark-200">{load.pickupCity} → {load.deliveryCity}</p>
-                              <p className="text-[11px] text-dark-300 mt-0.5">Status: {load.status}</p>
+                              <p className="text-[11px] text-dark-300 mt-0.5">Status: {getStatusLabel(load.status)}</p>
                               {hasGPS && !isSelectedLoad && (
                                 <p className="text-[11px] text-primary-200 mt-1 font-semibold">Klikni za prikaz rute</p>
                               )}

@@ -17,6 +17,12 @@ import {
   BarChart3,
 } from "lucide-react";
 import { TruckPerformance } from "@/components/performance";
+import {
+  getLoadStatusLabel,
+  getTrailerTypeLabel,
+  getTollPermitStatusLabel,
+  getTollPermitTypeLabel,
+} from "@/lib/ui-labels";
 
 type TollPermit = {
   id: string;
@@ -51,6 +57,17 @@ type TruckDetail = {
     id: string;
     user: { firstName: string; lastName: string };
   } | null;
+  trailers: {
+    id: string;
+    trailerNumber: string;
+    type: string;
+    make?: string | null;
+    model?: string | null;
+    licensePlate?: string | null;
+    lengthMeters?: number | null;
+    capacityM3?: number | null;
+    compartmentCount?: number | null;
+  }[];
   tollPermits: TollPermit[];
 };
 
@@ -85,6 +102,16 @@ type DriverOption = {
   user: { firstName: string; lastName: string };
   status: string;
   primaryTruck?: { id: string; truckNumber: string } | null;
+};
+
+type TrailerOption = {
+  id: string;
+  trailerNumber: string;
+  type: string;
+  make?: string | null;
+  model?: string | null;
+  licensePlate?: string | null;
+  currentTruck?: { id: string; truckNumber: string } | null;
 };
 
 const permitTypes = [
@@ -142,6 +169,11 @@ export default function TruckDetailPage() {
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignError, setAssignError] = useState("");
   const [assignSuccess, setAssignSuccess] = useState("");
+  const [availableTrailers, setAvailableTrailers] = useState<TrailerOption[]>([]);
+  const [selectedTrailerId, setSelectedTrailerId] = useState("");
+  const [trailerAssignLoading, setTrailerAssignLoading] = useState(false);
+  const [trailerAssignError, setTrailerAssignError] = useState("");
+  const [trailerAssignSuccess, setTrailerAssignSuccess] = useState("");
 
   useEffect(() => {
     fetchTruck();
@@ -149,6 +181,10 @@ export default function TruckDetailPage() {
 
   useEffect(() => {
     fetchDrivers();
+  }, [truckId]);
+
+  useEffect(() => {
+    fetchTrailers();
   }, [truckId]);
 
   useEffect(() => {
@@ -193,6 +229,22 @@ export default function TruckDetailPage() {
       setDriverOptions(data.drivers || []);
     } catch (err: any) {
       setAssignError(err.message || "Greška pri učitavanju vozača");
+    }
+  };
+
+  const fetchTrailers = async () => {
+    try {
+      const res = await fetch("/api/trailers");
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri učitavanju prikolica");
+      }
+      const trailers = (data.trailers || []) as TrailerOption[];
+      setAvailableTrailers(
+        trailers.filter((trailer) => !trailer.currentTruck || trailer.currentTruck.id === truckId)
+      );
+    } catch (err: any) {
+      setTrailerAssignError(err.message || "Greška pri učitavanju prikolica");
     }
   };
 
@@ -242,6 +294,59 @@ export default function TruckDetailPage() {
       setAssignError(err.message || "Greška pri dodjeli vozača");
     } finally {
       setAssignLoading(false);
+    }
+  };
+
+  const handleAttachTrailer = async () => {
+    if (!truck || !selectedTrailerId) return;
+
+    try {
+      setTrailerAssignLoading(true);
+      setTrailerAssignError("");
+      setTrailerAssignSuccess("");
+
+      const res = await fetch(`/api/trailers/${selectedTrailerId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentTruckId: truck.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri povezivanju prikolice");
+      }
+
+      setSelectedTrailerId("");
+      await Promise.all([fetchTruck(), fetchTrailers()]);
+      setTrailerAssignSuccess("Prikolica je povezana sa kamionom.");
+    } catch (err: any) {
+      setTrailerAssignError(err.message || "Greška pri povezivanju prikolice");
+    } finally {
+      setTrailerAssignLoading(false);
+    }
+  };
+
+  const handleDetachTrailer = async (trailerId: string) => {
+    try {
+      setTrailerAssignLoading(true);
+      setTrailerAssignError("");
+      setTrailerAssignSuccess("");
+
+      const res = await fetch(`/api/trailers/${trailerId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentTruckId: "" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri uklanjanju prikolice");
+      }
+
+      await Promise.all([fetchTruck(), fetchTrailers()]);
+      setTrailerAssignSuccess("Prikolica je odvojena od kamiona.");
+    } catch (err: any) {
+      setTrailerAssignError(err.message || "Greška pri uklanjanju prikolice");
+    } finally {
+      setTrailerAssignLoading(false);
     }
   };
 
@@ -348,12 +453,12 @@ export default function TruckDetailPage() {
   const statusOptions = useMemo(
     () => [
       { value: "", label: "Svi statusi" },
-      { value: "ASSIGNED", label: "ASSIGNED" },
-      { value: "PICKED_UP", label: "PICKED_UP" },
-      { value: "IN_TRANSIT", label: "IN_TRANSIT" },
-      { value: "DELIVERED", label: "DELIVERED" },
-      { value: "COMPLETED", label: "COMPLETED" },
-      { value: "CANCELLED", label: "CANCELLED" },
+      { value: "ASSIGNED", label: "Dodijeljen" },
+      { value: "PICKED_UP", label: "Preuzet" },
+      { value: "IN_TRANSIT", label: "U transportu" },
+      { value: "DELIVERED", label: "Isporučen" },
+      { value: "COMPLETED", label: "Završen" },
+      { value: "CANCELLED", label: "Otkazan" },
     ],
     []
   );
@@ -361,7 +466,10 @@ export default function TruckDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center text-dark-500">Učitavanje...</div>
+        <div className="text-center">
+          <TruckIcon className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-pulse" />
+          <p className="text-slate-500">Učitavanje...</p>
+        </div>
       </div>
     );
   }
@@ -369,7 +477,9 @@ export default function TruckDetailPage() {
   if (error || !truck) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center text-red-600">{error || "Kamion nije pronađen"}</div>
+        <div className="rounded-2xl bg-red-50 border border-red-200 p-6 max-w-md mx-auto">
+          <p className="text-sm text-red-700 font-medium">{error || "Kamion nije pronađen"}</p>
+        </div>
       </div>
     );
   }
@@ -389,34 +499,34 @@ export default function TruckDetailPage() {
       />
 
       {/* Tabs */}
-      <div className="bg-white rounded-2xl shadow-soft px-4">
-        <nav className="flex gap-8">
+      <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-lg border border-slate-100 overflow-hidden">
+        <nav className="flex gap-1 p-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
               activeTab === "overview"
-                ? "border-primary-500 text-primary-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
             Pregled
           </button>
           <button
             onClick={() => setActiveTab("history")}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
               activeTab === "history"
-                ? "border-primary-500 text-primary-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
             Historija vožnji
           </button>
           <button
             onClick={() => setActiveTab("performance")}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
               activeTab === "performance"
-                ? "border-primary-500 text-primary-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
             Performanse
@@ -427,128 +537,126 @@ export default function TruckDetailPage() {
       {activeTab === "overview" && (
         <>
           {/* Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Ukupno km (30 dana)</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {summaryLoading ? "..." : summary ? summary.totalMiles.toLocaleString() : "-"}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <TrendingUp className="w-5 h-5 text-blue-600" />
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Ukupno km (30 dana)</p>
+                  <p className="text-2xl md:text-3xl font-bold text-slate-900">
+                    {summaryLoading ? "..." : summary ? summary.totalMiles.toLocaleString() : "-"}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Prihod (30 dana)</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {summaryLoading ? "..." : summary ? formatCurrency(summary.revenueGenerated) : "-"}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-emerald-100 rounded-lg">
-                    <DollarSign className="w-5 h-5 text-emerald-600" />
-                  </div>
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-slate-600" />
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Loadovi (30 dana)</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {summaryLoading ? "..." : summary ? summary.loadsCompleted : "-"}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <BarChart3 className="w-5 h-5 text-purple-600" />
-                  </div>
+              </div>
+            </div>
+            <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Prihod (30 dana)</p>
+                  <p className="text-2xl md:text-3xl font-bold text-slate-900">
+                    {summaryLoading ? "..." : summary ? formatCurrency(summary.revenueGenerated) : "-"}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Trošak/km (30 dana)</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {summaryLoading ? "..." : summary ? formatCurrency(summary.totalCostPerMile) : "-"}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <Shield className="w-5 h-5 text-orange-600" />
-                  </div>
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-slate-600" />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+            <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Loadovi (30 dana)</p>
+                  <p className="text-2xl md:text-3xl font-bold text-slate-900">
+                    {summaryLoading ? "..." : summary ? summary.loadsCompleted : "-"}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-slate-600" />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Trošak/km (30 dana)</p>
+                  <p className="text-2xl md:text-3xl font-bold text-slate-900">
+                    {summaryLoading ? "..." : summary ? formatCurrency(summary.totalCostPerMile) : "-"}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <Shield className="w-6 h-6 text-slate-600" />
+                </div>
+              </div>
+            </div>
           </div>
-          {summaryError && <div className="text-sm text-red-600">{summaryError}</div>}
+          {summaryError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+              <p className="text-sm text-red-700 font-medium">{summaryError}</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Osnovni podaci</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Basic Info Card */}
+            <div className="lg:col-span-2 rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900">Osnovni podaci</h3>
+              </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <p className="text-xs text-dark-500">Broj kamiona</p>
-                  <p className="font-semibold text-dark-900">{truck.truckNumber}</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Broj kamiona</p>
+                  <p className="font-semibold text-slate-900">{truck.truckNumber}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-dark-500">Registracija</p>
-                  <p className="font-semibold text-dark-900">{truck.licensePlate}</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Registracija</p>
+                  <p className="font-semibold text-slate-900">{truck.licensePlate}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-dark-500">Model</p>
-                  <p className="font-semibold text-dark-900">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Model</p>
+                  <p className="font-semibold text-slate-900">
                     {truck.make} {truck.model} ({truck.year})
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-dark-500">Kilometraža</p>
-                  <p className="font-semibold text-dark-900">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Kilometraža</p>
+                  <p className="font-semibold text-slate-900">
                     {truck.currentMileage.toLocaleString()} km
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Vozači</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            {/* Drivers Card */}
+            <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900">Vozači</h3>
+              </div>
+              <div className="p-6 space-y-4">
                 <div>
-                  <p className="text-xs text-dark-500">Primarni</p>
-                  <p className="font-semibold text-dark-900">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Primarni</p>
+                  <p className="font-semibold text-slate-900">
                     {truck.primaryDriver
                       ? `${truck.primaryDriver.user.firstName} ${truck.primaryDriver.user.lastName}`
                       : "-"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-dark-500">Backup</p>
-                  <p className="font-semibold text-dark-900">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Backup</p>
+                  <p className="font-semibold text-slate-900">
                     {truck.backupDriver
                       ? `${truck.backupDriver.user.firstName} ${truck.backupDriver.user.lastName}`
                       : "-"}
                   </p>
                 </div>
 
-                <div className="pt-2 border-t border-dark-100">
-                  <p className="text-xs text-dark-500 mb-2">Brza dodjela</p>
-                  <div className="space-y-2">
+                <div className="pt-4 border-t border-slate-100">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Brza dodjela</p>
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-xs text-dark-500 mb-1">Primarni</label>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Primarni</label>
                       <select
-                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                         value={primaryDriverId}
                         onChange={(e) => setPrimaryDriverId(e.target.value)}
                       >
@@ -561,9 +669,9 @@ export default function TruckDetailPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-dark-500 mb-1">Backup</label>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Backup</label>
                       <select
-                        className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                         value={backupDriverId}
                         onChange={(e) => setBackupDriverId(e.target.value)}
                       >
@@ -575,36 +683,140 @@ export default function TruckDetailPage() {
                         ))}
                       </select>
                     </div>
-                    <Button
-                      className="w-full"
+                    <button
+                      className="w-full px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
                       onClick={handleAssignDrivers}
                       disabled={assignLoading}
                     >
-                      {assignLoading ? "Spremam..." : "Spasi dodjelu"}
-                    </Button>
-                    {assignError && <p className="text-xs text-red-600">{assignError}</p>}
+                      {assignLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Spremam...
+                        </span>
+                      ) : (
+                        "Spasi dodjelu"
+                      )}
+                    </button>
+                    {assignError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <p className="text-xs text-red-700 font-medium">{assignError}</p>
+                      </div>
+                    )}
                     {assignSuccess && (
-                      <p className="text-xs text-emerald-600">{assignSuccess}</p>
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                        <p className="text-xs text-emerald-700 font-medium">{assignSuccess}</p>
+                      </div>
                     )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                EU putarine i dozvole
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900">Povezane prikolice</h3>
+            </div>
+            <div className="p-6 md:p-8 space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-4 items-end">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Dodijeli postojeću prikolicu
+                  </label>
+                  <select
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
+                    value={selectedTrailerId}
+                    onChange={(e) => setSelectedTrailerId(e.target.value)}
+                  >
+                    <option value="">Odaberi prikolicu</option>
+                    {availableTrailers
+                      .filter((trailerOption) => !trailerOption.currentTruck)
+                      .map((trailerOption) => (
+                        <option key={trailerOption.id} value={trailerOption.id}>
+                          {trailerOption.trailerNumber} • {getTrailerTypeLabel(trailerOption.type)}
+                          {trailerOption.licensePlate ? ` • ${trailerOption.licensePlate}` : ""}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <button
+                  className="px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                  onClick={handleAttachTrailer}
+                  disabled={trailerAssignLoading || !selectedTrailerId}
+                >
+                  {trailerAssignLoading ? "Spremam..." : "Poveži prikolicu"}
+                </button>
+              </div>
+
+              {trailerAssignError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                  <p className="text-xs text-red-700 font-medium">{trailerAssignError}</p>
+                </div>
+              )}
+              {trailerAssignSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <p className="text-xs text-emerald-700 font-medium">{trailerAssignSuccess}</p>
+                </div>
+              )}
+
+              {truck.trailers.length === 0 ? (
+                <div className="p-6 rounded-2xl bg-slate-50/50 border border-slate-100 text-center">
+                  <p className="text-sm text-slate-600">Nema povezanih prikolica.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {truck.trailers.map((trailer) => (
+                    <div
+                      key={trailer.id}
+                      className="rounded-2xl border border-slate-200 bg-white px-5 py-4 flex items-center justify-between gap-4 hover:border-slate-300 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{trailer.trailerNumber}</p>
+                        <p className="text-xs text-slate-600 mt-1">
+                          {getTrailerTypeLabel(trailer.type)}
+                          {trailer.licensePlate ? ` • ${trailer.licensePlate}` : ""}
+                          {trailer.make ? ` • ${trailer.make} ${trailer.model || ""}` : ""}
+                        </p>
+                        {(trailer.lengthMeters || trailer.capacityM3 || trailer.compartmentCount) && (
+                          <p className="text-xs text-slate-500 mt-1">
+                            {trailer.lengthMeters ? `${trailer.lengthMeters} m` : ""}
+                            {trailer.capacityM3 ? `${trailer.lengthMeters ? " • " : ""}${trailer.capacityM3} m³` : ""}
+                            {trailer.compartmentCount
+                              ? `${trailer.lengthMeters || trailer.capacityM3 ? " • " : ""}${trailer.compartmentCount} komp.`
+                              : ""}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDetachTrailer(trailer.id)}
+                        className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        disabled={trailerAssignLoading}
+                      >
+                        Odvoji
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* EU Putarine i dozvole */}
+          <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-slate-600" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">EU putarine i dozvole</h3>
+              </div>
+            </div>
+            <div className="p-6 md:p-8 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Država (ISO)</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Država (ISO)</label>
                   <input
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.countryCode}
                     onChange={(e) =>
                       setForm((p) => ({ ...p, countryCode: e.target.value.toUpperCase() }))
@@ -613,18 +825,18 @@ export default function TruckDetailPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Naziv države</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Naziv države</label>
                   <input
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.countryName}
                     onChange={(e) => setForm((p) => ({ ...p, countryName: e.target.value }))}
                     placeholder="Austrija"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Tip</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tip</label>
                   <select
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.type}
                     onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
                   >
@@ -636,9 +848,9 @@ export default function TruckDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Status</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Status</label>
                   <select
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.status}
                     onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
                   >
@@ -650,43 +862,43 @@ export default function TruckDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Provider</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Provider</label>
                   <input
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.provider}
                     onChange={(e) => setForm((p) => ({ ...p, provider: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Referenca</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Referenca</label>
                   <input
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.referenceNo}
                     onChange={(e) => setForm((p) => ({ ...p, referenceNo: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Važi od</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Važi od</label>
                   <input
                     type="date"
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.validFrom}
                     onChange={(e) => setForm((p) => ({ ...p, validFrom: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-dark-500 mb-1">Važi do</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Važi do</label>
                   <input
                     type="date"
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     value={form.validTo}
                     onChange={(e) => setForm((p) => ({ ...p, validTo: e.target.value }))}
                   />
                 </div>
                 <div className="md:col-span-4">
-                  <label className="block text-xs text-dark-500 mb-1">Napomena</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Napomena</label>
                   <textarea
-                    className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                     rows={2}
                     value={form.notes}
                     onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
@@ -694,34 +906,47 @@ export default function TruckDetailPage() {
                 </div>
               </div>
               <div>
-                <Button onClick={handleSubmit} disabled={saving}>
-                  {saving ? "Spremanje..." : "Dodaj zapis"}
-                </Button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={saving}
+                  className="px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+                >
+                  {saving ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Spremanje...
+                    </span>
+                  ) : (
+                    "Dodaj zapis"
+                  )}
+                </button>
               </div>
 
               <div className="space-y-3">
                 {truck.tollPermits.length === 0 ? (
-                  <p className="text-sm text-dark-500">Nema unesenih putarina/dozvola.</p>
+                  <div className="p-6 rounded-2xl bg-slate-50/50 border border-slate-100 text-center">
+                    <p className="text-sm text-slate-600">Nema unesenih putarina/dozvola.</p>
+                  </div>
                 ) : (
                   truck.tollPermits.map((p) => (
                     <div
                       key={p.id}
-                      className="rounded-xl border border-dark-200 bg-white px-4 py-3 flex items-center justify-between"
+                      className="rounded-2xl border border-slate-200 bg-white px-5 py-4 flex items-center justify-between hover:border-slate-300 transition-colors"
                     >
-                      <div>
-                        <p className="text-sm font-semibold text-dark-900">
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">
                           {p.countryCode} {p.countryName ? `• ${p.countryName}` : ""}
                         </p>
-                        <p className="text-xs text-dark-600">
-                          {p.type} • {p.status} • {formatDate(p.validFrom)} - {formatDate(p.validTo)}
+                        <p className="text-xs text-slate-600 mt-1">
+                          {getTollPermitTypeLabel(p.type)} • {getTollPermitStatusLabel(p.status)} • {formatDate(p.validFrom)} - {formatDate(p.validTo)}
                         </p>
                         {p.referenceNo && (
-                          <p className="text-xs text-dark-500">Ref: {p.referenceNo}</p>
+                          <p className="text-xs text-slate-500 mt-1">Ref: {p.referenceNo}</p>
                         )}
                       </div>
                       <button
                         onClick={() => handleDelete(p.id)}
-                        className="p-2 text-red-600 hover:text-red-700"
+                        className="flex-shrink-0 p-2 rounded-xl text-red-600 hover:bg-red-50 transition-colors"
                         title="Obriši"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -730,26 +955,31 @@ export default function TruckDetailPage() {
                   ))
                 )}
               </div>
-              <div className="flex items-center gap-2 text-xs text-dark-500">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                Statusi i datumi se unose ručno. Auto‑upozorenja ćemo dodati u narednoj fazi.
+              <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 font-medium">
+                    Statusi i datumi se unose ručno. Auto‑upozorenja ćemo dodati u narednoj fazi.
+                  </p>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </>
       )}
 
       {activeTab === "history" && (
-        <Card className="rounded-[2rem] shadow-soft border-none overflow-hidden bg-white">
-          <CardHeader className="bg-dark-50/70 border-b border-dark-50">
-            <CardTitle>Historija vožnji</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900">Historija vožnji</h3>
+          </div>
+          <div className="p-6 md:p-8 space-y-6">
+            {/* Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Status</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Status</label>
                 <select
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   value={historyFilters.status}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, status: e.target.value }))
@@ -763,10 +993,10 @@ export default function TruckDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Od</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Od</label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   value={historyFilters.from}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, from: e.target.value }))
@@ -774,10 +1004,10 @@ export default function TruckDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Do</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Do</label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   value={historyFilters.to}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, to: e.target.value }))
@@ -785,9 +1015,9 @@ export default function TruckDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Load #</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Load #</label>
                 <input
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   placeholder="Unesi broj"
                   value={historyFilters.loadNumber}
                   onChange={(e) =>
@@ -797,45 +1027,53 @@ export default function TruckDetailPage() {
               </div>
             </div>
 
-            {historyError && <div className="text-sm text-red-600">{historyError}</div>}
+            {historyError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+                <p className="text-sm text-red-700 font-medium">{historyError}</p>
+              </div>
+            )}
 
             {historyLoading ? (
-              <div className="text-sm text-dark-500">Učitavanje...</div>
+              <div className="p-6 text-center">
+                <p className="text-sm text-slate-500">Učitavanje...</p>
+              </div>
             ) : historyLoads.length === 0 ? (
-              <div className="text-sm text-dark-500">Nema loadova za odabrane filtere.</div>
+              <div className="p-6 rounded-2xl bg-slate-50/50 border border-slate-100 text-center">
+                <p className="text-sm text-slate-600">Nema loadova za odabrane filtere.</p>
+              </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200 text-left text-dark-600">
-                      <th className="py-2 pr-3">Load #</th>
-                      <th className="py-2 pr-3">Status</th>
-                      <th className="py-2 pr-3">Pickup</th>
-                      <th className="py-2 pr-3">Delivery</th>
-                      <th className="py-2 pr-3 text-right">Km</th>
-                      <th className="py-2 pr-3 text-right">Cijena</th>
-                      <th className="py-2 pr-3">Vozač</th>
+                    <tr className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-200">
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-left">Load #</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-left">Status</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-left">Pickup</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-left">Delivery</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Km</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Cijena</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-left">Vozač</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="bg-white divide-y divide-slate-100">
                     {historyLoads.map((load) => (
-                      <tr key={load.id} className="border-b border-gray-100">
-                        <td className="py-2 pr-3">
+                      <tr key={load.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4">
                           <button
-                            className="text-primary-600 hover:underline"
+                            className="text-slate-900 hover:text-slate-600 font-semibold hover:underline"
                             onClick={() => router.push(`/loads/${load.id}`)}
                           >
                             {load.loadNumber}
                           </button>
                         </td>
-                        <td className="py-2 pr-3">{load.status}</td>
-                        <td className="py-2 pr-3">{formatDate(load.scheduledPickupDate)}</td>
-                        <td className="py-2 pr-3">{formatDate(load.scheduledDeliveryDate)}</td>
-                        <td className="py-2 pr-3 text-right">
+                        <td className="px-6 py-4 text-slate-700">{getLoadStatusLabel(load.status)}</td>
+                        <td className="px-6 py-4 text-slate-700">{formatDate(load.scheduledPickupDate)}</td>
+                        <td className="px-6 py-4 text-slate-700">{formatDate(load.scheduledDeliveryDate)}</td>
+                        <td className="px-6 py-4 text-right text-slate-700">
                           {load.distance ? load.distance.toLocaleString() : "-"}
                         </td>
-                        <td className="py-2 pr-3 text-right">{formatCurrency(load.loadRate)}</td>
-                        <td className="py-2 pr-3">
+                        <td className="px-6 py-4 text-right font-semibold text-slate-900">{formatCurrency(load.loadRate)}</td>
+                        <td className="px-6 py-4 text-slate-700">
                           {load.driver
                             ? `${load.driver.user.firstName} ${load.driver.user.lastName}`
                             : "-"}
@@ -848,36 +1086,34 @@ export default function TruckDetailPage() {
             )}
 
             {historyPagination && historyPagination.totalPages > 1 && (
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-dark-500">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4">
+                <p className="text-xs text-slate-600 font-medium">
                   Stranica {historyPagination.page} od {historyPagination.totalPages}
                 </p>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
                     disabled={historyPagination.page <= 1 || historyLoading}
+                    className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm text-sm"
                   >
                     Prethodna
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  </button>
+                  <button
                     onClick={() =>
                       setHistoryPage((p) =>
                         historyPagination ? Math.min(historyPagination.totalPages, p + 1) : p + 1
                       )
                     }
                     disabled={historyPagination.page >= historyPagination.totalPages || historyLoading}
+                    className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm text-sm"
                   >
                     Sljedeća
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {activeTab === "performance" && <TruckPerformance truckId={truckId} />}

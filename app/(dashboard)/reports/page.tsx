@@ -25,7 +25,7 @@ export default function ReportsPage() {
   const reportTypes = [
     {
       id: "custom" as ReportType,
-      name: "Custom Report Builder",
+      name: "Kreator prilagođenih izvještaja",
       description: "Sastavi vlastiti izvještaj po vozaču, kamionu ili mjesecu.",
       icon: FileText,
       color: "teal",

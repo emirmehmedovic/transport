@@ -120,23 +120,23 @@ export default function TrucksComparePage() {
     if (comparisons.length === 0) return;
 
     const headers = [
-      "Truck Number",
-      "Truck Name",
+      "Broj kamiona",
+      "Naziv kamiona",
       "Status",
       "Total km",
-      "Revenue Generated",
-      "Loads Completed",
+      "Ostvareni prihod",
+      "Završeni nalozi",
       "Trošak/km",
       "Gorivo/km",
       "Održavanje/km",
-      "Uptime %",
-      "Active Days",
+      "Dostupnost %",
+      "Aktivni dani",
     ];
 
     const rows = comparisons.map((c) => [
       c.truckNumber,
       c.truckName,
-      c.isActive ? "Active" : "Inactive",
+      c.isActive ? "Aktivan" : "Neaktivan",
       c.performance.totalMiles,
       c.performance.revenueGenerated.toFixed(2),
       c.performance.loadsCompleted,

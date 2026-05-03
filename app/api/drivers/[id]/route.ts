@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { driverSchema } from "@/lib/validation/driver";
 
 // GET /api/drivers/[id] - Detalji pojedinačnog vozača
@@ -9,16 +9,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -47,6 +38,16 @@ export async function GET(
             model: true,
             year: true,
             isActive: true,
+            trailers: {
+              select: {
+                id: true,
+                trailerNumber: true,
+                type: true,
+              },
+              orderBy: {
+                trailerNumber: "asc",
+              },
+            },
           },
         },
         loads: {
@@ -110,16 +111,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (
       !decoded ||
       !decoded.userId ||
@@ -281,16 +273,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Samo administratori mogu brisati vozače" },

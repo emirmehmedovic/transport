@@ -39,6 +39,8 @@ import {
 } from "lucide-react";
 import { LoadTimeline } from "@/components/loads/load-timeline";
 import { LoadStatusBadge } from "@/components/loads/LoadStatusBadge";
+import AuditTimelineCard from "@/components/audit/AuditTimelineCard";
+import ETADisplay from "@/components/loads/ETADisplay";
 import { formatDateDMY, formatDateTimeDMY } from "@/lib/date";
 
 // Dynamic import for DriverLoadMap (client-side only)
@@ -135,6 +137,11 @@ interface LoadDetail {
   detentionPay: number;
   notes: string | null;
   specialInstructions: string | null;
+  checklist?: Record<string, boolean> | null;
+  delayReason?: string | null;
+  pickupExceptionReason?: string | null;
+  deliveryExceptionReason?: string | null;
+  proofOfDeliveryUploaded?: boolean;
   actualPickupDate?: string | null;
   actualDeliveryDate?: string | null;
   pickupLatitude?: number | null;
@@ -520,13 +527,13 @@ export default function LoadDetailPage() {
 
   // Document type options for dropdown
   const documentTypeOptions = [
-    { value: "POD", label: "Potvrda dostave", description: "Proof of Delivery" },
-    { value: "BOL", label: "Tovarni list", description: "Bill of Lading" },
-    { value: "LOAD_PHOTO", label: "Fotografija", description: "Slika loada" },
-    { value: "DAMAGE_REPORT", label: "Izvještaj o oštećenju", description: "Damage Report" },
-    { value: "RATE_CONFIRMATION", label: "Potvrda cijene", description: "Rate Confirmation" },
-    { value: "FUEL_RECEIPT", label: "Račun za gorivo", description: "Fuel Receipt" },
-    { value: "OTHER", label: "Ostalo", description: "Other Documents" },
+    { value: "POD", label: "Potvrda dostave", description: "Dokaz o dostavi" },
+    { value: "BOL", label: "Tovarni list", description: "Prateći transportni dokument" },
+    { value: "LOAD_PHOTO", label: "Fotografija", description: "Fotografija transportnog naloga" },
+    { value: "DAMAGE_REPORT", label: "Izvještaj o oštećenju", description: "Prijava oštećenja" },
+    { value: "RATE_CONFIRMATION", label: "Potvrda cijene", description: "Potvrda ugovorene cijene" },
+    { value: "FUEL_RECEIPT", label: "Račun za gorivo", description: "Potvrda o kupovini goriva" },
+    { value: "OTHER", label: "Ostalo", description: "Drugi dokumenti" },
   ];
 
   if (loading) {
@@ -554,7 +561,9 @@ export default function LoadDetailPage() {
 
   const canMarkPickedUp = load.status === "ASSIGNED";
   const canMarkDelivered = load.status === "IN_TRANSIT";
-  const canMarkCompleted = load.status === "DELIVERED";
+  const canMarkCompleted = load.status === "DELIVERED" && load.proofOfDeliveryUploaded;
+  const missingPodForCompletion =
+    load.status === "DELIVERED" && !load.proofOfDeliveryUploaded;
 
   const updated = searchParams.get("updated");
   const assigned = searchParams.get("assigned");
@@ -599,6 +608,12 @@ export default function LoadDetailPage() {
           Load je uspješno dodijeljen vozaču i kamionu.
         </div>
       )}
+      {missingPodForCompletion && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Load je isporučen, ali ne može biti označen kao završen dok se ne uploaduje
+          `POD` dokument u tabu Dokumenti.
+        </div>
+      )}
       <PageHeader
         icon={Package}
         title={load.routeName || load.loadNumber}
@@ -617,7 +632,7 @@ export default function LoadDetailPage() {
                 onClick={() => updateStatus("PICKED_UP")}
                 className="rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
               >
-                Mark as Picked Up
+                Označi kao preuzet
               </Button>
             )}
             {canMarkDelivered && (
@@ -628,7 +643,7 @@ export default function LoadDetailPage() {
                 onClick={() => updateStatus("DELIVERED")}
                 className="rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
               >
-                Mark as Delivered
+                Označi kao isporučen
               </Button>
             )}
             {canMarkCompleted && (
@@ -639,7 +654,17 @@ export default function LoadDetailPage() {
                 onClick={() => updateStatus("COMPLETED")}
                 className="rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10"
               >
-                Mark as Completed
+                Označi kao završen
+              </Button>
+            )}
+            {missingPodForCompletion && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveTab("documents")}
+                className="rounded-full border-amber-200 bg-amber-100 text-amber-900 hover:bg-amber-200"
+              >
+                Upload POD za završetak
               </Button>
             )}
             {!isDriver && (
@@ -864,6 +889,14 @@ export default function LoadDetailPage() {
             </Card>
           </div>
 
+          {load.driver && (
+            <ETADisplay
+              loadId={load.id}
+              scheduledPickupDate={load.scheduledPickupDate}
+              scheduledDeliveryDate={load.scheduledDeliveryDate}
+            />
+          )}
+
           {/* Preuzimanje & Dostava */}
           <Card>
             <CardHeader>
@@ -911,6 +944,63 @@ export default function LoadDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Driver checklist</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {[
+                    ["pickupContacted", "Kontaktiran pickup"],
+                    ["cargoSecured", "Teret preuzet / osiguran"],
+                    ["deliveryContacted", "Kontaktirana dostava"],
+                    ["podUploaded", "POD uploadovan"],
+                  ].map(([key, label]) => (
+                    <div
+                      key={key}
+                      className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+                        load.checklist?.[key]
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          : "border-dark-200 bg-white text-dark-500"
+                      }`}
+                    >
+                      {load.checklist?.[key] ? "✓ " : ""}{label}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Razlozi izuzetaka</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <p className="text-dark-500 mb-1">Razlog kašnjenja</p>
+                    <p className="font-medium text-dark-900">
+                      {load.delayReason || "Nije evidentirano"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-dark-500 mb-1">Razlog neuspješnog pickup-a</p>
+                    <p className="font-medium text-dark-900">
+                      {load.pickupExceptionReason || "Nije evidentirano"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-dark-500 mb-1">Razlog neuspješne dostave</p>
+                    <p className="font-medium text-dark-900">
+                      {load.deliveryExceptionReason || "Nije evidentirano"}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Destination Map */}
           <Card>
@@ -1246,6 +1336,14 @@ export default function LoadDetailPage() {
                 actualDeliveryDate={(load as any).actualDeliveryDate}
               />
             </div>
+
+            {user?.role === "ADMIN" && (
+              <AuditTimelineCard
+                entity="LOAD"
+                entityId={load.id}
+                title="Audit vremenska linija loada"
+              />
+            )}
           </CardContent>
         </Card>
       )}

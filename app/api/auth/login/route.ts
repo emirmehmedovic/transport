@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       email: user.email,
       role: user.role,
       driverId: user.driver?.id || null,
+      tokenVersion: user.refreshTokenVersion,
     };
 
     const token = generateToken(tokenPayload);

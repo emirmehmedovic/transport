@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
 import { syncNTSGPSData } from '@/lib/nts-gps-sync';
 
 /**
@@ -10,12 +10,7 @@ import { syncNTSGPSData } from '@/lib/nts-gps-sync';
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded || decoded.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 });
     }
@@ -45,12 +40,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }

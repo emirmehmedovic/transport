@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 
 // GET /api/trailers/[id]
 export async function GET(
@@ -8,12 +9,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
@@ -44,12 +40,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
@@ -62,6 +53,10 @@ export async function PUT(
       model,
       year,
       licensePlate,
+      type,
+      lengthMeters,
+      capacityM3,
+      compartmentCount,
       registrationExpiry,
       insuranceExpiry,
       isActive,
@@ -78,16 +73,55 @@ export async function PUT(
         model: model ?? undefined,
         year: year ? parseInt(year) : undefined,
         licensePlate: licensePlate ?? undefined,
+        type: type ?? undefined,
+        lengthMeters:
+          lengthMeters === "" || lengthMeters === null
+            ? null
+            : lengthMeters !== undefined
+            ? Number(lengthMeters)
+            : undefined,
+        capacityM3:
+          capacityM3 === "" || capacityM3 === null
+            ? null
+            : capacityM3 !== undefined
+            ? Number(capacityM3)
+            : undefined,
+        compartmentCount:
+          compartmentCount === "" || compartmentCount === null
+            ? null
+            : compartmentCount !== undefined
+            ? parseInt(compartmentCount, 10)
+            : undefined,
         registrationExpiry: registrationExpiry ? new Date(registrationExpiry) : undefined,
         insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : undefined,
         isActive: isActive !== undefined ? Boolean(isActive) : undefined,
         currentMileage: currentMileage ? parseInt(currentMileage) : undefined,
-        currentTruckId: currentTruckId ?? undefined,
+        currentTruckId:
+          currentTruckId === ""
+            ? null
+            : currentTruckId !== undefined
+            ? currentTruckId
+            : undefined,
       },
     });
 
     return NextResponse.json({ trailer });
   } catch (error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const target = Array.isArray(error.meta?.target) ? error.meta?.target.join(",") : "";
+      if (target.includes("trailerNumber")) {
+        return NextResponse.json(
+          { error: "Prikolica sa ovim brojem već postoji" },
+          { status: 400 }
+        );
+      }
+      if (target.includes("vin")) {
+        return NextResponse.json(
+          { error: "Prikolica sa ovim VIN brojem već postoji" },
+          { status: 400 }
+        );
+      }
+    }
     console.error("Trailer update error:", error);
     return NextResponse.json({ error: "Greška pri ažuriranju prikolice" }, { status: 500 });
   }
@@ -99,12 +133,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }

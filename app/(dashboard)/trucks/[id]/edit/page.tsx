@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Truck as TruckIcon } from "lucide-react";
 
 interface Truck {
   id: string;
@@ -152,10 +152,8 @@ export default function EditTruckPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="mb-4 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
-          </div>
-          <p className="text-dark-500">Učitavanje...</p>
+          <TruckIcon className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-pulse" />
+          <p className="text-slate-500">Učitavanje...</p>
         </div>
       </div>
     );
@@ -164,44 +162,43 @@ export default function EditTruckPage() {
   if (error && !formData.truckNumber) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <p className="text-red-600">{error}</p>
+        <div className="rounded-2xl bg-red-50 border border-red-200 p-6 max-w-md mx-auto">
+          <p className="text-sm text-red-700 font-medium">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 md:space-y-8 pb-8">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button
-          variant="outline"
+        <button
           onClick={() => router.push("/trucks")}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
         >
           <ArrowLeft className="w-4 h-4" />
-          Nazad
-        </Button>
+          <span className="font-medium">Nazad</span>
+        </button>
         <div>
-          <h1 className="text-3xl font-bold text-dark-900">Uredi kamion</h1>
-          <p className="text-dark-500 mt-2">{formData.truckNumber}</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Uredi kamion</h1>
+          <p className="text-slate-500 mt-1">{formData.truckNumber}</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="p-5 bg-red-50 border border-red-200 rounded-2xl animate-shake">
+            <p className="text-sm text-red-700 font-medium">{error}</p>
           </div>
         )}
 
         {/* Osnovni podaci */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Osnovni podaci</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900">Osnovni podaci</h3>
+          </div>
+          <div className="p-6 md:p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Input
                 label="Broj kamiona *"
@@ -281,22 +278,22 @@ export default function EditTruckPage() {
                   name="isActive"
                   checked={formData.isActive}
                   onChange={handleChange}
-                  className="w-5 h-5 text-primary-600 border-dark-300 rounded focus:ring-primary-500"
+                  className="w-5 h-5 text-slate-900 border-slate-300 rounded focus:ring-2 focus:ring-slate-400/50"
                 />
-                <label className="text-sm font-medium text-dark-700">
+                <label className="text-sm font-semibold text-slate-700">
                   Aktivan
                 </label>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Registracija i osiguranje */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Registracija i osiguranje</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900">Registracija i osiguranje</h3>
+          </div>
+          <div className="p-6 md:p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Input
                 label="Istek registracije *"
@@ -336,15 +333,15 @@ export default function EditTruckPage() {
                 required
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Kapacitet car hauler-a */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Kapacitet car hauler-a</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900">Kapacitet car hauler-a</h3>
+          </div>
+          <div className="p-6 md:p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <Input
                 label="Max mali automobili"
@@ -386,23 +383,46 @@ export default function EditTruckPage() {
                 max="10"
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Buttons */}
-        <div className="flex items-center gap-4">
-          <Button type="submit" disabled={saving}>
-            {saving ? "Spremanje..." : "Sačuvaj promjene"}
-          </Button>
-          <Button
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-6 border-t border-slate-100">
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+          >
+            {saving ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Spremanje...
+              </span>
+            ) : (
+              "Sačuvaj promjene"
+            )}
+          </button>
+          <button
             type="button"
-            variant="outline"
             onClick={() => router.push("/trucks")}
+            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
           >
             Odustani
-          </Button>
+          </button>
         </div>
       </form>
+
+      <style jsx>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-10px); }
+          75% { transform: translateX(10px); }
+        }
+
+        .animate-shake {
+          animation: shake 0.4s ease-in-out;
+        }
+      `}</style>
     </div>
   );
 }

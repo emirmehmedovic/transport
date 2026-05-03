@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/documents
@@ -12,6 +15,7 @@ import { verifyToken } from '@/lib/auth';
  * - type: filter by document type
  * - inspectionId: filter by inspection
  * - incidentId: filter by incident
+ * - approvalStatus: filter by approval workflow status
  * - search: search by filename
  * - page: page number (default 1)
  * - limit: items per page (default 20)
@@ -19,14 +23,9 @@ import { verifyToken } from '@/lib/auth';
 export async function GET(request: NextRequest) {
   try {
     // Autentifikacija
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: 'Nevažeća autentifikacija' }, { status: 401 });
     }
 
     // Parse query params
@@ -35,6 +34,7 @@ export async function GET(request: NextRequest) {
     const driverId = searchParams.get('driverId') || undefined;
     const inspectionId = searchParams.get('inspectionId') || undefined;
     const incidentId = searchParams.get('incidentId') || undefined;
+    const approvalStatus = searchParams.get('approvalStatus') || undefined;
     const type = searchParams.get('type') || undefined;
     const search = searchParams.get('search') || undefined;
     const page = parseInt(searchParams.get('page') || '1', 10);
@@ -99,6 +99,27 @@ export async function GET(request: NextRequest) {
         // Ako nema filtera, prikaži samo dokumente ovog vozača
         where.driverId = driver?.id;
       }
+    } else if (decoded.role === 'CLIENT') {
+      if (loadId) {
+        const load = await prisma.load.findUnique({
+          where: { id: loadId },
+          select: { id: true, requestedByUserId: true },
+        });
+
+        if (!load || load.requestedByUserId !== decoded.userId) {
+          return NextResponse.json(
+            { error: 'Nemate dozvolu za pristup dokumentima ovog loada' },
+            { status: 403 }
+          );
+        }
+
+        where.loadId = loadId;
+      } else {
+        return NextResponse.json(
+          { error: 'Klijent može pregledati samo dokumente svojih loadova' },
+          { status: 403 }
+        );
+      }
     } else {
       // Admin/Dispatcher mogu vidjeti sve dokumente sa filterima
       if (loadId) {
@@ -118,6 +139,10 @@ export async function GET(request: NextRequest) {
 
     if (type) {
       where.type = type;
+    }
+
+    if (approvalStatus) {
+      where.approvalStatus = approvalStatus;
     }
 
     if (search) {

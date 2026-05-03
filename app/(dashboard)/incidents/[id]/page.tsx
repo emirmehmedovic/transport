@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowLeft, UploadCloud } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
+import { getClaimStatusLabel, getIncidentSeverityLabel, getIncidentStatusLabel } from "@/lib/ui-labels";
 
 type IncidentDetail = {
   id: string;
@@ -121,7 +122,7 @@ export default function IncidentDetailPage() {
       <PageHeader
         icon={AlertTriangle}
         title="Incident detalji"
-        subtitle={`${incident.severity} • ${incident.status}`}
+        subtitle={`${getIncidentSeverityLabel(incident.severity)} • ${getIncidentStatusLabel(incident.status)}`}
         actions={
           <Button variant="outline" onClick={() => router.push("/incidents")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -158,10 +159,10 @@ export default function IncidentDetailPage() {
             value={claimForm.status}
             onChange={(e) => setClaimForm((p) => ({ ...p, status: e.target.value }))}
           >
-            <option value="OPEN">Open</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Rejected</option>
-            <option value="PAID">Paid</option>
+            <option value="OPEN">Otvoren</option>
+            <option value="APPROVED">Odobren</option>
+            <option value="REJECTED">Odbijen</option>
+            <option value="PAID">Plaćen</option>
           </select>
           <Button onClick={handleClaimCreate} disabled={saving}>
             {saving ? "Spremanje..." : "Dodaj claim"}
@@ -178,7 +179,7 @@ export default function IncidentDetailPage() {
           {claims.map((c) => (
             <div key={c.id} className="rounded-xl border border-dark-200 px-4 py-3 text-sm">
               <p className="font-semibold text-dark-900">
-                {c.claimNumber || "Claim"} • {c.status}
+                {c.claimNumber || "Claim"} • {getClaimStatusLabel(c.status)}
               </p>
               {c.amount !== null && <p className="text-xs text-dark-600">Iznos: {c.amount}</p>}
               {c.notes && <p className="text-xs text-dark-500">{c.notes}</p>}
@@ -194,7 +195,7 @@ export default function IncidentDetailPage() {
           <input type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
           <Button onClick={handleUpload} disabled={uploading || !selectedFile}>
             <UploadCloud className="w-4 h-4 mr-2" />
-            {uploading ? "Upload..." : "Upload"}
+                    {uploading ? "Slanje..." : "Pošalji"}
           </Button>
         </div>
         <div className="space-y-2">
@@ -206,7 +207,7 @@ export default function IncidentDetailPage() {
               </p>
               <div className="mt-2 flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => window.open(`/api/documents/${d.id}/download`)}>
-                  Download
+                  Preuzmi
                 </Button>
               </div>
             </div>

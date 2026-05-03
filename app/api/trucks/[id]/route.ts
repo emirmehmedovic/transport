@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { truckSchema } from "@/lib/validation/truck";
 
 // GET /api/trucks/[id] - Detalji pojedinačnog kamiona
@@ -9,16 +9,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -53,6 +44,22 @@ export async function GET(
                 phone: true,
               },
             },
+          },
+        },
+        trailers: {
+          select: {
+            id: true,
+            trailerNumber: true,
+            type: true,
+            make: true,
+            model: true,
+            licensePlate: true,
+            lengthMeters: true,
+            capacityM3: true,
+            compartmentCount: true,
+          },
+          orderBy: {
+            trailerNumber: "asc",
           },
         },
         loads: {
@@ -110,16 +117,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
@@ -243,16 +241,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Samo administratori mogu brisati kamione" },

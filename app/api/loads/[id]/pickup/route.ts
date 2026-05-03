@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
+import { createLoadPickedUpNotification } from "@/lib/client-notifications";
 
 const TARGET_STATUS = "PICKED_UP" as const;
 
@@ -9,16 +10,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -65,6 +57,8 @@ export async function POST(
         userId: decoded.userId,
       },
     });
+
+    await createLoadPickedUpNotification(updated.id);
 
     return NextResponse.json({ load: updated });
   } catch (error: any) {

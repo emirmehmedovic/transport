@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { processUpload, DocumentType } from '@/lib/fileUpload';
-import { verifyToken } from '@/lib/auth';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
 import {
   sendAdminNotification,
   createDocumentUploadedNotification,
 } from '@/lib/telegram';
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/documents/upload
@@ -23,14 +26,9 @@ import {
 export async function POST(request: NextRequest) {
   try {
     // Autentifikacija
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: 'Nevažeća autentifikacija' }, { status: 401 });
     }
 
     // Parse FormData
@@ -45,11 +43,11 @@ export async function POST(request: NextRequest) {
 
     // Validacija
     if (!file) {
-      return NextResponse.json({ error: 'File is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Datoteka je obavezna' }, { status: 400 });
     }
 
     if (!type) {
-      return NextResponse.json({ error: 'Document type is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Tip dokumenta je obavezan' }, { status: 400 });
     }
 
     // Validacija da bar jedan entity ID postoji (loadId ili driverId)
@@ -65,30 +63,55 @@ export async function POST(request: NextRequest) {
     if (loadId) {
       const load = await prisma.load.findUnique({
         where: { id: loadId },
+        select: {
+          id: true,
+          driverId: true,
+          requestedByUserId: true,
+        },
       });
 
       if (!load) {
-        return NextResponse.json({ error: 'Load not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Load nije pronađen' }, { status: 404 });
+      }
+
+      if (decoded.role === 'DRIVER' && load.driverId !== decoded.driverId) {
+        return NextResponse.json({ error: 'Nemate dozvolu' }, { status: 403 });
+      }
+
+      if (decoded.role === 'CLIENT' && load.requestedByUserId !== decoded.userId) {
+        return NextResponse.json({ error: 'Nemate dozvolu' }, { status: 403 });
       }
     }
 
     // Ako je driver dokument, provjeri da li driver postoji
     if (driverId) {
+      if (decoded.role === 'CLIENT') {
+        return NextResponse.json({ error: 'Klijent ne može direktno uploadovati dokument na vozača' }, { status: 403 });
+      }
+
       const driver = await prisma.driver.findUnique({
         where: { id: driverId },
       });
 
       if (!driver) {
-        return NextResponse.json({ error: 'Driver not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Vozač nije pronađen' }, { status: 404 });
+      }
+
+      if (decoded.role === 'DRIVER' && driver.id !== decoded.driverId) {
+        return NextResponse.json({ error: 'Nemate dozvolu' }, { status: 403 });
       }
     }
 
     if (inspectionId) {
+      if (decoded.role === 'CLIENT') {
+        return NextResponse.json({ error: 'Klijent ne može direktno uploadovati dokument na inspekciju' }, { status: 403 });
+      }
+
       const inspection = await prisma.inspection.findUnique({
         where: { id: inspectionId },
       });
       if (!inspection) {
-        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Inspekcija nije pronađena' }, { status: 404 });
       }
       if (decoded.role === 'DRIVER' && inspection.driverId !== decoded.driverId) {
         return NextResponse.json({ error: 'Nemate dozvolu' }, { status: 403 });
@@ -96,11 +119,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (incidentId) {
+      if (decoded.role === 'CLIENT') {
+        return NextResponse.json({ error: 'Klijent ne može direktno uploadovati dokument na incident' }, { status: 403 });
+      }
+
       const incident = await prisma.incident.findUnique({
         where: { id: incidentId },
       });
       if (!incident) {
-        return NextResponse.json({ error: 'Incident not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Incident nije pronađen' }, { status: 404 });
       }
       if (decoded.role === 'DRIVER' && incident.driverId !== decoded.driverId) {
         return NextResponse.json({ error: 'Nemate dozvolu' }, { status: 403 });
@@ -169,7 +196,7 @@ export async function POST(request: NextRequest) {
 
       const uploaderName = uploader
         ? `${uploader.firstName} ${uploader.lastName}`
-        : 'Unknown';
+        : 'Nepoznat korisnik';
 
       // Ako je dokument vezan za load, pošalji notifikaciju
       if (document.load) {
@@ -188,13 +215,13 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      message: 'Document uploaded successfully',
+      message: 'Dokument je uspješno uploadovan',
       document,
     });
   } catch (error: any) {
     console.error('Upload error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to upload document' },
+      { error: error.message || 'Upload dokumenta nije uspio' },
       { status: 500 }
     );
   }

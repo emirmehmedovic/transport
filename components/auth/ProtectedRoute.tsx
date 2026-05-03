@@ -24,7 +24,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
     if (!loading && user && allowedRoles && !allowedRoles.includes(user.role)) {
       console.log("User role not allowed, redirecting to dashboard");
-      router.push("/");
+      router.push("/dashboard");
     }
   }, [user, loading, router, allowedRoles]);
 

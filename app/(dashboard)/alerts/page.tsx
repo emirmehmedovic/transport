@@ -155,13 +155,13 @@ export default function AlertsPage() {
   const getTypeLabel = (type: AlertType): string => {
     switch (type) {
       case "compliance":
-        return "Compliance";
+        return "Usklađenost";
       case "maintenance":
-        return "Maintenance";
+        return "Održavanje";
       case "documents":
-        return "Documents";
+        return "Dokumenti";
       case "financial":
-        return "Financial";
+        return "Finansije";
     }
   };
 
@@ -187,7 +187,7 @@ export default function AlertsPage() {
       <PageHeader
         icon={AlertTriangle}
         title="Alarmi i Upozorenja"
-        subtitle="Pregled svih aktivnih alertova i upozorenja koja zahtijevaju pažnju"
+        subtitle="Pregled svih aktivnih alarma i upozorenja koja zahtijevaju pažnju"
         actions={
           <Button
             onClick={fetchAlerts}
@@ -208,7 +208,7 @@ export default function AlertsPage() {
           </div>
           <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10">
             <p className="text-[10px] md:text-xs font-semibold text-dark-200 uppercase tracking-wide">
-              Urgent
+              Hitno
             </p>
             <p className="text-2xl md:text-3xl font-bold mt-1 text-red-200">
               {data?.breakdown.urgent ?? 0}
@@ -216,7 +216,7 @@ export default function AlertsPage() {
           </div>
           <div className="bg-white/5 rounded-xl md:rounded-2xl px-4 md:px-5 py-2.5 md:py-3 border border-white/10">
             <p className="text-[10px] md:text-xs font-semibold text-dark-200 uppercase tracking-wide">
-              Warning
+              Upozorenje
             </p>
             <p className="text-2xl md:text-3xl font-bold mt-1 text-yellow-100">
               {data?.breakdown.warning ?? 0}

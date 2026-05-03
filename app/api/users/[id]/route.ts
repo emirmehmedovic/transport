@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, hashPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 
 // GET /api/users/[id] - Detalji pojedinačnog korisnika
 export async function GET(
@@ -8,16 +9,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
@@ -71,16 +63,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
@@ -157,6 +140,21 @@ export async function PUT(
       },
     });
 
+    if (role === "CLIENT") {
+      await prisma.clientProfile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          contactPerson: `${firstName} ${lastName}`.trim(),
+          contactPhone: phone || null,
+        },
+        update: {
+          contactPerson: `${firstName} ${lastName}`.trim(),
+          contactPhone: phone || null,
+        },
+      });
+    }
+
     // Kreiranje audit log-a
     await prisma.auditLog.create({
       data: {
@@ -183,16 +181,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },

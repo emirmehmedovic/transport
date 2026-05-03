@@ -2,33 +2,38 @@
 
 import { useState, useRef, DragEvent } from 'react';
 import { Upload, X, FileText, AlertCircle } from 'lucide-react';
+import { DOCUMENT_TYPE_LABELS } from "@/lib/ui-labels";
 
 interface DocumentUploadProps {
   onUploadSuccess?: (document: any) => void;
   loadId?: string;
   driverId?: string;
+  inspectionId?: string;
+  incidentId?: string;
   defaultDocumentType?: string;
   maxFiles?: number;
 }
 
 const DOCUMENT_TYPES = [
-  { value: 'BOL', label: 'Bill of Lading (BOL)' },
-  { value: 'POD', label: 'Proof of Delivery (POD)' },
-  { value: 'DAMAGE_REPORT', label: 'Damage Report' },
-  { value: 'LOAD_PHOTO', label: 'Load Photo' },
-  { value: 'RATE_CONFIRMATION', label: 'Rate Confirmation' },
-  { value: 'FUEL_RECEIPT', label: 'Fuel Receipt' },
-  { value: 'CDL_LICENSE', label: 'CDL License' },
-  { value: 'MEDICAL_CARD', label: 'Medical Card' },
-  { value: 'INSURANCE', label: 'Insurance' },
-  { value: 'REGISTRATION', label: 'Registration' },
-  { value: 'OTHER', label: 'Other' },
+  { value: 'BOL', label: `${DOCUMENT_TYPE_LABELS.BOL} (BOL)` },
+  { value: 'POD', label: `${DOCUMENT_TYPE_LABELS.POD} (POD)` },
+  { value: 'DAMAGE_REPORT', label: DOCUMENT_TYPE_LABELS.DAMAGE_REPORT },
+  { value: 'LOAD_PHOTO', label: DOCUMENT_TYPE_LABELS.LOAD_PHOTO },
+  { value: 'RATE_CONFIRMATION', label: DOCUMENT_TYPE_LABELS.RATE_CONFIRMATION },
+  { value: 'FUEL_RECEIPT', label: DOCUMENT_TYPE_LABELS.FUEL_RECEIPT },
+  { value: 'CDL_LICENSE', label: DOCUMENT_TYPE_LABELS.CDL_LICENSE },
+  { value: 'MEDICAL_CARD', label: DOCUMENT_TYPE_LABELS.MEDICAL_CARD },
+  { value: 'INSURANCE', label: DOCUMENT_TYPE_LABELS.INSURANCE },
+  { value: 'REGISTRATION', label: DOCUMENT_TYPE_LABELS.REGISTRATION },
+  { value: 'OTHER', label: DOCUMENT_TYPE_LABELS.OTHER },
 ];
 
 export default function DocumentUpload({
   onUploadSuccess,
   loadId,
   driverId,
+  inspectionId,
+  incidentId,
   defaultDocumentType,
   maxFiles = 10,
 }: DocumentUploadProps) {
@@ -75,7 +80,7 @@ export default function DocumentUpload({
 
     // Check total number of files
     if (selectedFiles.length + files.length > maxFiles) {
-      newErrors.push(`Maximum ${maxFiles} files allowed`);
+      newErrors.push(`Maksimalno je dozvoljeno ${maxFiles} fajlova`);
       setErrors(newErrors);
       return;
     }
@@ -83,7 +88,7 @@ export default function DocumentUpload({
     // Validate file sizes
     const validFiles = files.filter((file) => {
       if (file.size > 10 * 1024 * 1024) {
-        newErrors.push(`${file.name} is too large (max 10MB)`);
+        newErrors.push(`${file.name} je prevelik (maksimalno 10 MB)`);
         return false;
       }
       return true;
@@ -99,12 +104,12 @@ export default function DocumentUpload({
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
-      setErrors(['Please select at least one file']);
+      setErrors(['Odaberi barem jedan fajl']);
       return;
     }
 
     if (!documentType) {
-      setErrors(['Please select document type']);
+      setErrors(['Odaberi vrstu dokumenta']);
       return;
     }
 
@@ -128,6 +133,14 @@ export default function DocumentUpload({
           formData.append('driverId', driverId);
         }
 
+        if (inspectionId) {
+          formData.append('inspectionId', inspectionId);
+        }
+
+        if (incidentId) {
+          formData.append('incidentId', incidentId);
+        }
+
         if (showExpiryDate && expiryDate) {
           formData.append('expiryDate', expiryDate);
         }
@@ -143,7 +156,7 @@ export default function DocumentUpload({
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error || 'Upload failed');
+          throw new Error(error.error || 'Slanje nije uspjelo');
         }
 
         const result = await response.json();
@@ -162,19 +175,19 @@ export default function DocumentUpload({
       setProgress({});
 
       // Success message
-      alert('Documents uploaded successfully!');
+      alert('Dokumenti su uspješno poslani');
     } catch (error: any) {
       console.error('Upload error:', error);
-      setErrors([error.message || 'Failed to upload documents']);
+      setErrors([error.message || 'Neuspjelo slanje dokumenata']);
     } finally {
       setUploading(false);
     }
   };
 
   const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
+    const sizes = ['B', 'KB', 'MB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
@@ -184,7 +197,7 @@ export default function DocumentUpload({
       {/* Document Type Selector */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Document Type *
+          Vrsta dokumenta *
         </label>
         <select
           value={documentType}
@@ -204,7 +217,7 @@ export default function DocumentUpload({
       {showExpiryDate && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Expiry Date
+            Datum isteka
           </label>
           <input
             type="date"
@@ -231,13 +244,13 @@ export default function DocumentUpload({
       >
         <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
         <p className="text-lg font-medium text-gray-700 mb-2">
-          Drag & drop files here
+          Prevuci fajlove ovdje
         </p>
         <p className="text-sm text-gray-500 mb-4">
-          or click to browse
+          ili klikni za odabir
         </p>
         <p className="text-xs text-gray-400">
-          Max file size: 10MB • Allowed types: PDF, Images, Office documents
+          Maksimalna veličina: 10 MB • Dozvoljeno: PDF, slike i Office dokumenti
         </p>
 
         <input
@@ -255,7 +268,7 @@ export default function DocumentUpload({
       {selectedFiles.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-gray-700">
-            Selected Files ({selectedFiles.length})
+            Odabrani fajlovi ({selectedFiles.length})
           </h4>
           {selectedFiles.map((file, index) => (
             <div
@@ -328,7 +341,7 @@ export default function DocumentUpload({
             }
           `}
         >
-          {uploading ? 'Uploading...' : `Upload ${selectedFiles.length} file(s)`}
+          {uploading ? 'Slanje...' : `Pošalji ${selectedFiles.length} fajl(a)`}
         </button>
       </div>
     </div>

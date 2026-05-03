@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { isInSchengen } from "@/lib/schengen";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/loads - Lista svih loadova
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -32,6 +26,7 @@ export async function GET(req: NextRequest) {
     const to = searchParams.get("to")?.trim() || "";
     const loadNumber = searchParams.get("loadNumber")?.trim() || "";
     const recurringGroupId = searchParams.get("recurringGroupId")?.trim() || "";
+    const approvalStatus = searchParams.get("approvalStatus")?.trim().toUpperCase() || "";
     const sortBy = searchParams.get("sortBy")?.trim() || "createdAt"; // createdAt | scheduledPickupDate
     const sortDir = (searchParams.get("sortDir")?.trim().toLowerCase() || "desc") as
       | "asc"
@@ -41,7 +36,11 @@ export async function GET(req: NextRequest) {
 
     // Driver vidi samo svoje loadove
     const where: any =
-      decoded.role === "DRIVER" ? { driverId: decoded.driverId } : {};
+      decoded.role === "DRIVER"
+        ? { driverId: decoded.driverId }
+        : decoded.role === "CLIENT"
+        ? { requestedByUserId: decoded.userId }
+        : {};
 
     // Handle multiple statuses (comma-separated)
     if (statusParam) {
@@ -80,6 +79,18 @@ export async function GET(req: NextRequest) {
 
     if (recurringGroupId) {
       where.recurringGroupId = recurringGroupId;
+    }
+
+    if (approvalStatus) {
+      const approvalStatuses = approvalStatus
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (approvalStatuses.length === 1) {
+        where.approvalStatus = approvalStatuses[0];
+      } else if (approvalStatuses.length > 1) {
+        where.approvalStatus = { in: approvalStatuses };
+      }
     }
 
     const skip = (page - 1) * pageSize;
@@ -130,6 +141,14 @@ export async function GET(req: NextRequest) {
             longitude: true,
           },
         },
+        requestedByUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
         },
         orderBy: {
           [sortBy]: sortDir,
@@ -161,17 +180,15 @@ export async function GET(req: NextRequest) {
 // POST /api/loads - Kreiranje novog loada
 export async function POST(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
+    const decoded = await getVerifiedAuthUserFromRequest(req);
+    if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
         { status: 401 }
       );
     }
 
-    const decoded = verifyToken(token);
-    if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
+    if (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER") {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
         { status: 403 }
@@ -205,6 +222,7 @@ export async function POST(req: NextRequest) {
       detentionTime,
       detentionPay,
       estimatedDurationHours,
+      distanceSource,
       notes,
       specialInstructions,
       routeName,
@@ -327,10 +345,13 @@ export async function POST(req: NextRequest) {
         estimatedDurationHours: estimatedDurationHours
           ? parseFloat(estimatedDurationHours)
           : null,
+        distanceSource: distanceSource === "AUTO" ? "AUTO" : "MANUAL",
         notes,
         specialInstructions,
         routeName: routeName ? routeName.trim() : null,
         cargoType,
+        sourceType: "INTERNAL",
+        approvalStatus: "APPROVED",
         driverId: driverId || null,
         truckId: truckId || null,
         status: driverId && truckId ? "ASSIGNED" : "AVAILABLE",

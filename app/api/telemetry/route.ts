@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { checkGeofences, checkLoadProximity } from '@/lib/geofence';
+import { processDriverBorderCrossingPushNotifications } from '@/lib/driver-schengen-push';
+
+function sanitizeTelemetryUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has('key')) {
+      parsed.searchParams.set('key', '***');
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
 
 /**
  * POST/GET /api/telemetry
@@ -16,6 +29,7 @@ import { checkGeofences, checkLoadProximity } from '@/lib/geofence';
  * - battery or batt: Battery level in % (optional)
  * - accuracy: Accuracy in meters (optional)
  * - timestamp: Unix timestamp or ISO date (optional)
+ * - key: Shared telemetry key (required)
  */
 export async function POST(request: NextRequest) {
   return handleTelemetry(request);
@@ -31,14 +45,16 @@ async function handleTelemetry(request: NextRequest) {
     console.log('[Telemetry] ═══════════════════════════════════════════════════════');
     console.log('[Telemetry] Request received:', new Date().toISOString());
     console.log('[Telemetry] Method:', request.method);
-    console.log('[Telemetry] URL:', request.url);
+    console.log('[Telemetry] URL:', sanitizeTelemetryUrl(request.url));
 
     // Extract parameters from query string or POST body
     let params: any;
+    let telemetryKey: string | null = null;
 
     if (request.method === 'GET') {
       // Parse from query string
       const searchParams = request.nextUrl.searchParams;
+      telemetryKey = searchParams.get('key');
       params = {
         id:
           searchParams.get('id') ||
@@ -66,8 +82,20 @@ async function handleTelemetry(request: NextRequest) {
       if (typeof location?._ === 'string' && location._) {
         const raw = location._.replace(/^[?&]/, '');
         templateParams = new URLSearchParams(raw);
-        console.log('[Telemetry] Template params:', Object.fromEntries(templateParams.entries()));
+        const templateEntries = Object.fromEntries(templateParams.entries());
+        if ('key' in templateEntries) {
+          templateEntries.key = '***';
+        }
+        console.log('[Telemetry] Template params:', templateEntries);
       }
+
+      telemetryKey =
+        body.key ||
+        location?.key ||
+        body?.params?.key ||
+        location?.params?.key ||
+        templateParams?.get('key') ||
+        null;
 
       params = {
         id:
@@ -113,6 +141,23 @@ async function handleTelemetry(request: NextRequest) {
         timestamp: body.timestamp || location?.timestamp || coords?.timestamp,
       };
       console.log('[Telemetry] Parsed params:', JSON.stringify(params, null, 2));
+    }
+
+    const expectedTelemetryKey = process.env.TELEMETRY_SHARED_KEY;
+    if (!expectedTelemetryKey) {
+      console.error('[Telemetry] TELEMETRY_SHARED_KEY nije postavljen');
+      return NextResponse.json(
+        { error: 'Telemetry key nije konfigurisan na serveru' },
+        { status: 500 }
+      );
+    }
+
+    if (!telemetryKey || telemetryKey !== expectedTelemetryKey) {
+      console.warn('[Telemetry] Odbijen zahtjev zbog nevažećeg telemetry key-a');
+      return NextResponse.json(
+        { error: 'Nevažeći telemetry key' },
+        { status: 401 }
+      );
     }
 
     // Validate required fields
@@ -270,6 +315,10 @@ async function handleTelemetry(request: NextRequest) {
     // Check proximity to assigned load locations (non-blocking)
     checkLoadProximity(driver.id, latitude, longitude).catch((error) => {
       console.error('[Telemetry] Load proximity check failed:', error);
+    });
+
+    processDriverBorderCrossingPushNotifications(driver.id).catch((error) => {
+      console.error('[Telemetry] Driver Schengen push processing failed:', error);
     });
 
     // Return 200 OK (Traccar Client expects this)

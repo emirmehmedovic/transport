@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { driverSchema } from "@/lib/validation/driver";
 
 // GET /api/drivers - Lista svih vozača
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -117,16 +109,7 @@ export async function GET(req: NextRequest) {
 // POST /api/drivers - Kreiranje novog vozača
 export async function POST(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
@@ -144,6 +127,7 @@ export async function POST(req: NextRequest) {
 
     const {
       userId,
+      user: newUser,
       licenseNumber,
       licenseState,
       licenseExpiry,
@@ -156,26 +140,6 @@ export async function POST(req: NextRequest) {
       status,
       traccarDeviceId,
     } = parsed.data;
-
-    // Provjera da li user postoji i da li nije već vozač
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { driver: true },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "Korisnik nije pronađen" },
-        { status: 404 }
-      );
-    }
-
-    if (user.driver) {
-      return NextResponse.json(
-        { error: "Ovaj korisnik već ima vozački profil" },
-        { status: 400 }
-      );
-    }
 
     // Provjera da li licenca već postoji
     const existingDriver = await prisma.driver.findFirst({
@@ -213,43 +177,118 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Kreiranje vozača
-    const driver = await prisma.driver.create({
-      data: {
-        userId,
-        cdlNumber: licenseNumber,
-        cdlState: licenseState,
-        cdlExpiry: new Date(licenseExpiry),
-        endorsements: endorsements || [],
-        medicalCardExpiry: new Date(medicalCardExpiry),
-        hireDate: new Date(hireDate),
-        emergencyContactName: emergencyContact || "",
-        emergencyContactPhone: emergencyPhone || "",
-        ratePerMile: ratePerMile ?? 0.6,
-        status: status || "ACTIVE",
-        traccarDeviceId: traccarDeviceId || null,
-      },
-      include: {
-        user: {
+    let resolvedUserId = userId || "";
+
+    if (newUser) {
+      const existingUserByEmail = await prisma.user.findUnique({
+        where: { email: newUser.email },
+        select: { id: true },
+      });
+
+      if (existingUserByEmail) {
+        return NextResponse.json(
+          { error: "Korisnik sa ovim emailom već postoji" },
+          { status: 400 }
+        );
+      }
+    } else {
+      const existingUser = await prisma.user.findUnique({
+        where: { id: resolvedUserId },
+        include: { driver: true },
+      });
+
+      if (!existingUser) {
+        return NextResponse.json(
+          { error: "Korisnik nije pronađen" },
+          { status: 404 }
+        );
+      }
+
+      if (existingUser.driver) {
+        return NextResponse.json(
+          { error: "Ovaj korisnik već ima vozački profil" },
+          { status: 400 }
+        );
+      }
+
+      if (existingUser.role !== "DRIVER") {
+        return NextResponse.json(
+          { error: "Izabrani korisnik mora imati DRIVER rolu" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const driver = await prisma.$transaction(async (tx) => {
+      if (newUser) {
+        const hashedPassword = await hashPassword(newUser.password);
+        const createdUser = await tx.user.create({
+          data: {
+            email: newUser.email,
+            password: hashedPassword,
+            firstName: newUser.firstName,
+            lastName: newUser.lastName,
+            phone: newUser.phone || null,
+            role: "DRIVER",
+            telegramChatId: newUser.telegramChatId || null,
+          },
           select: {
             id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
+          },
+        });
+
+        resolvedUserId = createdUser.id;
+      }
+
+      const createdDriver = await tx.driver.create({
+        data: {
+          userId: resolvedUserId,
+          cdlNumber: licenseNumber,
+          cdlState: licenseState,
+          cdlExpiry: new Date(licenseExpiry),
+          endorsements: endorsements || [],
+          medicalCardExpiry: new Date(medicalCardExpiry),
+          hireDate: new Date(hireDate),
+          emergencyContactName: emergencyContact || "",
+          emergencyContactPhone: emergencyPhone || "",
+          ratePerMile: ratePerMile ?? 0.6,
+          status: status || "ACTIVE",
+          traccarDeviceId: traccarDeviceId || null,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    // Kreiranje audit log-a
-    await prisma.auditLog.create({
-      data: {
-        action: "CREATE",
-        entity: "DRIVER",
-        entityId: driver.id,
-        userId: decoded.userId,
-      },
+      await tx.auditLog.create({
+        data: {
+          action: "CREATE",
+          entity: "DRIVER",
+          entityId: createdDriver.id,
+          userId: decoded.userId,
+        },
+      });
+
+      if (newUser) {
+        await tx.auditLog.create({
+          data: {
+            action: "CREATE",
+            entity: "USER",
+            entityId: createdDriver.user.id,
+            userId: decoded.userId,
+          },
+        });
+      }
+
+      return createdDriver;
     });
 
     return NextResponse.json({ driver }, { status: 201 });

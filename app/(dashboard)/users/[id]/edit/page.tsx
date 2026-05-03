@@ -267,6 +267,7 @@ export default function EditUserPage() {
                   <option value="DRIVER">Vozač</option>
                   <option value="DISPATCHER">Dispatcher</option>
                   <option value="ADMIN">Administrator</option>
+                  <option value="CLIENT">Klijent</option>
                 </select>
               </div>
 

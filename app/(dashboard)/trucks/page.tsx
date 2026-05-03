@@ -13,6 +13,7 @@ import {
   Search,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
+import { getTrailerTypeLabel } from "@/lib/ui-labels";
 
 interface Truck {
   id: string;
@@ -40,6 +41,11 @@ interface Truck {
       lastName: string;
     };
   } | null;
+  trailers: {
+    id: string;
+    trailerNumber: string;
+    type: string;
+  }[];
 }
 
 export default function TrucksPage() {
@@ -57,14 +63,19 @@ export default function TrucksPage() {
     fetchTrucks();
   }, []);
 
-  const fetchTrucks = async () => {
+  const fetchTrucks = async (
+    overrides?: Partial<{ search: string; statusFilter: "all" | "active" | "inactive" }>
+  ) => {
     try {
       const params = new URLSearchParams();
-      if (search.trim()) {
-        params.set("q", search.trim());
+      const nextSearch = overrides?.search ?? search;
+      const nextStatusFilter = overrides?.statusFilter ?? statusFilter;
+
+      if (nextSearch.trim()) {
+        params.set("q", nextSearch.trim());
       }
-      if (statusFilter === "active" || statusFilter === "inactive") {
-        params.set("status", statusFilter);
+      if (nextStatusFilter === "active" || nextStatusFilter === "inactive") {
+        params.set("status", nextStatusFilter);
       }
 
       const queryString = params.toString();
@@ -189,7 +200,7 @@ export default function TrucksPage() {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   setLoading(true);
-                  fetchTrucks();
+                  fetchTrucks({ search });
                 }
               }}
             />
@@ -205,7 +216,7 @@ export default function TrucksPage() {
                 const value = e.target.value as "all" | "active" | "inactive";
                 setStatusFilter(value);
                 setLoading(true);
-                fetchTrucks();
+                fetchTrucks({ statusFilter: value });
               }}
             >
               <option value="all">Svi statusi</option>
@@ -268,6 +279,7 @@ export default function TrucksPage() {
                   <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden lg:table-cell">VIN</th>
                   <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden xl:table-cell">Tablica</th>
                   <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden md:table-cell">Vozač</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden xl:table-cell">Prikolica</th>
                   <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden lg:table-cell">Kilometraža</th>
                   <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Status</th>
                   <th className="px-3 md:px-6 py-3 md:py-4 text-right whitespace-nowrap">Akcije</th>
@@ -292,6 +304,12 @@ export default function TrucksPage() {
                           <p className="text-[11px] md:text-sm text-dark-500 truncate">
                             {truck.make} {truck.model} ({truck.year})
                           </p>
+                          {truck.trailers.length > 0 && (
+                            <p className="text-[11px] md:text-sm text-dark-500 truncate">
+                              Prikolica: {truck.trailers[0].trailerNumber} • {getTrailerTypeLabel(truck.trailers[0].type)}
+                              {truck.trailers.length > 1 ? ` +${truck.trailers.length - 1}` : ""}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -319,6 +337,21 @@ export default function TrucksPage() {
                         <span className="text-xs md:text-sm text-dark-400">
                           Nije dodijeljen
                         </span>
+                      )}
+                    </td>
+                    <td className="px-3 md:px-6 py-3 md:py-4 hidden xl:table-cell">
+                      {truck.trailers.length > 0 ? (
+                        <div className="text-xs md:text-sm">
+                          <p className="font-medium text-dark-900 truncate">
+                            {truck.trailers[0].trailerNumber}
+                          </p>
+                          <p className="text-dark-500 truncate">
+                            {getTrailerTypeLabel(truck.trailers[0].type)}
+                            {truck.trailers.length > 1 ? ` (+${truck.trailers.length - 1})` : ""}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-xs md:text-sm text-dark-400">Nije uparen</span>
                       )}
                     </td>
                     <td className="px-3 md:px-6 py-3 md:py-4 text-dark-600 text-[11px] md:text-sm hidden lg:table-cell whitespace-nowrap">

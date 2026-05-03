@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
 import { deleteFile } from '@/lib/fileUpload';
 
 /**
@@ -13,12 +13,7 @@ export async function GET(
 ) {
   try {
     // Autentifikacija
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
@@ -32,6 +27,7 @@ export async function GET(
             id: true,
             loadNumber: true,
             status: true,
+            requestedByUserId: true,
           },
         },
         driver: {
@@ -83,6 +79,13 @@ export async function GET(
       }
     }
 
+    if (decoded.role === 'CLIENT') {
+      const hasAccess = document.load?.requestedByUserId === decoded.userId;
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     return NextResponse.json({ document });
   } catch (error: any) {
     console.error('Get document error:', error);
@@ -103,18 +106,13 @@ export async function DELETE(
 ) {
   try {
     // Autentifikacija
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
     // Permission check - samo Admin i Dispatcher mogu brisati
-    if (decoded.role === 'DRIVER') {
+    if (decoded.role !== 'ADMIN' && decoded.role !== 'DISPATCHER') {
       return NextResponse.json(
         { error: 'Forbidden - only admins and dispatchers can delete documents' },
         { status: 403 }

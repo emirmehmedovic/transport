@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AppNotificationType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export type AlertType = "compliance" | "maintenance" | "documents" | "financial";
 export type AlertUrgency = "urgent" | "warning" | "info";
@@ -25,13 +29,7 @@ export interface Alert {
  */
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
@@ -179,6 +177,66 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const trailersWithExpiringDocs = await prisma.trailer.findMany({
+      where: {
+        OR: [
+          {
+            registrationExpiry: {
+              lte: thirtyDaysFromNow,
+              gte: now,
+            },
+          },
+          {
+            insuranceExpiry: {
+              lte: thirtyDaysFromNow,
+              gte: now,
+            },
+          },
+        ],
+        isActive: true,
+      },
+    });
+
+    for (const trailer of trailersWithExpiringDocs) {
+      if (trailer.registrationExpiry && trailer.registrationExpiry >= now && trailer.registrationExpiry <= thirtyDaysFromNow) {
+        const daysUntil = Math.ceil(
+          (new Date(trailer.registrationExpiry).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+
+        alerts.push({
+          id: `trailer-reg-${trailer.id}`,
+          type: "compliance",
+          urgency: daysUntil <= 7 ? "urgent" : daysUntil <= 15 ? "warning" : "info",
+          title: "Trailer Registration Expiring",
+          description: `Prikolica ${trailer.trailerNumber} - Registracija ističe za ${daysUntil} dana`,
+          entityId: trailer.id,
+          entityType: "truck",
+          createdAt: now,
+          daysUntil,
+        });
+      }
+
+      if (trailer.insuranceExpiry && trailer.insuranceExpiry >= now && trailer.insuranceExpiry <= thirtyDaysFromNow) {
+        const daysUntil = Math.ceil(
+          (new Date(trailer.insuranceExpiry).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+
+        alerts.push({
+          id: `trailer-ins-${trailer.id}`,
+          type: "compliance",
+          urgency: daysUntil <= 7 ? "urgent" : daysUntil <= 15 ? "warning" : "info",
+          title: "Trailer Insurance Expiring",
+          description: `Prikolica ${trailer.trailerNumber} - Osiguranje ističe za ${daysUntil} dana`,
+          entityId: trailer.id,
+          entityType: "truck",
+          createdAt: now,
+          daysUntil,
+        });
+      }
+    }
+
     // 2. MAINTENANCE ALERTS - Due within 500 km
     const maintenanceRecords = await prisma.maintenanceRecord.findMany({
       where: {
@@ -314,7 +372,74 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. FINANCIAL ALERTS - Unpaid Pay Stubs (>30 days old)
+    // 5. BORDER CONFIRMATION ALERTS - Driver confirmation pending
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    const borderConfirmationsPending = await prisma.appNotification.findMany({
+      where: {
+        requiresConfirmation: true,
+        confirmedAt: null,
+        createdAt: {
+          lte: sixHoursAgo,
+        },
+        type: {
+          in: [
+            AppNotificationType.DRIVER_BORDER_EXIT_EU,
+            AppNotificationType.DRIVER_BORDER_RETURN_BIH,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        type: true,
+        createdAt: true,
+        data: true,
+        driver: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    for (const notification of borderConfirmationsPending) {
+      if (!notification.driver) continue;
+
+      const hoursPending = Math.ceil(
+        (now.getTime() - notification.createdAt.getTime()) / (1000 * 60 * 60)
+      );
+
+      const data =
+        notification.data &&
+        typeof notification.data === "object" &&
+        !Array.isArray(notification.data)
+          ? (notification.data as Prisma.JsonObject)
+          : null;
+
+      const crossingName =
+        typeof data?.borderCrossingName === "string" ? data.borderCrossingName : null;
+
+      alerts.push({
+        id: `border-confirm-${notification.id}`,
+        type: "compliance",
+        urgency: hoursPending >= 12 ? "urgent" : "warning",
+        title:
+          notification.type === AppNotificationType.DRIVER_BORDER_EXIT_EU
+            ? "Čeka potvrda izlaska u EU"
+            : "Čeka potvrda povratka u BiH",
+        description: `${notification.driver.user.firstName} ${notification.driver.user.lastName} nije potvrdio border događaj ${hoursPending}h${crossingName ? ` • ${crossingName}` : ""}`,
+        entityId: notification.driver.id,
+        entityType: "driver",
+        createdAt: notification.createdAt,
+      });
+    }
+
+    // 6. FINANCIAL ALERTS - Unpaid Pay Stubs (>30 days old)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 

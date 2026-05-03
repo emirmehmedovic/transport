@@ -114,7 +114,7 @@ export default function RouteMap({
         <MapContainer
           center={[centerLat, centerLng]}
           zoom={6}
-          style={{ height: "600px", width: "100%" }}
+          className="h-[360px] md:h-[600px] w-full"
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

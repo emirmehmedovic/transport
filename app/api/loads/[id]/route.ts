@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
+import { hasProofOfDelivery } from "@/lib/load-pod";
+import {
+  createLoadCompletedNotification,
+  createLoadPickedUpNotification,
+} from "@/lib/client-notifications";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/loads/[id] - Detalji pojedinačnog loada
 export async function GET(
@@ -8,16 +16,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
@@ -74,7 +73,21 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ load });
+    if (decoded.role === "CLIENT" && load.requestedByUserId !== decoded.userId) {
+      return NextResponse.json(
+        { error: "Nemate dozvolu za pristup ovom loadu" },
+        { status: 403 }
+      );
+    }
+
+    const proofOfDeliveryUploaded = await hasProofOfDelivery(params.id);
+
+    return NextResponse.json({
+      load: {
+        ...load,
+        proofOfDeliveryUploaded,
+      },
+    });
   } catch (error: any) {
     console.error("Error fetching load:", error);
     return NextResponse.json(
@@ -90,17 +103,15 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
+    const decoded = await getVerifiedAuthUserFromRequest(req);
+    if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
         { status: 401 }
       );
     }
 
-    const decoded = verifyToken(token);
-    if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
+    if (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER") {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
         { status: 403 }
@@ -144,6 +155,7 @@ export async function PUT(
       detentionTime,
       detentionPay,
       estimatedDurationHours,
+      distanceSource,
       notes,
       specialInstructions,
       routeName,
@@ -152,7 +164,10 @@ export async function PUT(
       driverId,
       truckId,
       status,
+      approvalStatus,
+      approvalNote,
       stops,
+      proofOfDeliveryUploaded: _ignoredProofOfDeliveryUploaded,
     } = body;
 
     // Minimalna validacija (glavna polja ne smiju biti prazna ako su poslata)
@@ -178,6 +193,16 @@ export async function PUT(
         { error: "Sva obavezna polja moraju biti popunjena" },
         { status: 400 }
       );
+    }
+
+    if (status === "COMPLETED") {
+      const podExists = await hasProofOfDelivery(params.id);
+      if (!podExists) {
+        return NextResponse.json(
+          { error: "Load ne može biti završen bez uploadovanog POD dokumenta." },
+          { status: 400 }
+        );
+      }
     }
 
     const updated = await prisma.load.update({
@@ -210,6 +235,12 @@ export async function PUT(
         estimatedDurationHours: estimatedDurationHours
           ? parseFloat(estimatedDurationHours)
           : null,
+        distanceSource:
+          distanceSource !== undefined
+            ? distanceSource === "AUTO"
+              ? "AUTO"
+              : "MANUAL"
+            : existing.distanceSource,
         notes,
         specialInstructions,
         routeName: routeName !== undefined ? (routeName ? routeName.trim() : null) : existing.routeName,
@@ -217,6 +248,8 @@ export async function PUT(
         driverId: driverId || null,
         truckId: truckId || null,
         status: status || existing.status,
+        approvalStatus: approvalStatus || existing.approvalStatus,
+        approvalNote: approvalNote !== undefined ? approvalNote : existing.approvalNote,
         stops: Array.isArray(stops)
           ? {
               deleteMany: {},
@@ -262,6 +295,16 @@ export async function PUT(
       },
     });
 
+    if (existing.status !== "PICKED_UP" && updated.status === "PICKED_UP") {
+      await createLoadPickedUpNotification(updated.id);
+    }
+    if (
+      existing.status !== updated.status &&
+      (updated.status === "DELIVERED" || updated.status === "COMPLETED")
+    ) {
+      await createLoadCompletedNotification(updated.id);
+    }
+
     // Audit log
     await prisma.auditLog.create({
       data: {
@@ -288,17 +331,15 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
+    const decoded = await getVerifiedAuthUserFromRequest(req);
+    if (!decoded) {
       return NextResponse.json(
         { error: "Neautorizovan pristup" },
         { status: 401 }
       );
     }
 
-    const decoded = verifyToken(token);
-    if (!decoded || decoded.role !== "ADMIN") {
+    if (decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Samo administratori mogu brisati loadove" },
         { status: 403 }

@@ -16,7 +16,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -120,17 +120,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Force a small delay to ensure state is updated
     setTimeout(() => {
-      router.push("/");
+      router.push("/dashboard");
     }, 100);
   };
 
-  const logout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Logout request failed:", error);
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
+      setUser(null);
+      router.push("/login");
     }
-    setUser(null);
-    router.push("/login");
   };
 
   return (

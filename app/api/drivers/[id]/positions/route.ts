@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/drivers/[id]/positions
@@ -16,18 +19,17 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
+    const decoded = await getVerifiedAuthUserFromRequest(request);
+    if (!decoded) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const canViewOwnPositions =
+      decoded.role === 'DRIVER' && decoded.driverId === params.id;
+    const canViewAnyPositions =
+      decoded.role === 'ADMIN' || decoded.role === 'DISPATCHER';
 
-    // Only ADMIN and DISPATCHER can view position history
-    if (decoded.role !== 'ADMIN' && decoded.role !== 'DISPATCHER') {
+    if (!canViewOwnPositions && !canViewAnyPositions) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

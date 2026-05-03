@@ -29,20 +29,33 @@ interface RouteReplayMapProps {
   positions: Position[];
   driverName: string;
   fullScreen?: boolean;
+  focusPoint?: {
+    latitude: number;
+    longitude: number;
+    label?: string;
+  } | null;
 }
 
 // Custom component to fit map to route bounds
-function FitBounds({ positions }: { positions: Position[] }) {
+function FitBounds({
+  positions,
+  focusPoint,
+}: {
+  positions: Position[];
+  focusPoint?: { latitude: number; longitude: number } | null;
+}) {
   const map = useMap();
 
   useEffect(() => {
     if (positions.length > 0) {
-      const bounds = L.latLngBounds(
-        positions.map((p) => [p.latitude, p.longitude] as [number, number])
-      );
+      const points = positions.map((p) => [p.latitude, p.longitude] as [number, number]);
+      if (focusPoint) {
+        points.push([focusPoint.latitude, focusPoint.longitude]);
+      }
+      const bounds = L.latLngBounds(points);
       map.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [positions, map]);
+  }, [positions, focusPoint, map]);
 
   return null;
 }
@@ -73,7 +86,12 @@ function InvalidateSize({ trigger }: { trigger: number }) {
   return null;
 }
 
-export default function RouteReplayMap({ positions, driverName, fullScreen = false }: RouteReplayMapProps) {
+export default function RouteReplayMap({
+  positions,
+  driverName,
+  fullScreen = false,
+  focusPoint = null,
+}: RouteReplayMapProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -202,7 +220,20 @@ export default function RouteReplayMap({ positions, driverName, fullScreen = fal
             </Marker>
           )}
 
-          <FitBounds positions={positions} />
+          {focusPoint && (
+            <Marker position={[focusPoint.latitude, focusPoint.longitude]}>
+              <Popup>
+                <div className="text-sm">
+                  <p className="font-semibold">{focusPoint.label || "Tačka prelaza"}</p>
+                  <p className="text-xs text-dark-400">
+                    {focusPoint.latitude.toFixed(5)}, {focusPoint.longitude.toFixed(5)}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
+          <FitBounds positions={positions} focusPoint={focusPoint} />
           <FollowPosition position={currentPosition} isPlaying={isPlaying} />
           <InvalidateSize trigger={resizeTick} />
         </MapContainer>

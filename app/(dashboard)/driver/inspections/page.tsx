@@ -15,6 +15,7 @@ import {
   Search,
 } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
+import { getInspectionStatusLabel, getInspectionTypeLabel } from "@/lib/ui-labels";
 
 type Option = { id: string; label: string };
 
@@ -373,7 +374,7 @@ export default function DriverInspectionsPage() {
               <option value="">Izaberi inspekciju</option>
               {inspections.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.type} • {formatDateDMY(i.createdAt)}
+                  {getInspectionTypeLabel(i.type)} • {formatDateDMY(i.createdAt)}
                 </option>
               ))}
             </select>
@@ -393,7 +394,7 @@ export default function DriverInspectionsPage() {
                 className="w-full sm:w-auto"
               >
                 <UploadCloud className="w-4 h-4 mr-2" />
-                {uploading ? "Učitavanje..." : "Upload"}
+                {uploading ? "Učitavanje..." : "Pošalji"}
               </Button>
             </div>
             <p className="text-xs text-dark-500">Podržane slike i PDF dokumenti.</p>
@@ -468,7 +469,7 @@ export default function DriverInspectionsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-dark-900">{i.type}</p>
+                    <p className="font-semibold text-dark-900">{getInspectionTypeLabel(i.type)}</p>
                     <p className="text-xs text-dark-500">{formatDateDMY(i.createdAt)}</p>
                   </div>
                   <span
@@ -480,7 +481,7 @@ export default function DriverInspectionsPage() {
                         : "bg-amber-100 text-amber-700"
                     }`}
                   >
-                    {i.status}
+                    {getInspectionStatusLabel(i.status)}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px] text-dark-600">

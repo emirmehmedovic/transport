@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
+import {
+  createLoadCompletedNotification,
+  createLoadPickedUpNotification,
+} from '@/lib/client-notifications';
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/loads/[id]/update-status
@@ -14,14 +21,9 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: 'Nevažeća autentifikacija' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -29,7 +31,7 @@ export async function POST(
 
     if (!action || !['pickup', 'start_transit', 'deliver'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be: pickup, start_transit, or deliver' },
+        { error: 'Nevažeća akcija. Dozvoljeno: pickup, start_transit ili deliver' },
         { status: 400 }
       );
     }
@@ -54,7 +56,7 @@ export async function POST(
     });
 
     if (!load) {
-      return NextResponse.json({ error: 'Load not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Load nije pronađen' }, { status: 404 });
     }
 
     // Check permissions: Driver can only update their own loads, ADMIN/DISPATCHER can update any
@@ -63,7 +65,7 @@ export async function POST(
 
     if (!isDriver && !isAdminOrDispatcher) {
       return NextResponse.json(
-        { error: 'You do not have permission to update this load' },
+        { error: 'Nemate dozvolu za ažuriranje ovog loada' },
         { status: 403 }
       );
     }
@@ -92,7 +94,7 @@ export async function POST(
     if (!transition.from.includes(load.status)) {
       return NextResponse.json(
         {
-          error: `Cannot ${action} - load is currently ${load.status}. Expected: ${transition.from.join(' or ')}`,
+          error: `Akcija ${action} nije dozvoljena jer je load trenutno ${load.status}. Očekivano: ${transition.from.join(' ili ')}`,
         },
         { status: 400 }
       );
@@ -126,6 +128,13 @@ export async function POST(
       },
     });
 
+    if (transition.to === 'PICKED_UP') {
+      await createLoadPickedUpNotification(updatedLoad.id);
+    }
+    if (transition.to === 'DELIVERED' || transition.to === 'COMPLETED') {
+      await createLoadCompletedNotification(updatedLoad.id);
+    }
+
     console.log(
       `[LoadStatus] ${load.driver?.user.firstName} ${load.driver?.user.lastName} updated load ${load.loadNumber}: ${load.status} → ${transition.to}`
     );
@@ -133,7 +142,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       load: updatedLoad,
-      message: `Load status updated to ${transition.to}`,
+      message: `Status loada je promijenjen na ${transition.to}`,
     });
   } catch (error: any) {
     console.error('[LoadStatus] Error updating load status:', error);

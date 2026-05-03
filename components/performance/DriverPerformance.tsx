@@ -45,18 +45,18 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
   };
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-500">Loading performance data...</div>;
+    return <div className="text-center py-8 text-gray-500">Učitavanje podataka o performansama...</div>;
   }
 
   if (!performance) {
-    return <div className="text-center py-8 text-gray-500">No performance data available</div>;
+    return <div className="text-center py-8 text-gray-500">Nema dostupnih podataka o performansama</div>;
   }
 
   return (
     <div className="space-y-6">
       {/* Period Selector */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Performance Metrics</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Metrike performansi</h2>
         <div className="flex items-center gap-2">
           <Calendar className="w-5 h-5 text-gray-400" />
           <select
@@ -64,9 +64,9 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
             onChange={(e) => setPeriod(parseInt(e.target.value))}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           >
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
+            <option value={7}>Posljednjih 7 dana</option>
+            <option value={30}>Posljednjih 30 dana</option>
+            <option value={90}>Posljednjih 90 dana</option>
           </select>
         </div>
       </div>
@@ -84,7 +84,7 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
           icon={<Package className="w-6 h-6" />}
           label="Završeni loadovi"
           value={formatNumber(performance.completedLoads)}
-          subValue={`${performance.avgMilesPerLoad.toFixed(0)} avg km/load`}
+          subValue={`${performance.avgMilesPerLoad.toFixed(0)} prosj. km po nalogu`}
           color="purple"
         />
         <KPICard
@@ -96,9 +96,9 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
         />
         <KPICard
           icon={<Target className="w-6 h-6" />}
-          label="On-Time Delivery"
+          label="Pravovremena isporuka"
           value={`${performance.onTimeDeliveryRate.toFixed(1)}%`}
-          subValue={`${performance.activeDays} active days`}
+          subValue={`${performance.activeDays} aktivnih dana`}
           color="cyan"
         />
       </div>
@@ -112,12 +112,12 @@ export function DriverPerformance({ driverId }: DriverPerformanceProps) {
         <StatCard
           label="Deadhead km"
           value={formatNumber(performance.totalDeadheadMiles)}
-          subValue={`${((performance.totalDeadheadMiles / performance.totalMiles) * 100).toFixed(1)}% of total`}
+          subValue={`${((performance.totalDeadheadMiles / performance.totalMiles) * 100).toFixed(1)}% od ukupno`}
         />
         <StatCard
-          label="Utilization Rate"
+          label="Stepen iskorištenosti"
           value={`${performance.utilizationRate.toFixed(1)}%`}
-          subValue={`${performance.activeDays} of ${period} days`}
+          subValue={`${performance.activeDays} od ${period} dana`}
         />
       </div>
 

@@ -72,6 +72,41 @@ export default function AuditLogsPage() {
   // Selected log for detail view
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
+  const exportCurrentView = () => {
+    if (!data?.logs?.length) return;
+
+    const rows = data.logs.map((log) => ({
+      datum: formatDate(log.createdAt),
+      akcija: getActionLabel(log.action),
+      entitet: getEntityLabel(log.entity),
+      entityId: log.entityId,
+      korisnik: `${log.user.firstName} ${log.user.lastName}`,
+      uloga: log.user.role,
+      ipAdresa: log.ipAddress || "",
+      promjene: JSON.stringify(log.changes || {}),
+    }));
+
+    const header = Object.keys(rows[0]);
+    const csv = [
+      header.join(","),
+      ...rows.map((row) =>
+        header
+          .map((key) => `"${String((row as any)[key]).replace(/"/g, '""')}"`)
+          .join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     fetchLogs();
   }, [page, entityFilter, actionFilter, entityIdFilter, startDate, endDate]);
@@ -234,12 +269,21 @@ export default function AuditLogsPage() {
         title="Audit Logs"
         subtitle="Kompletan zapis svih akcija i izmjena u sistemu."
         actions={
-          <button
-            onClick={fetchLogs}
-            className="rounded-full border border-white/15 bg-white/5 px-3 md:px-5 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-dark-50 hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
-          >
-            Osvježi
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportCurrentView}
+              disabled={!data?.logs?.length}
+              className="rounded-full border border-white/15 bg-white/5 px-3 md:px-5 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-dark-50 hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Eksport CSV
+            </button>
+            <button
+              onClick={fetchLogs}
+              className="rounded-full border border-white/15 bg-white/5 px-3 md:px-5 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-dark-50 hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
+            >
+              Osvježi
+            </button>
+          </div>
         }
       >
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">

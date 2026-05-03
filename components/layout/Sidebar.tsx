@@ -20,6 +20,8 @@ import {
   X,
   Clipboard,
   Shield,
+  Plus,
+  Bell,
 } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 
@@ -34,15 +36,15 @@ const navigation: { category?: string; items: NavItem[] }[] = [
   {
     category: "HOME",
     items: [
-      { name: "Kontrolna tabla", href: "/", icon: LayoutDashboard },
+      { name: "Kontrolna tabla", href: "/dashboard", icon: LayoutDashboard },
       { name: "Live Mapa", href: "/live-map", icon: Map, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Schengen 90/180", href: "/schengen", icon: Shield, roles: ["ADMIN", "DISPATCHER", "DRIVER"] },
     ],
   },
   {
     category: "MANAGEMENT",
     items: [
       { name: "Vozači", href: "/drivers", icon: Users, roles: ["ADMIN", "DISPATCHER"] },
-      { name: "Schengen 90/180", href: "/schengen", icon: Shield, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Kamioni", href: "/trucks", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Prikolice", href: "/trailers", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
       { name: "DVIR", href: "/driver/inspections", icon: Clipboard, roles: ["DRIVER"] },
@@ -62,6 +64,17 @@ const navigation: { category?: string; items: NavItem[] }[] = [
       { name: "Izvještaji", href: "/reports", icon: BarChart3, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Alarmi", href: "/alerts", icon: AlertTriangle, roles: ["ADMIN"] },
       { name: "Audit Logs", href: "/audit-logs", icon: ScrollText, roles: ["ADMIN"] },
+    ],
+  },
+  {
+    category: "CLIENT PORTAL",
+    items: [
+      { name: "Portal pregled", href: "/client", icon: LayoutDashboard, roles: ["CLIENT"] },
+      { name: "Nova kalkulacija", href: "/client/loads/new", icon: Plus, roles: ["CLIENT"] },
+      { name: "Moji zahtjevi", href: "/client/loads", icon: Package, roles: ["CLIENT"] },
+      { name: "Live mapa", href: "/client/live-map", icon: Map, roles: ["CLIENT"] },
+      { name: "Obavijesti", href: "/client/notifications", icon: Bell, roles: ["CLIENT"] },
+      { name: "Profil kompanije", href: "/client/profile", icon: Settings, roles: ["CLIENT"] },
     ],
   },
 ];
@@ -101,7 +114,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <X className="w-5 h-5" />
           </button>
 
-          <Link href="/" className="flex items-center gap-3 group mb-5">
+          <Link href="/dashboard" className="flex items-center gap-3 group mb-5">
             <div className="h-9 w-9 md:h-10 md:w-10 rounded-2xl bg-primary-600 flex items-center justify-center text-white shadow-primary group-hover:shadow-primary-lg transition-all">
               <Truck className="w-5 h-5" />
             </div>
@@ -127,8 +140,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             {navigation.map((section, idx) => {
               // Filter items based on role
               const visibleItems = section.items.filter((item) => {
+                if (!user) return false;
+                if (user.role === "CLIENT") {
+                  return !!item.roles && item.roles.includes("CLIENT");
+                }
                 if (!item.roles) return true;
-                return user && item.roles.includes(user.role);
+                return item.roles.includes(user.role);
               });
 
               if (visibleItems.length === 0) return null;
@@ -188,10 +205,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <Sparkles className="w-5 h-5 text-primary-600" />
               </div>
               <h3 className="font-bold text-dark-900 text-sm mb-1">Mobile App</h3>
-              <p className="text-xs text-dark-500 mb-3">Uskoro dostupna za vozače</p>
-              <button className="w-full py-2 bg-dark-900 text-white text-xs font-medium rounded-xl hover:bg-primary-600 transition-colors shadow-soft">
+              <p className="text-xs text-dark-500 mb-3">Dostupna za vozače</p>
+              <Link
+                href="/android-app"
+                className="block w-full py-2 bg-dark-900 text-white text-xs font-medium rounded-xl hover:bg-primary-600 transition-colors shadow-soft text-center"
+              >
                 Saznaj više
-              </button>
+              </Link>
             </div>
           </div>
 

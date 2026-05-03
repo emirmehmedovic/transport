@@ -8,6 +8,8 @@ import { Upload, List } from 'lucide-react';
 interface DocumentsTabProps {
   loadId?: string;
   driverId?: string;
+  inspectionId?: string;
+  incidentId?: string;
   defaultView?: 'upload' | 'list';
   showUploadButton?: boolean;
 }
@@ -19,6 +21,8 @@ interface DocumentsTabProps {
 export default function DocumentsTab({
   loadId,
   driverId,
+  inspectionId,
+  incidentId,
   defaultView = 'list',
   showUploadButton = true,
 }: DocumentsTabProps) {
@@ -74,8 +78,10 @@ export default function DocumentsTab({
 
         {/* Info */}
         <div className="text-sm text-gray-500">
-          {loadId && 'Load Documents'}
-          {driverId && 'Driver Documents'}
+          {loadId && 'Dokumenti loada'}
+          {driverId && 'Dokumenti vozača'}
+          {inspectionId && 'Dokumenti inspekcije'}
+          {incidentId && 'Dokumenti incidenta'}
         </div>
       </div>
 
@@ -86,6 +92,8 @@ export default function DocumentsTab({
             key={refreshKey}
             loadId={loadId}
             driverId={driverId}
+            inspectionId={inspectionId}
+            incidentId={incidentId}
             onDocumentDeleted={handleDocumentDeleted}
           />
         )}
@@ -94,6 +102,8 @@ export default function DocumentsTab({
           <DocumentUpload
             loadId={loadId}
             driverId={driverId}
+            inspectionId={inspectionId}
+            incidentId={incidentId}
             onUploadSuccess={handleUploadSuccess}
           />
         )}

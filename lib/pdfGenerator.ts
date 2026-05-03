@@ -21,6 +21,46 @@ export interface PayStubData {
   loads: LoadWageDetail[];
 }
 
+export interface DriverBorderCrossingReportData {
+  driverName: string;
+  generatedAt: Date;
+  windowFrom?: Date | null;
+  schengenFrom: Date;
+  schengenTo: Date;
+  usedDays: number;
+  remainingDays: number;
+  borderCrossings: Array<{
+    type: "EXIT_BIH" | "ENTRY_BIH";
+    recordedAt: Date;
+    latitude?: number | null;
+    longitude?: number | null;
+    nearestBorderCrossing?: {
+      name: string;
+      distanceMeters?: number | null;
+    } | null;
+  }>;
+}
+
+const PDFKIT_FONT_PATHS = {
+  regular: '/System/Library/Fonts/Supplemental/Arial.ttf',
+  bold: '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+} as const;
+
+function ensureFontExists(fontPath: string) {
+  if (!existsSync(fontPath)) {
+    throw new Error(`PDF font file missing: ${fontPath}`);
+  }
+  return fontPath;
+}
+
+function regularFont() {
+  return ensureFontExists(PDFKIT_FONT_PATHS.regular);
+}
+
+function boldFont() {
+  return ensureFontExists(PDFKIT_FONT_PATHS.bold);
+}
+
 /**
  * Generiše pay stub PDF
  *
@@ -45,6 +85,7 @@ export async function generatePayStubPDF(
   const doc = new PDFDocument({
     size: 'LETTER',
     margins: { top: 50, bottom: 50, left: 50, right: 50 },
+    font: regularFont(),
   });
 
   // Pipe to file
@@ -54,22 +95,22 @@ export async function generatePayStubPDF(
   // Header
   doc
     .fontSize(24)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text('PAY STUB', { align: 'center' })
     .moveDown(0.5);
 
   doc
     .fontSize(12)
-    .font('Helvetica')
+    .font(regularFont())
     .text('Transport Management System', { align: 'center' })
     .moveDown(2);
 
   // Stub Number & Date
   doc
     .fontSize(10)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text(`Stub Number: ${payStubData.stubNumber}`, 50, 120)
-    .font('Helvetica')
+    .font(regularFont())
     .text(`Generated: ${formatDate(new Date())}`, 50, 135)
     .moveDown(1);
 
@@ -77,13 +118,13 @@ export async function generatePayStubPDF(
   const startY = 160;
   doc
     .fontSize(14)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text('Driver Information', 50, startY)
     .moveDown(0.5);
 
   doc
     .fontSize(10)
-    .font('Helvetica')
+    .font(regularFont())
     .text(
       `Name: ${payStubData.driver.firstName} ${payStubData.driver.lastName}`,
       50
@@ -95,19 +136,19 @@ export async function generatePayStubPDF(
   // Period Section
   doc
     .fontSize(14)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text('Pay Period', 50)
     .moveDown(0.5);
 
   doc
     .fontSize(10)
-    .font('Helvetica')
+    .font(regularFont())
     .text(`From: ${formatDate(payStubData.periodStart)}`, 50)
     .text(`To: ${formatDate(payStubData.periodEnd)}`, 50)
     .moveDown(2);
 
   // Loads Table
-  doc.fontSize(14).font('Helvetica-Bold').text('Loads Summary', 50).moveDown(0.5);
+  doc.fontSize(14).font(boldFont()).text('Loads Summary', 50).moveDown(0.5);
 
   // Table Header
   const tableTop = doc.y;
@@ -121,7 +162,7 @@ export async function generatePayStubPDF(
 
   doc
     .fontSize(9)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text('Load #', col1, tableTop)
     .text('Pickup', col2, tableTop)
     .text('Delivery', col3, tableTop)
@@ -138,7 +179,7 @@ export async function generatePayStubPDF(
 
   // Table Rows
   let yPosition = tableTop + 25;
-  doc.fontSize(8).font('Helvetica');
+  doc.fontSize(8).font(regularFont());
 
   payStubData.loads.forEach((load, index) => {
     // Check if we need a new page
@@ -168,37 +209,37 @@ export async function generatePayStubPDF(
 
   // Summary Section
   yPosition += 20;
-  doc.fontSize(12).font('Helvetica-Bold').text('Summary', 50, yPosition);
+  doc.fontSize(12).font(boldFont()).text('Summary', 50, yPosition);
 
   yPosition += 25;
-  doc.fontSize(10).font('Helvetica');
+  doc.fontSize(10).font(regularFont());
 
   const summaryCol1 = 350;
   const summaryCol2 = 480;
 
   doc
     .text('Total Loads:', summaryCol1, yPosition)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text(payStubData.loads.length.toString(), summaryCol2, yPosition);
 
   yPosition += 20;
   doc
-    .font('Helvetica')
+    .font(regularFont())
     .text('Ukupno km:', summaryCol1, yPosition)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text(payStubData.totalMiles.toString(), summaryCol2, yPosition);
 
   yPosition += 20;
   doc
-    .font('Helvetica')
+    .font(regularFont())
     .text('Prosječna cijena po km:', summaryCol1, yPosition)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text(`${payStubData.avgRatePerMile.toFixed(3)} KM/km`, summaryCol2, yPosition);
 
   yPosition += 25;
   doc
     .fontSize(12)
-    .font('Helvetica-Bold')
+    .font(boldFont())
     .text('TOTAL AMOUNT:', summaryCol1, yPosition)
     .fontSize(14)
     .text(formatCurrency(payStubData.totalAmount), summaryCol2, yPosition);
@@ -207,7 +248,7 @@ export async function generatePayStubPDF(
   const footerY = 720;
   doc
     .fontSize(8)
-    .font('Helvetica')
+    .font(regularFont())
     .text(
       'This document is computer-generated and does not require a signature.',
       50,
@@ -230,4 +271,114 @@ export async function generatePayStubPDF(
   });
 
   return relativePath;
+}
+
+export async function generateDriverBorderCrossingPDFBuffer(
+  reportData: DriverBorderCrossingReportData
+): Promise<Buffer> {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: { top: 50, bottom: 50, left: 50, right: 50 },
+    font: regularFont(),
+  });
+
+  const chunks: Buffer[] = [];
+
+  return await new Promise<Buffer>((resolve, reject) => {
+    doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    doc
+      .fontSize(20)
+      .font(boldFont())
+      .text('IZVJESTAJ PRELAZAKA GRANICE', { align: 'center' })
+      .moveDown(0.5);
+
+    doc
+      .fontSize(11)
+      .font(regularFont())
+      .text(`Vozac: ${reportData.driverName}`)
+      .text(`Generisano: ${formatDate(reportData.generatedAt)}`)
+      .text(
+        `Schengen period: ${formatDate(reportData.schengenFrom)} - ${formatDate(reportData.schengenTo)}`
+      )
+      .text(`Iskoristeno dana: ${reportData.usedDays}`)
+      .text(`Preostalo dana: ${reportData.remainingDays}`);
+
+    if (reportData.windowFrom) {
+      doc.text(`GPS historija za prelaze od: ${formatDate(reportData.windowFrom)}`);
+    }
+
+    doc.moveDown(1.5);
+    doc.fontSize(14).font(boldFont()).text('Prelazi').moveDown(0.5);
+
+    const col1 = 50;
+    const col2 = 145;
+    const col3 = 290;
+    const col4 = 440;
+    let y = doc.y;
+
+    doc
+      .fontSize(9)
+      .font(boldFont())
+      .text('Dogadjaj', col1, y)
+      .text('Datum i vrijeme', col2, y)
+      .text('Lokacija', col3, y)
+      .text('Koordinate', col4, y);
+
+    y += 15;
+    doc.moveTo(50, y).lineTo(545, y).stroke();
+    y += 10;
+
+    if (reportData.borderCrossings.length === 0) {
+      doc.font(regularFont()).fontSize(10).text('Nema evidentiranih prelazaka granice.', 50, y);
+      doc.end();
+      return;
+    }
+
+    for (const crossing of reportData.borderCrossings) {
+      if (y > 760) {
+        doc.addPage();
+        y = 50;
+      }
+
+      const location = crossing.nearestBorderCrossing?.name || 'Nepoznata lokacija';
+      const coords =
+        crossing.latitude !== null &&
+        crossing.latitude !== undefined &&
+        crossing.longitude !== null &&
+        crossing.longitude !== undefined
+          ? `${crossing.latitude.toFixed(5)}, ${crossing.longitude.toFixed(5)}`
+          : '-';
+
+      doc
+        .fontSize(9)
+        .font(regularFont())
+        .text(crossing.type === "EXIT_BIH" ? "Izlaz iz BiH" : "Ulaz u BiH", col1, y, { width: 85 })
+        .text(formatDate(crossing.recordedAt) + " " + crossing.recordedAt.toLocaleTimeString("bs-BA", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }), col2, y, { width: 130 })
+        .text(location, col3, y, { width: 135 })
+        .text(coords, col4, y, { width: 100 });
+
+      if (crossing.nearestBorderCrossing?.distanceMeters !== undefined && crossing.nearestBorderCrossing?.distanceMeters !== null) {
+        y += 12;
+        doc
+          .fontSize(8)
+          .fillColor('#6b7280')
+          .text(`Najblizi prelaz, udaljenost ${crossing.nearestBorderCrossing.distanceMeters} m`, col3, y, {
+            width: 180,
+          })
+          .fillColor('black');
+      }
+
+      y += 24;
+      doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').stroke().strokeColor('black');
+      y += 8;
+    }
+
+    doc.end();
+  });
 }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendTestNotification } from "@/lib/telegram";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 /**
  * Test endpoint za Telegram notifikacije
  * GET /api/telegram/test

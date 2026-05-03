@@ -118,16 +118,16 @@ export default function DriversComparePage() {
     if (comparisons.length === 0) return;
 
     const headers = [
-      "Driver Name",
+      "Ime vozača",
       "Email",
       "Status",
       "Total km",
-      "Total Revenue",
-      "Completed Loads",
-      "On-Time Delivery %",
+      "Ukupni prihod",
+      "Završeni nalozi",
+      "Pravovremena isporuka %",
       "Prosjek prihoda/km",
-      "Avg Revenue/Load",
-      "Utilization Rate %",
+      "Prosj. prihod po nalogu",
+      "Stepen iskorištenosti %",
     ];
 
     const rows = comparisons.map((c) => [

@@ -16,10 +16,19 @@ interface Load {
   loadNumber: string;
   routeName?: string | null;
   status: string;
+  sourceType?: "INTERNAL" | "CLIENT_PORTAL";
+  approvalStatus?: "APPROVED" | "PENDING" | "REJECTED";
+  approvalNote?: string | null;
   scheduledPickupDate: string | null;
   scheduledDeliveryDate: string | null;
   isRecurring?: boolean;
   recurringGroupId?: string | null;
+  requestedByUser?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
   driver?: {
     id: string;
     user: {
@@ -58,6 +67,7 @@ export default function LoadsPage() {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [startRouteUpdating, setStartRouteUpdating] = useState(false);
   const [startRouteMessage, setStartRouteMessage] = useState<string | null>(null);
+  const [approvalUpdatingId, setApprovalUpdatingId] = useState<string | null>(null);
 
   const fetchLoads = useCallback(async () => {
     try {
@@ -179,6 +189,33 @@ export default function LoadsPage() {
     }
   };
 
+  const handleApproval = async (
+    loadId: string,
+    approvalStatus: "APPROVED" | "REJECTED"
+  ) => {
+    try {
+      setApprovalUpdatingId(loadId);
+      const approvalNote =
+        approvalStatus === "REJECTED"
+          ? window.prompt("Unesite razlog odbijanja (opcionalno):") || ""
+          : "";
+      const res = await fetch(`/api/loads/${loadId}/approval`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus, approvalNote }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || "Greška pri ažuriranju odobrenja");
+      }
+      await fetchLoads();
+    } catch (err: any) {
+      setError(err.message || "Greška pri ažuriranju odobrenja");
+    } finally {
+      setApprovalUpdatingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -255,13 +292,23 @@ export default function LoadsPage() {
         title="Rute/Transporti"
         subtitle="Pregled svih ruta i transporta sa filtriranjem po statusu i paginacijom"
         actions={
-          <button
-            onClick={() => router.push("/loads/new")}
-            className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
-            Kreiraj rutu
-          </button>
+          user?.role === "CLIENT" ? (
+            <button
+              onClick={() => router.push("/client/loads/new")}
+              className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              Novi zahtjev
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push("/loads/new")}
+              className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              Kreiraj rutu
+            </button>
+          )
         }
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
@@ -381,7 +428,26 @@ export default function LoadsPage() {
                         {formatDate(load.scheduledPickupDate)} → {formatDate(load.scheduledDeliveryDate)}
                       </p>
                     </div>
-                    <LoadStatusBadge status={load.status} />
+                    <div className="flex flex-col items-end gap-1">
+                      <LoadStatusBadge status={load.status} />
+                      {load.sourceType === "CLIENT_PORTAL" && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            load.approvalStatus === "PENDING"
+                              ? "bg-amber-100 text-amber-700"
+                              : load.approvalStatus === "REJECTED"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {load.approvalStatus === "PENDING"
+                            ? "Čeka odobrenje"
+                            : load.approvalStatus === "REJECTED"
+                            ? "Odbijen"
+                            : "Odobren"}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-3 text-xs text-dark-600 space-y-1">
@@ -399,9 +465,38 @@ export default function LoadsPage() {
                           })`
                         : "Nije dodijeljen"}
                     </p>
+                    {load.sourceType === "CLIENT_PORTAL" && load.requestedByUser && (
+                      <p className="truncate">
+                        <span className="font-semibold">Klijent:</span>{" "}
+                        {`${load.requestedByUser.firstName} ${load.requestedByUser.lastName}`}
+                      </p>
+                    )}
                   </div>
 
                   <div className="mt-4 flex items-center gap-2">
+                    {(user?.role === "ADMIN" || user?.role === "DISPATCHER") &&
+                      load.sourceType === "CLIENT_PORTAL" &&
+                      load.approvalStatus === "PENDING" && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproval(load.id, "APPROVED")}
+                            disabled={approvalUpdatingId === load.id}
+                            className="flex-1 text-xs"
+                          >
+                            Odobri
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleApproval(load.id, "REJECTED")}
+                            disabled={approvalUpdatingId === load.id}
+                            className="flex-1 text-xs"
+                          >
+                            Odbij
+                          </Button>
+                        </>
+                      )}
                     {(!load.driver || !load.truck) && load.status === "AVAILABLE" && (
                       <Button
                         size="sm"
@@ -473,7 +568,28 @@ export default function LoadsPage() {
                   key: "status",
                   header: "Status",
                   className: "min-w-[120px]",
-                  render: (load) => <LoadStatusBadge status={load.status} />,
+                  render: (load) => (
+                    <div className="space-y-1">
+                      <LoadStatusBadge status={load.status} />
+                      {load.sourceType === "CLIENT_PORTAL" && (
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            load.approvalStatus === "PENDING"
+                              ? "bg-amber-100 text-amber-700"
+                              : load.approvalStatus === "REJECTED"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {load.approvalStatus === "PENDING"
+                            ? "Čeka odobrenje"
+                            : load.approvalStatus === "REJECTED"
+                            ? "Odbijen"
+                            : "Odobren"}
+                        </span>
+                      )}
+                    </div>
+                  ),
                 },
                 {
                   key: "dates",
@@ -498,6 +614,18 @@ export default function LoadsPage() {
                   ),
                 },
                 {
+                  key: "client",
+                  header: "Klijent",
+                  className: "min-w-[160px]",
+                  render: (load) => (
+                    <span className="text-[11px] md:text-sm text-dark-600 whitespace-nowrap">
+                      {load.sourceType === "CLIENT_PORTAL" && load.requestedByUser
+                        ? `${load.requestedByUser.firstName} ${load.requestedByUser.lastName}`
+                        : "-"}
+                    </span>
+                  ),
+                },
+                {
                   key: "truck",
                   header: "Kamion",
                   className: "min-w-[180px]",
@@ -517,6 +645,35 @@ export default function LoadsPage() {
                   className: "min-w-[120px]",
                   render: (load) => (
                     <div className="flex items-center gap-1 md:gap-2">
+                      {(user?.role === "ADMIN" || user?.role === "DISPATCHER") &&
+                        load.sourceType === "CLIENT_PORTAL" &&
+                        load.approvalStatus === "PENDING" && (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproval(load.id, "APPROVED");
+                              }}
+                              disabled={approvalUpdatingId === load.id}
+                              className="text-[10px] md:text-xs px-2 md:px-3"
+                            >
+                              Odobri
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproval(load.id, "REJECTED");
+                              }}
+                              disabled={approvalUpdatingId === load.id}
+                              className="text-[10px] md:text-xs px-2 md:px-3"
+                            >
+                              Odbij
+                            </Button>
+                          </>
+                        )}
                       {(!load.driver || !load.truck) && load.status === "AVAILABLE" && (
                         <Button
                           size="sm"

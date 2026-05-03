@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Transport Mobile",
+    "slug": "transport-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-notifications"
+    ],
+    "android": {
+      "package": "ba.transport.mobile"
+    }
+  }
+}

@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 
 // GET /api/trailers
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
@@ -55,12 +51,7 @@ export async function GET(req: NextRequest) {
 // POST /api/trailers
 export async function POST(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
@@ -73,6 +64,10 @@ export async function POST(req: NextRequest) {
       model,
       year,
       licensePlate,
+      type,
+      lengthMeters,
+      capacityM3,
+      compartmentCount,
       registrationExpiry,
       insuranceExpiry,
       isActive,
@@ -92,6 +87,19 @@ export async function POST(req: NextRequest) {
         model: model || null,
         year: year ? parseInt(year) : null,
         licensePlate: licensePlate || null,
+        type: type || "OTHER",
+        lengthMeters:
+          lengthMeters === "" || lengthMeters === null || lengthMeters === undefined
+            ? null
+            : Number(lengthMeters),
+        capacityM3:
+          capacityM3 === "" || capacityM3 === null || capacityM3 === undefined
+            ? null
+            : Number(capacityM3),
+        compartmentCount:
+          compartmentCount === "" || compartmentCount === null || compartmentCount === undefined
+            ? null
+            : parseInt(compartmentCount, 10),
         registrationExpiry: registrationExpiry ? new Date(registrationExpiry) : null,
         insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : null,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
@@ -102,6 +110,21 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ trailer }, { status: 201 });
   } catch (error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const target = Array.isArray(error.meta?.target) ? error.meta?.target.join(",") : "";
+      if (target.includes("trailerNumber")) {
+        return NextResponse.json(
+          { error: "Prikolica sa ovim brojem već postoji" },
+          { status: 400 }
+        );
+      }
+      if (target.includes("vin")) {
+        return NextResponse.json(
+          { error: "Prikolica sa ovim VIN brojem već postoji" },
+          { status: 400 }
+        );
+      }
+    }
     console.error("Trailer create error:", error);
     return NextResponse.json({ error: "Greška pri kreiranju prikolice" }, { status: 500 });
   }

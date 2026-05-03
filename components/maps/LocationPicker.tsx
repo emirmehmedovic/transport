@@ -232,7 +232,7 @@ export default function LocationPicker({
         </label>
 
         {/* Search Bar */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
             <input
@@ -248,7 +248,7 @@ export default function LocationPicker({
           <button
             onClick={handleSearch}
             disabled={searching || !searchQuery.trim()}
-            className="px-4 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             {searching ? (
               <>
@@ -269,7 +269,7 @@ export default function LocationPicker({
           <MapContainer
             center={position}
             zoom={13}
-            style={{ height: "600px", width: "100%" }}
+            className="h-[360px] md:h-[600px] w-full"
             key={`${position[0]}-${position[1]}`}
           >
             <TileLayer

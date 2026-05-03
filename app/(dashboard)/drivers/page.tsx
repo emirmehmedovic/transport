@@ -335,42 +335,42 @@ export default function DriversPage() {
       </div>
 
       {/* Content Section */}
-      <div className="bg-white rounded-2xl md:rounded-[2rem] shadow-soft overflow-hidden min-h-[300px] md:min-h-[400px]">
+      <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-lg border border-slate-200/60 overflow-hidden min-h-[300px] md:min-h-[400px]">
         {loading ? (
           // Skeleton Loading State
           <div className="p-4 md:p-6 space-y-4 md:space-y-6">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-3 md:gap-4 animate-pulse">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-dark-100 shrink-0" />
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-100 shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3 md:h-4 bg-dark-100 rounded w-1/4" />
-                  <div className="h-2 md:h-3 bg-dark-100 rounded w-1/6" />
+                  <div className="h-3 md:h-4 bg-slate-100 rounded w-1/4" />
+                  <div className="h-2 md:h-3 bg-slate-100 rounded w-1/6" />
                 </div>
-                <div className="hidden md:block h-8 bg-dark-100 rounded w-24" />
-                <div className="hidden md:block h-8 bg-dark-100 rounded w-32" />
+                <div className="hidden md:block h-8 bg-slate-100 rounded-xl w-24" />
+                <div className="hidden md:block h-8 bg-slate-100 rounded-xl w-32" />
               </div>
             ))}
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-4">
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mb-4">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mb-4 ring-4 ring-red-100">
               <Trash2 className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-dark-900 mb-2">Greška</h3>
-            <p className="text-dark-500">{error}</p>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Greška</h3>
+            <p className="text-slate-600">{error}</p>
           </div>
         ) : drivers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-4">
-            <div className="w-20 h-20 bg-dark-50 rounded-full flex items-center justify-center text-dark-400 mb-6">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-6 ring-4 ring-slate-100">
               <User className="w-10 h-10" />
             </div>
-            <h3 className="text-xl font-bold text-dark-900 mb-2">Nema pronađenih vozača</h3>
-            <p className="text-dark-500 max-w-xs mx-auto">
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Nema pronađenih vozača</h3>
+            <p className="text-slate-600 max-w-xs mx-auto">
               Pokušajte promijeniti filtere ili dodajte novog vozača u sistem.
             </p>
             <button
               onClick={() => router.push("/drivers/new")}
-              className="mt-6 text-primary-600 font-bold hover:text-primary-700"
+              className="mt-6 px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-all shadow-lg"
             >
               + Dodaj novog vozača
             </button>
@@ -386,7 +386,7 @@ export default function DriversPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ring-2 ring-slate-200">
                         {driver.user.firstName[0]}
                         {driver.user.lastName[0]}
                       </div>
@@ -460,34 +460,34 @@ export default function DriversPage() {
 
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs md:text-sm text-left">
-              <thead className="bg-dark-50 text-dark-500 font-medium">
-                <tr>
-                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Vozač</th>
-                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden lg:table-cell">Kontakt</th>
-                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden xl:table-cell">Detalji Licence</th>
-                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap hidden md:table-cell">Kamion</th>
-                  <th className="px-3 md:px-6 py-3 md:py-4 whitespace-nowrap">Status</th>
-                  <th className="px-3 md:px-6 py-3 md:py-4 text-right whitespace-nowrap">Akcije</th>
+              <thead>
+                <tr className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-200">
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Vozač</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Kontakt</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap hidden xl:table-cell">Detalji Licence</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Kamion</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">Status</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right whitespace-nowrap">Akcije</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-dark-50">
+              <tbody className="divide-y divide-slate-100">
                 {drivers.map((driver) => (
                   <tr
                     key={driver.id}
-                    className="hover:bg-dark-50/50 transition-colors group cursor-pointer"
+                    className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
                     onClick={() => router.push(`/drivers/${driver.id}`)}
                   >
                     <td className="px-3 md:px-6 py-3 md:py-4">
                       <div className="flex items-center gap-2 md:gap-3">
-                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold shadow-md text-xs md:text-sm flex-shrink-0">
+                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold shadow-md text-xs md:text-sm flex-shrink-0 ring-2 ring-slate-200">
                           {driver.user.firstName[0]}
                           {driver.user.lastName[0]}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-dark-900 truncate">
+                          <p className="font-bold text-slate-900 truncate">
                             {driver.user.firstName} {driver.user.lastName}
                           </p>
-                          <p className="text-[10px] md:text-xs text-dark-500 truncate">
+                          <p className="text-[10px] md:text-xs text-slate-500 truncate">
                             ID: {driver.id.slice(0, 8)}
                           </p>
                         </div>
@@ -495,26 +495,26 @@ export default function DriversPage() {
                     </td>
                     <td className="px-3 md:px-6 py-3 md:py-4 hidden lg:table-cell">
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-dark-600">
-                          <Mail className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">{driver.user.email}</span>
+                        <div className="flex items-center gap-2 text-slate-700">
+                          <Mail className="w-3 h-3 flex-shrink-0 text-slate-400" />
+                          <span className="truncate font-medium">{driver.user.email}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-dark-600">
-                          <Phone className="w-3 h-3 flex-shrink-0" />
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <Phone className="w-3 h-3 flex-shrink-0 text-slate-400" />
                           <span className="truncate">{driver.user.phone || "Nema telefon"}</span>
                         </div>
                       </div>
                     </td>
                     <td className="px-3 md:px-6 py-3 md:py-4 hidden xl:table-cell">
                       <div className="flex items-center gap-2">
-                        <div className="p-1.5 md:p-2 bg-dark-100 rounded-lg text-dark-500 flex-shrink-0">
+                        <div className="p-1.5 md:p-2 bg-slate-100 rounded-xl text-slate-600 flex-shrink-0">
                           <FileText className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-dark-900 truncate">
+                          <p className="font-semibold text-slate-900 truncate">
                             {driver.licenseNumber}
                           </p>
-                          <p className="text-[10px] md:text-xs text-dark-500 truncate">
+                          <p className="text-[10px] md:text-xs text-slate-500 truncate">
                             {driver.licenseState} • Exp: {formatDateDMY(driver.licenseExpiry)}
                           </p>
                         </div>
@@ -523,25 +523,25 @@ export default function DriversPage() {
                     <td className="px-3 md:px-6 py-3 md:py-4 hidden md:table-cell">
                       {driver.primaryTruck ? (
                         <div className="flex items-center gap-2">
-                          <div className="p-1.5 md:p-2 bg-dark-100 rounded-lg text-dark-500 flex-shrink-0">
+                          <div className="p-1.5 md:p-2 bg-slate-100 rounded-xl text-slate-600 flex-shrink-0">
                             <Truck className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-medium text-dark-900 truncate">
+                            <p className="font-semibold text-slate-900 truncate">
                               {driver.primaryTruck.truckNumber}
                             </p>
-                            <p className="text-[10px] md:text-xs text-dark-500 truncate">
+                            <p className="text-[10px] md:text-xs text-slate-500 truncate">
                               {driver.primaryTruck.make}
                             </p>
                           </div>
                         </div>
                       ) : (
-                        <span className="text-dark-400 italic text-[10px] md:text-xs">Nije dodijeljen</span>
+                        <span className="text-slate-400 italic text-[10px] md:text-xs">Nije dodijeljen</span>
                       )}
                     </td>
                     <td className="px-3 md:px-6 py-3 md:py-4">
                       <span
-                        className={`inline-flex items-center px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold border ${getStatusBadgeColor(
+                        className={`inline-flex items-center px-2 md:px-3 py-1 md:py-1.5 rounded-full text-[10px] md:text-xs font-semibold ring-1 ${getStatusBadgeColor(
                           driver.status
                         )} whitespace-nowrap`}
                       >
@@ -555,7 +555,7 @@ export default function DriversPage() {
                             e.stopPropagation();
                             router.push(`/drivers/${driver.id}/edit`);
                           }}
-                          className="p-1.5 md:p-2 text-dark-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg md:rounded-xl transition-all"
+                          className="p-1.5 md:p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg md:rounded-xl transition-all"
                           title="Uredi"
                         >
                           <Pencil className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -584,7 +584,7 @@ export default function DriversPage() {
                               e.stopPropagation();
                               setDeleteConfirm(driver.id);
                             }}
-                            className="p-1.5 md:p-2 text-dark-500 hover:text-red-600 hover:bg-red-50 rounded-lg md:rounded-xl transition-all"
+                            className="p-1.5 md:p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg md:rounded-xl transition-all"
                             title="Obriši"
                           >
                             <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -596,13 +596,13 @@ export default function DriversPage() {
                 ))}
               </tbody>
             </table>
-            <div className="flex flex-col gap-3 px-4 md:px-6 py-3 md:py-4 border-t border-dark-100 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs md:text-sm text-dark-500">
-                Stranica {pagination.page} od {pagination.totalPages}
+            <div className="flex flex-col gap-3 px-4 md:px-6 py-4 md:py-5 border-t border-slate-100 bg-gradient-to-r from-slate-50/50 to-transparent sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs md:text-sm font-medium text-slate-600">
+                Stranica <span className="font-bold text-slate-900">{pagination.page}</span> od <span className="font-bold text-slate-900">{pagination.totalPages}</span>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
-                  className="flex-1 sm:flex-none px-3 py-2 rounded-full border border-dark-200 text-xs md:text-sm font-semibold text-dark-600 hover:bg-dark-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                   disabled={pagination.page <= 1}
                   onClick={() => {
                     const nextPage = Math.max(1, pagination.page - 1);
@@ -614,7 +614,7 @@ export default function DriversPage() {
                   Prethodna
                 </button>
                 <button
-                  className="flex-1 sm:flex-none px-3 py-2 rounded-full border border-dark-200 text-xs md:text-sm font-semibold text-dark-600 hover:bg-dark-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                   disabled={pagination.page >= pagination.totalPages}
                   onClick={() => {
                     const nextPage = Math.min(pagination.totalPages, pagination.page + 1);

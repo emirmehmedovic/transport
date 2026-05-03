@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Calendar, Download } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -31,17 +31,8 @@ interface Driver {
 export default function DriverReplayPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const driverId = params.id as string;
-
-  const [driver, setDriver] = useState<Driver | null>(null);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [statistics, setStatistics] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [limit, setLimit] = useState(5000);
-  const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
-  const [limited, setLimited] = useState(false);
-  const [fullScreen, setFullScreen] = useState(false);
 
   // Date range (default: last 24 hours)
   const toLocalInputValue = (date: Date) => {
@@ -51,11 +42,38 @@ export default function DriverReplayPage() {
     )}:${pad(date.getMinutes())}`;
   };
 
+  const queryStart = searchParams.get("start");
+  const queryEnd = searchParams.get("end");
+  const queryLimit = Number(searchParams.get("limit") || "5000");
+  const queryFocusLat = Number(searchParams.get("focusLat"));
+  const queryFocusLng = Number(searchParams.get("focusLng"));
+  const queryFocusLabel = searchParams.get("focusLabel");
+  const initialStart = queryStart ? new Date(queryStart) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const initialEnd = queryEnd ? new Date(queryEnd) : new Date();
+  const focusPoint =
+    Number.isFinite(queryFocusLat) && Number.isFinite(queryFocusLng)
+      ? {
+          latitude: queryFocusLat,
+          longitude: queryFocusLng,
+          label: queryFocusLabel || "Tačka prelaza",
+        }
+      : null;
+
+  const [driver, setDriver] = useState<Driver | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [statistics, setStatistics] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [limit, setLimit] = useState(Number.isFinite(queryLimit) && queryLimit > 0 ? queryLimit : 5000);
+  const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
+  const [limited, setLimited] = useState(false);
+  const [fullScreen, setFullScreen] = useState(false);
+
   const [startDateTime, setStartDateTime] = useState(
-    toLocalInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000))
+    toLocalInputValue(initialStart)
   );
   const [endDateTime, setEndDateTime] = useState(
-    toLocalInputValue(new Date())
+    toLocalInputValue(initialEnd)
   );
 
   const fetchPositions = async () => {
@@ -137,7 +155,7 @@ ${positions
     <div className={fullScreen ? "fixed inset-0 z-50 bg-dark-900/80" : "space-y-6"}>
       {!fullScreen && (
         <PageHeader
-          title={`Route Replay: ${driver?.name || "Loading..."}`}
+          title={`Reprodukcija rute: ${driver?.name || "Učitavanje..."}`}
           subtitle="Pregledaj historiju kretanja vozača"
           actions={
             <button
@@ -200,16 +218,16 @@ ${positions
             onClick={() => setFullScreen((prev) => !prev)}
             className="ml-auto px-4 py-2 bg-dark-100 rounded-lg hover:bg-dark-200"
           >
-            {fullScreen ? "Izađi iz full screen" : "Full screen"}
+            {fullScreen ? "Izađi iz prikaza preko cijelog ekrana" : "Prikaz preko cijelog ekrana"}
           </button>
           {positions.length > 0 && (
             <button
               onClick={handleExportGPX}
               className="px-4 py-2 bg-dark-100 rounded-lg hover:bg-dark-200 flex items-center gap-2"
-              title="Export GPX"
+              title="Izvezi GPX"
             >
               <Download className="w-4 h-4" />
-              Export GPX
+              Izvezi GPX
             </button>
           )}
         </div>
@@ -269,10 +287,15 @@ ${positions
           className={
             fullScreen
               ? "flex flex-col h-[calc(100vh-140px)] bg-white rounded-b-2xl overflow-hidden"
-              : ""
+              : "space-y-4"
           }
         >
-          <RouteReplayMap positions={positions} driverName={driver.name} fullScreen={fullScreen} />
+          <RouteReplayMap
+            positions={positions}
+            driverName={driver.name}
+            fullScreen={fullScreen}
+            focusPoint={focusPoint}
+          />
         </div>
       )}
     </div>

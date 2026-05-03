@@ -45,28 +45,43 @@ export function TruckPerformance({ truckId }: TruckPerformanceProps) {
   };
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-500">Loading performance data...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Activity className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-pulse" />
+          <p className="text-slate-500">Učitavanje...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!performance) {
-    return <div className="text-center py-8 text-gray-500">No performance data available</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-6 max-w-md mx-auto text-center">
+          <p className="text-sm text-slate-600 font-medium">Nema dostupnih podataka o performansama</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 md:space-y-8">
       {/* Period Selector */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Performance Metrics</h2>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-gray-400" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg p-6">
+        <h2 className="text-2xl font-bold text-slate-900">Metrike performansi</h2>
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
+            <Calendar className="w-5 h-5 text-slate-600" />
+          </div>
           <select
             value={period}
             onChange={(e) => setPeriod(parseInt(e.target.value))}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="px-4 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400 text-sm"
           >
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
+            <option value={7}>Zadnjih 7 dana</option>
+            <option value={30}>Zadnjih 30 dana</option>
+            <option value={90}>Zadnjih 90 dana</option>
           </select>
         </div>
       </div>
@@ -138,23 +153,16 @@ function KPICard({
   subValue?: string;
   color: 'blue' | 'green' | 'purple' | 'orange' | 'yellow' | 'red';
 }) {
-  const colors = {
-    blue: 'text-blue-500 bg-blue-50',
-    green: 'text-green-500 bg-green-50',
-    purple: 'text-purple-500 bg-purple-50',
-    orange: 'text-orange-500 bg-orange-50',
-    yellow: 'text-yellow-600 bg-yellow-50',
-    red: 'text-red-500 bg-red-50',
-  };
-
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm">
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`p-2 rounded-lg ${colors[color]}`}>{icon}</div>
-        <span className="text-sm text-gray-500 font-medium">{label}</span>
+    <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <div className="flex items-start justify-between mb-4">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
+        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+          {icon}
+        </div>
       </div>
-      <div className="text-3xl font-bold text-gray-900 mb-1">{value}</div>
-      {subValue && <div className="text-sm text-gray-500">{subValue}</div>}
+      <div className="text-3xl font-bold text-slate-900 mb-2">{value}</div>
+      {subValue && <div className="text-sm text-slate-600">{subValue}</div>}
     </div>
   );
 }
@@ -171,10 +179,10 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm">
-      <div className="text-sm text-gray-500 font-medium mb-2">{label}</div>
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      {subValue && <div className="text-sm text-gray-500 mt-1">{subValue}</div>}
+    <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{label}</p>
+      <div className="text-2xl font-bold text-slate-900">{value}</div>
+      {subValue && <div className="text-sm text-slate-600 mt-2">{subValue}</div>}
     </div>
   );
 }

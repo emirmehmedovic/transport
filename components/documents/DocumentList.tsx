@@ -5,13 +5,12 @@ import {
   FileText,
   Download,
   Trash2,
-  Eye,
   Search,
-  Filter,
-  Calendar,
   AlertCircle
 } from 'lucide-react';
+import { useAuth } from '@/lib/authContext';
 import { formatDateDMY } from "@/lib/date";
+import { DOCUMENT_APPROVAL_STATUS_LABELS, DOCUMENT_TYPE_LABELS } from "@/lib/ui-labels";
 
 interface Document {
   id: string;
@@ -21,6 +20,9 @@ interface Document {
   fileSize: number;
   mimeType: string;
   expiryDate: string | null;
+  approvalStatus: string;
+  reviewedAt: string | null;
+  reviewNote: string | null;
   createdAt: string;
   load?: {
     id: string;
@@ -38,38 +40,30 @@ interface Document {
 interface DocumentListProps {
   loadId?: string;
   driverId?: string;
+  inspectionId?: string;
+  incidentId?: string;
   onDocumentDeleted?: () => void;
 }
-
-const DOCUMENT_TYPE_LABELS: { [key: string]: string } = {
-  BOL: 'Bill of Lading',
-  POD: 'Proof of Delivery',
-  DAMAGE_REPORT: 'Damage Report',
-  LOAD_PHOTO: 'Load Photo',
-  RATE_CONFIRMATION: 'Rate Confirmation',
-  FUEL_RECEIPT: 'Fuel Receipt',
-  CDL_LICENSE: 'CDL License',
-  MEDICAL_CARD: 'Medical Card',
-  INSURANCE: 'Insurance',
-  REGISTRATION: 'Registration',
-  OTHER: 'Other',
-};
 
 export default function DocumentList({
   loadId,
   driverId,
+  inspectionId,
+  incidentId,
   onDocumentDeleted,
 }: DocumentListProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState('');
+  const [selectedApprovalStatus, setSelectedApprovalStatus] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchDocuments();
-  }, [loadId, driverId, selectedType]);
+  }, [loadId, driverId, inspectionId, incidentId, selectedType, selectedApprovalStatus]);
 
   const fetchDocuments = async () => {
     try {
@@ -79,26 +73,54 @@ export default function DocumentList({
       const params = new URLSearchParams();
       if (loadId) params.append('loadId', loadId);
       if (driverId) params.append('driverId', driverId);
+      if (inspectionId) params.append('inspectionId', inspectionId);
+      if (incidentId) params.append('incidentId', incidentId);
       if (selectedType) params.append('type', selectedType);
+      if (selectedApprovalStatus) params.append('approvalStatus', selectedApprovalStatus);
       if (searchQuery) params.append('search', searchQuery);
 
       const response = await fetch(`/api/documents?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch documents');
+      if (!response.ok) throw new Error('Neuspjelo učitavanje dokumenata');
 
       const data = await response.json();
       setDocuments(data.documents || []);
     } catch (error) {
       console.error('Fetch documents error:', error);
-      alert('Failed to load documents');
+      alert('Neuspjelo učitavanje dokumenata');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReview = async (id: string, status: 'APPROVED' | 'REJECTED' | 'PENDING') => {
+    try {
+      const response = await fetch(`/api/documents/${id}/review`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status,
+          reviewNote: reviewNote[id] || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Ažuriranje nije uspjelo');
+      }
+
+      await fetchDocuments();
+    } catch (error: any) {
+      console.error('Review error:', error);
+      alert(error.message || 'Greška pri pregledu dokumenta');
     }
   };
 
   const handleDownload = async (doc: Document) => {
     try {
       const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error('Download failed');
+      if (!response.ok) throw new Error('Preuzimanje nije uspjelo');
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -111,7 +133,7 @@ export default function DocumentList({
       document.body.removeChild(a);
     } catch (error) {
       console.error('Download error:', error);
-      alert('Failed to download document');
+      alert('Neuspjelo preuzimanje dokumenta');
     }
   };
 
@@ -121,7 +143,7 @@ export default function DocumentList({
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Delete failed');
+      if (!response.ok) throw new Error('Brisanje nije uspjelo');
 
       // Refresh list
       fetchDocuments();
@@ -131,17 +153,17 @@ export default function DocumentList({
         onDocumentDeleted();
       }
 
-      alert('Document deleted successfully');
+      alert('Dokument je uspješno obrisan');
     } catch (error) {
       console.error('Delete error:', error);
-      alert('Failed to delete document');
+      alert('Neuspjelo brisanje dokumenta');
     }
   };
 
   const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
+    const sizes = ['B', 'KB', 'MB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
@@ -172,7 +194,7 @@ export default function DocumentList({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by filename..."
+            placeholder="Pretraži po nazivu fajla..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && fetchDocuments()}
@@ -187,8 +209,23 @@ export default function DocumentList({
             onChange={(e) => setSelectedType(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           >
-            <option value="">All Types</option>
+            <option value="">Sve vrste</option>
             {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="sm:w-52">
+          <select
+            value={selectedApprovalStatus}
+            onChange={(e) => setSelectedApprovalStatus(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="">Svi statusi pregleda</option>
+            {Object.entries(DOCUMENT_APPROVAL_STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -201,7 +238,7 @@ export default function DocumentList({
           onClick={fetchDocuments}
           className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
         >
-          Search
+          Pretraži
         </button>
       </div>
 
@@ -209,12 +246,12 @@ export default function DocumentList({
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-500">
-            Loading documents...
+            Učitavanje dokumenata...
           </div>
         ) : documents.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>No documents found</p>
+            <p>Nema pronađenih dokumenata</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -222,22 +259,25 @@ export default function DocumentList({
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    File Name
+                    Naziv fajla
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Type
+                    Vrsta
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Size
+                    Veličina
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Uploaded
+                    Dodano
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Expiry
+                    Istek
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    Pregled
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
-                    Actions
+                    Akcije
                   </th>
                 </tr>
               </thead>
@@ -253,12 +293,12 @@ export default function DocumentList({
                           </p>
                           {doc.load && (
                             <p className="text-xs text-gray-500">
-                              Load: {doc.load.loadNumber}
+                              Nalog: {doc.load.loadNumber}
                             </p>
                           )}
                           {doc.driver && (
                             <p className="text-xs text-gray-500">
-                              Driver: {doc.driver.user.firstName} {doc.driver.user.lastName}
+                              Vozač: {doc.driver.user.firstName} {doc.driver.user.lastName}
                             </p>
                           )}
                         </div>
@@ -294,13 +334,56 @@ export default function DocumentList({
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="space-y-2">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
+                          doc.approvalStatus === 'APPROVED'
+                            ? 'bg-green-100 text-green-700'
+                            : doc.approvalStatus === 'REJECTED'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {DOCUMENT_APPROVAL_STATUS_LABELS[doc.approvalStatus] || doc.approvalStatus}
+                        </span>
+                        {doc.reviewNote && (
+                          <p className="text-xs text-gray-500 max-w-xs">{doc.reviewNote}</p>
+                        )}
+                        {(user?.role === 'ADMIN' || user?.role === 'DISPATCHER') && (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={reviewNote[doc.id] || ''}
+                              onChange={(e) =>
+                                setReviewNote((prev) => ({ ...prev, [doc.id]: e.target.value }))
+                              }
+                              placeholder="Napomena pregleda"
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleReview(doc.id, 'APPROVED')}
+                                className="px-2 py-1 rounded bg-green-600 text-white text-xs font-medium"
+                              >
+                                Odobri
+                              </button>
+                              <button
+                                onClick={() => handleReview(doc.id, 'REJECTED')}
+                                className="px-2 py-1 rounded bg-red-600 text-white text-xs font-medium"
+                              >
+                                Odbij
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end space-x-2">
                         {/* Download Button */}
                         <button
                           onClick={() => handleDownload(doc)}
                           className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                          title="Download"
+                          title="Preuzmi"
                         >
                           <Download className="w-4 h-4" />
                         </button>
@@ -309,7 +392,7 @@ export default function DocumentList({
                         <button
                           onClick={() => setDeleteConfirm(doc.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
+                          title="Obriši"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -328,23 +411,23 @@ export default function DocumentList({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Delete Document?
+              Obrisati dokument?
             </h3>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this document? This action cannot be undone.
+              Da li ste sigurni da želite obrisati ovaj dokument? Ovu radnju nije moguće poništiti.
             </p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                Otkaži
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirm)}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
-                Delete
+                Obriši
               </button>
             </div>
           </div>

@@ -1,8 +1,21 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret';
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET nije postavljen');
+  }
+  return secret;
+}
+
+function getJwtRefreshSecret() {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) {
+    throw new Error('JWT_REFRESH_SECRET nije postavljen');
+  }
+  return secret;
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return await bcrypt.hash(password, 10);
@@ -16,16 +29,16 @@ export async function comparePassword(
 }
 
 export function generateToken(payload: any): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '30d' });
 }
 
 export function generateRefreshToken(payload: any): string {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: '90d' });
+  return jwt.sign(payload, getJwtRefreshSecret(), { expiresIn: '90d' });
 }
 
 export function verifyToken(token: string): any {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
   } catch (error) {
     return null;
   }
@@ -33,7 +46,7 @@ export function verifyToken(token: string): any {
 
 export function verifyRefreshToken(token: string): any {
   try {
-    return jwt.verify(token, JWT_REFRESH_SECRET);
+    return jwt.verify(token, getJwtRefreshSecret());
   } catch (error) {
     return null;
   }

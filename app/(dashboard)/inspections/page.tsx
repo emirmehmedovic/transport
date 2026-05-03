@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Clipboard } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
+import { getInspectionStatusLabel, getInspectionTypeLabel } from "@/lib/ui-labels";
 
 type Option = { id: string; label: string };
 
@@ -122,17 +123,17 @@ export default function InspectionsPage() {
             value={form.type}
             onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
           >
-            <option value="PRE_TRIP">Pre-trip</option>
-            <option value="POST_TRIP">Post-trip</option>
+            <option value="PRE_TRIP">Prije vožnje</option>
+            <option value="POST_TRIP">Poslije vožnje</option>
           </select>
           <select
             className="rounded-xl border border-dark-200 px-3 py-2 text-sm"
             value={form.status}
             onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
           >
-            <option value="SAFE">Safe</option>
-            <option value="UNSAFE">Unsafe</option>
-            <option value="NEEDS_REPAIR">Needs repair</option>
+            <option value="SAFE">Ispravno</option>
+            <option value="UNSAFE">Neispravno</option>
+            <option value="NEEDS_REPAIR">Potrebna popravka</option>
           </select>
           <select
             className="rounded-xl border border-dark-200 px-3 py-2 text-sm"
@@ -172,7 +173,7 @@ export default function InspectionsPage() {
           </select>
           <input
             className="rounded-xl border border-dark-200 px-3 py-2 text-sm"
-            placeholder="Odometer"
+            placeholder="Kilometraža"
             value={form.odometer}
             onChange={(e) => setForm((p) => ({ ...p, odometer: e.target.value }))}
           />
@@ -218,7 +219,7 @@ export default function InspectionsPage() {
                 className="rounded-xl border border-dark-200 px-4 py-3 text-sm"
               >
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold text-dark-900">{i.type} • {i.status}</p>
+                  <p className="font-semibold text-dark-900">{getInspectionTypeLabel(i.type)} • {getInspectionStatusLabel(i.status)}</p>
                   <p className="text-xs text-dark-500">
                     {formatDateDMY(i.createdAt)}
                   </p>

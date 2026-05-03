@@ -5,9 +5,10 @@ import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/authContext";
-import { formatDateDMY } from "@/lib/date";
+import { formatDateDMY, formatDateTimeDMY } from "@/lib/date";
 import {
   ArrowLeft,
+  Download,
   Pencil,
   Trash2,
   Phone,
@@ -26,6 +27,8 @@ import {
   BarChart3,
 } from "lucide-react";
 import { DriverPerformance } from "@/components/performance";
+import AuditTimelineCard from "@/components/audit/AuditTimelineCard";
+import { getDriverStatusLabel, getLoadStatusLabel, getTrailerTypeLabel } from "@/lib/ui-labels";
 
 interface Driver {
   id: string;
@@ -53,6 +56,11 @@ interface Driver {
     model: string;
     year: number;
     status: string;
+    trailers: {
+      id: string;
+      trailerNumber: string;
+      type: string;
+    }[];
   } | null;
   loads: {
     id: string;
@@ -118,13 +126,52 @@ export default function DriverDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "performance" | "history">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "performance" | "history" | "schengen">("overview");
   const [updatingLoadId, setUpdatingLoadId] = useState<string | null>(null);
   const [schengenStats, setSchengenStats] = useState<{
     usedDays: number;
     remainingDays: number;
     from: string;
     to: string;
+    borderCrossings?: {
+      type: "EXIT_BIH" | "ENTRY_BIH";
+      recordedAt: string;
+      latitude?: number | null;
+      longitude?: number | null;
+      nearestBorderCrossing?: {
+        id: string;
+        name: string;
+        distanceMeters: number;
+      } | null;
+      confirmation?: {
+        notificationId: string;
+        status: "AUTO_ONLY" | "PENDING_DRIVER_CONFIRMATION" | "DRIVER_CONFIRMED";
+        notificationCreatedAt: string;
+        confirmedAt: string | null;
+        pushSentAt?: string | null;
+        pushStatus?: string | null;
+        timeline?: {
+          detectedAt: string;
+          notificationCreatedAt: string;
+          pushSentAt: string | null;
+          confirmationQueuedAt: string | null;
+          confirmationSyncedAt: string | null;
+          confirmedAt: string | null;
+          reviewedAt: string | null;
+        };
+        review?: {
+          status: "APPROVED" | "REJECTED" | null;
+          note: string | null;
+          reviewedAt: string | null;
+          reviewedByUserId: string | null;
+        } | null;
+      } | null;
+      confidence?: {
+        score: number;
+        label: string;
+      };
+    }[];
+    borderWindowFrom?: string;
     manual?: {
       remainingDays: number;
       asOf: string;
@@ -166,6 +213,9 @@ export default function DriverDetailPage() {
   const [truckAssignSuccess, setTruckAssignSuccess] = useState("");
   const [aggregateLoading, setAggregateLoading] = useState(false);
   const [aggregateMessage, setAggregateMessage] = useState("");
+  const [exportingSchengenPdf, setExportingSchengenPdf] = useState(false);
+  const [reviewingNotificationId, setReviewingNotificationId] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
 
   const { user } = useAuth();
 
@@ -548,16 +598,7 @@ export default function DriverDetailPage() {
   };
 
   const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return "Aktivan";
-      case "INACTIVE":
-        return "Neaktivan";
-      case "ON_VACATION":
-        return "Na odmoru";
-      default:
-        return status;
-    }
+    return getDriverStatusLabel(status);
   };
 
   const getLoadStatusBadge = (status: string) => {
@@ -580,12 +621,12 @@ export default function DriverDetailPage() {
   const statusOptions = useMemo(
     () => [
       { value: "", label: "Svi statusi" },
-      { value: "ASSIGNED", label: "ASSIGNED" },
-      { value: "PICKED_UP", label: "PICKED_UP" },
-      { value: "IN_TRANSIT", label: "IN_TRANSIT" },
-      { value: "DELIVERED", label: "DELIVERED" },
-      { value: "COMPLETED", label: "COMPLETED" },
-      { value: "CANCELLED", label: "CANCELLED" },
+      { value: "ASSIGNED", label: "Dodijeljen" },
+      { value: "PICKED_UP", label: "Preuzet" },
+      { value: "IN_TRANSIT", label: "U transportu" },
+      { value: "DELIVERED", label: "Isporučen" },
+      { value: "COMPLETED", label: "Završen" },
+      { value: "CANCELLED", label: "Otkazan" },
     ],
     []
   );
@@ -597,6 +638,51 @@ export default function DriverDetailPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
+  };
+
+  const getBorderConfirmationBadge = (
+    confirmation?: {
+      status: "AUTO_ONLY" | "PENDING_DRIVER_CONFIRMATION" | "DRIVER_CONFIRMED";
+      confirmedAt: string | null;
+      review?: {
+        status: "APPROVED" | "REJECTED" | null;
+      } | null;
+    } | null
+  ) => {
+    if (confirmation?.review?.status === "APPROVED") {
+      return {
+        label: "Pregledano od operative",
+        className: "bg-blue-50 text-blue-700 ring-blue-200",
+      };
+    }
+
+    if (confirmation?.review?.status === "REJECTED") {
+      return {
+        label: "Operativa označila za provjeru",
+        className: "bg-rose-50 text-rose-700 ring-rose-200",
+      };
+    }
+
+    if (!confirmation || confirmation.status === "AUTO_ONLY") {
+      return {
+        label: "GPS potvrđeno",
+        className: "bg-slate-100 text-slate-700 ring-slate-200",
+      };
+    }
+
+    if (confirmation.status === "DRIVER_CONFIRMED") {
+      return {
+        label: confirmation.confirmedAt
+          ? `Vozač potvrdio ${formatDateTimeDMY(confirmation.confirmedAt)}`
+          : "Vozač potvrdio",
+        className: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+      };
+    }
+
+    return {
+      label: "Čeka potvrdu vozača",
+      className: "bg-amber-50 text-amber-700 ring-amber-200",
+    };
   };
 
   const isExpiringSoon = (dateString: string, days: number = 30) => {
@@ -611,12 +697,117 @@ export default function DriverDetailPage() {
     return new Date(dateString) < new Date();
   };
 
+  const openReplayAroundCrossing = (crossing: {
+    recordedAt: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    nearestBorderCrossing?: {
+      name: string;
+    } | null;
+  }) => {
+    const { recordedAt, latitude, longitude, nearestBorderCrossing } = crossing;
+    const crossingDate = new Date(recordedAt);
+    const start = new Date(crossingDate.getTime() - 3 * 60 * 60 * 1000);
+    const end = new Date(crossingDate.getTime() + 3 * 60 * 60 * 1000);
+
+    const params = new URLSearchParams({
+      start: start.toISOString(),
+      end: end.toISOString(),
+      limit: "5000",
+    });
+
+    if (latitude !== null && latitude !== undefined && longitude !== null && longitude !== undefined) {
+      params.set("focusLat", String(latitude));
+      params.set("focusLng", String(longitude));
+      if (nearestBorderCrossing?.name) {
+        params.set("focusLabel", nearestBorderCrossing.name);
+      }
+    }
+
+    router.push(`/drivers/${driverId}/replay?${params.toString()}`);
+  };
+
+  const handleExportSchengenPdf = async () => {
+    if (!driver || !schengenStats) return;
+
+    try {
+      setExportingSchengenPdf(true);
+      const res = await fetch(`/api/drivers/${driverId}/schengen/export`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          driverName: `${driver.user.firstName} ${driver.user.lastName}`,
+          from: schengenStats.from,
+          to: schengenStats.to,
+          borderWindowFrom: schengenStats.borderWindowFrom,
+          usedDays: schengenStats.usedDays,
+          remainingDays: schengenStats.remainingDays,
+          borderCrossings: schengenStats.borderCrossings || [],
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Greška pri generisanju PDF izvještaja");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `border-crossings-${driver.user.firstName}-${driver.user.lastName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message || "Greška pri generisanju PDF izvještaja");
+    } finally {
+      setExportingSchengenPdf(false);
+    }
+  };
+
+  const handleReviewBorderCrossing = async (
+    notificationId: string,
+    reviewStatus: "APPROVED" | "REJECTED" | "RESET"
+  ) => {
+    try {
+      setReviewingNotificationId(notificationId);
+      const response = await fetch(`/api/drivers/${driverId}/schengen/review`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          notificationId,
+          reviewStatus,
+          reviewNote: reviewNotes[notificationId] || "",
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Greška pri spremanju review statusa");
+      }
+
+      await fetchSchengen();
+    } catch (err: any) {
+      alert(err?.message || "Greška pri spremanju review statusa");
+    } finally {
+      setReviewingNotificationId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="text-4xl mb-4">🚗</div>
-          <p className="text-dark-500">Učitavanje...</p>
+          <div className="mb-4">
+            <Truck className="w-12 h-12 text-slate-400 mx-auto animate-pulse" />
+          </div>
+          <p className="text-slate-500">Učitavanje...</p>
         </div>
       </div>
     );
@@ -633,92 +824,101 @@ export default function DriverDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 md:space-y-8 pb-8">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3 md:gap-4">
-          <Button
-            variant="outline"
+          <button
             onClick={() => router.push("/drivers")}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            Nazad
-          </Button>
+            <span className="font-medium">Nazad</span>
+          </button>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-dark-900">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               {driver.user.firstName} {driver.user.lastName}
             </h1>
-            <p className="text-dark-500 mt-1">Detalji vozača</p>
+            <p className="text-slate-500 mt-1">Detalji vozača</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          <Button
-            variant="outline"
+          <button
             onClick={() => router.push(`/drivers/${driverId}/edit`)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
           >
             <Pencil className="w-4 h-4" />
-            Uredi
-          </Button>
+            <span className="font-medium">Uredi</span>
+          </button>
           {deleteConfirm ? (
             <>
-              <Button variant="danger" onClick={handleDelete} className="w-full sm:w-auto">
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 transition-all duration-200 shadow-sm font-medium"
+              >
                 Potvrdi brisanje
-              </Button>
-              <Button
-                variant="outline"
+              </button>
+              <button
                 onClick={() => setDeleteConfirm(false)}
-                className="w-full sm:w-auto"
+                className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all duration-200 shadow-sm font-medium"
               >
                 Odustani
-              </Button>
+              </button>
             </>
           ) : (
-            <Button
-              variant="danger"
+            <button
               onClick={() => setDeleteConfirm(true)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all duration-200 shadow-sm"
             >
               <Trash2 className="w-4 h-4" />
-              Obriši
-            </Button>
+              <span className="font-medium">Obriši</span>
+            </button>
           )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-2xl shadow-soft px-4 overflow-x-auto">
-        <nav className="flex gap-6 whitespace-nowrap">
+      <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-lg border border-slate-100 overflow-hidden">
+        <nav className="flex gap-1 p-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
               activeTab === "overview"
-                ? "border-primary-500 text-primary-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
             Pregled
           </button>
           <button
             onClick={() => setActiveTab("history")}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
               activeTab === "history"
-                ? "border-primary-500 text-primary-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
             Historija vožnji
           </button>
           <button
             onClick={() => setActiveTab("performance")}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
               activeTab === "performance"
-                ? "border-primary-500 text-primary-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
             Performanse
+          </button>
+          <button
+            onClick={() => setActiveTab("schengen")}
+            className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
+              activeTab === "schengen"
+                ? "bg-slate-900 text-white shadow-md"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+            }`}
+          >
+            Schengen
           </button>
         </nav>
       </div>
@@ -727,305 +927,342 @@ export default function DriverDetailPage() {
       {activeTab === "overview" && (
         <>
           {/* Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Ukupno km (30 dana)</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {summaryLoading ? "..." : summary ? summary.totalMiles.toLocaleString() : "-"}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <TrendingUp className="w-5 h-5 text-blue-600" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/60 p-6 hover:shadow-lg hover:border-slate-300/60 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-slate-200/20 rounded-full -mr-12 -mt-12 group-hover:bg-slate-300/30 transition-colors" />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-slate-100 rounded-2xl ring-1 ring-slate-200/60">
+                    <TrendingUp className="w-6 h-6 text-slate-700" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Prihod (30 dana)</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {summaryLoading ? "..." : summary ? formatCurrency(summary.totalRevenue) : "-"}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-emerald-100 rounded-lg">
-                    <DollarSign className="w-5 h-5 text-emerald-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Završeni loadovi (30 dana)</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {summaryLoading ? "..." : summary ? summary.completedLoads : "-"}
-                    </p>
-                  </div>
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <BarChart3 className="w-5 h-5 text-purple-600" />
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Ukupno km (30 dana)
+                </p>
+                <p className="text-3xl font-bold text-slate-900">
+                  {summaryLoading ? "..." : summary ? summary.totalMiles.toLocaleString() : "-"}
+                </p>
+              </div>
+            </div>
+
+            <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-50/50 to-slate-100/50 border border-blue-200/40 p-6 hover:shadow-lg hover:border-blue-300/50 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-200/15 rounded-full -mr-12 -mt-12 group-hover:bg-blue-300/25 transition-colors" />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-blue-50 rounded-2xl ring-1 ring-blue-200/50">
+                    <DollarSign className="w-6 h-6 text-blue-700" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="border-dark-50 shadow-soft">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-dark-500">Schengen preostalo</p>
-                    <p className="text-2xl font-bold text-dark-900">
-                      {schengenStats ? schengenStats.remainingDays : "-"}
-                    </p>
-                    <p className="text-[11px] text-dark-400">dana u 90/180</p>
-                  </div>
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <Shield className="w-5 h-5 text-orange-600" />
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Prihod (30 dana)
+                </p>
+                <p className="text-3xl font-bold text-slate-900">
+                  {summaryLoading ? "..." : summary ? formatCurrency(summary.totalRevenue) : "-"}
+                </p>
+              </div>
+            </div>
+
+            <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 to-gray-100/50 border border-slate-200/60 p-6 hover:shadow-lg hover:border-slate-300/60 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-slate-200/20 rounded-full -mr-12 -mt-12 group-hover:bg-slate-300/30 transition-colors" />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-slate-100 rounded-2xl ring-1 ring-slate-200/60">
+                    <BarChart3 className="w-6 h-6 text-slate-700" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Završeni loadovi (30 dana)
+                </p>
+                <p className="text-3xl font-bold text-slate-900">
+                  {summaryLoading ? "..." : summary ? summary.completedLoads : "-"}
+                </p>
+              </div>
+            </div>
+
+            <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-50/40 to-slate-100/50 border border-blue-200/40 p-6 hover:shadow-lg hover:border-blue-300/50 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-200/15 rounded-full -mr-12 -mt-12 group-hover:bg-blue-300/25 transition-colors" />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-blue-50 rounded-2xl ring-1 ring-blue-200/50">
+                    <Shield className="w-6 h-6 text-blue-700" />
+                  </div>
+                </div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Schengen preostalo
+                </p>
+                <div>
+                  <p className="text-3xl font-bold text-slate-900">
+                    {schengenStats ? schengenStats.remainingDays : "-"}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1">dana u 90/180</p>
+                </div>
+              </div>
+            </div>
           </div>
           {summaryError && (
-            <div className="text-sm text-red-600">{summaryError}</div>
+            <Card className="rounded-2xl shadow-sm border border-red-100 bg-red-50/50">
+              <CardContent className="p-4">
+                <p className="text-sm text-red-600">{summaryError}</p>
+              </CardContent>
+            </Card>
           )}
 
           {/* Basic Info Card */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Osnovni podaci</CardTitle>
-              <span
-                className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getStatusBadgeColor(
-                  driver.status
-                )}`}
-              >
-                {getStatusLabel(driver.status)}
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
+        <div className="lg:col-span-2 rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-slate-900">Osnovni podaci</h3>
+            <span
+              className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ring-1 ${getStatusBadgeColor(
+                driver.status
+              )}`}
+            >
+              {getStatusLabel(driver.status)}
+            </span>
+          </div>
+          <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex items-start gap-3">
-                <Mail className="w-5 h-5 text-dark-400 mt-1" />
-                <div>
-                  <p className="text-sm text-dark-500">Email</p>
-                  <p className="font-medium text-dark-900">{driver.user.email}</p>
+              <div className="group flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50/50 transition-colors">
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                  <Mail className="w-5 h-5 text-slate-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Email</p>
+                  <p className="font-semibold text-slate-900 truncate">{driver.user.email}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Phone className="w-5 h-5 text-dark-400 mt-1" />
-                <div>
-                  <p className="text-sm text-dark-500">Telefon</p>
-                  <p className="font-medium text-dark-900">
+              <div className="group flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50/50 transition-colors">
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                  <Phone className="w-5 h-5 text-slate-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Telefon</p>
+                  <p className="font-semibold text-slate-900">
                     {driver.user.phone || "-"}
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <Calendar className="w-5 h-5 text-dark-400 mt-1" />
-                <div>
-                  <p className="text-sm text-dark-500">Datum zaposlenja</p>
-                  <p className="font-medium text-dark-900">
+              <div className="group flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50/50 transition-colors">
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                  <Calendar className="w-5 h-5 text-slate-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Datum zaposlenja</p>
+                  <p className="font-semibold text-slate-900">
                     {formatDate(driver.hireDate)}
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <DollarSign className="w-5 h-5 text-dark-400 mt-1" />
-                <div>
-                  <p className="text-sm text-dark-500">Cijena po km</p>
-                  <p className="font-medium text-dark-900">
+              <div className="group flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50/50 transition-colors">
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                  <DollarSign className="w-5 h-5 text-slate-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cijena po km</p>
+                  <p className="font-semibold text-slate-900">
                     {driver.ratePerMile ? `${driver.ratePerMile} KM` : "-"}
                   </p>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Emergency Contact */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Hitni kontakt</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-dark-500">Ime</p>
-                <p className="font-medium text-dark-900">
-                  {driver.emergencyContact || "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-dark-500">Telefon</p>
-                <p className="font-medium text-dark-900">
-                  {driver.emergencyPhone || "-"}
-                </p>
-              </div>
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900">Hitni kontakt</h3>
+          </div>
+          <div className="p-6 space-y-5">
+            <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Ime</p>
+              <p className="font-semibold text-slate-900">
+                {driver.emergencyContact || "-"}
+              </p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Telefon</p>
+              <p className="font-semibold text-slate-900">
+                {driver.emergencyPhone || "-"}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* License & Medical */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Licenca i medicinske informacije</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div>
-              <p className="text-sm text-dark-500 mb-1">Broj licence</p>
-              <p className="font-medium text-dark-900">{driver.licenseNumber}</p>
+      <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-900">Licenca i medicinske informacije</h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Broj licence</p>
+              <p className="font-bold text-slate-900">{driver.licenseNumber}</p>
             </div>
-            <div>
-              <p className="text-sm text-dark-500 mb-1">Država</p>
-              <p className="font-medium text-dark-900">{driver.licenseState}</p>
+            <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Država</p>
+              <p className="font-bold text-slate-900">{driver.licenseState}</p>
             </div>
-            <div>
-              <p className="text-sm text-dark-500 mb-1">Istek licence</p>
+            <div className={`p-4 rounded-2xl border ${
+              isExpired(driver.licenseExpiry)
+                ? "bg-red-50 border-red-200"
+                : isExpiringSoon(driver.licenseExpiry)
+                ? "bg-amber-50 border-amber-200"
+                : "bg-slate-50/50 border-slate-100"
+            }`}>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Istek licence</p>
               <div className="flex items-center gap-2">
                 <p
-                  className={`font-medium ${
+                  className={`font-bold ${
                     isExpired(driver.licenseExpiry)
-                      ? "text-red-600"
+                      ? "text-red-700"
                       : isExpiringSoon(driver.licenseExpiry)
-                      ? "text-yellow-600"
-                      : "text-dark-900"
+                      ? "text-amber-700"
+                      : "text-slate-900"
                   }`}
                 >
                   {formatDate(driver.licenseExpiry)}
                 </p>
                 {(isExpired(driver.licenseExpiry) ||
                   isExpiringSoon(driver.licenseExpiry)) && (
-                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <AlertCircle className={`w-4 h-4 ${isExpired(driver.licenseExpiry) ? "text-red-600" : "text-amber-600"}`} />
                 )}
               </div>
             </div>
-            <div>
-              <p className="text-sm text-dark-500 mb-1">Endorsements</p>
-              <p className="font-medium text-dark-900">
+            <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Endorsements</p>
+              <p className="font-bold text-slate-900">
                 {driver.endorsements.length > 0
                   ? driver.endorsements.join(", ")
                   : "-"}
               </p>
             </div>
             {driver.medicalCardExpiry && (
-              <div>
-                <p className="text-sm text-dark-500 mb-1">
+              <div className={`p-4 rounded-2xl border ${
+                isExpired(driver.medicalCardExpiry)
+                  ? "bg-red-50 border-red-200"
+                  : isExpiringSoon(driver.medicalCardExpiry)
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-slate-50/50 border-slate-100"
+              }`}>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                   Medicinska kartica istek
                 </p>
                 <div className="flex items-center gap-2">
                   <p
-                    className={`font-medium ${
+                    className={`font-bold ${
                       isExpired(driver.medicalCardExpiry)
-                        ? "text-red-600"
+                        ? "text-red-700"
                         : isExpiringSoon(driver.medicalCardExpiry)
-                        ? "text-yellow-600"
-                        : "text-dark-900"
+                        ? "text-amber-700"
+                        : "text-slate-900"
                     }`}
                   >
                     {formatDate(driver.medicalCardExpiry)}
                   </p>
                   {(isExpired(driver.medicalCardExpiry) ||
                     isExpiringSoon(driver.medicalCardExpiry)) && (
-                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <AlertCircle className={`w-4 h-4 ${isExpired(driver.medicalCardExpiry) ? "text-red-600" : "text-amber-600"}`} />
                   )}
                 </div>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Trucks, Schengen & Loads */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Assigned Truck */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Truck className="w-5 h-5" />
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Truck className="w-5 h-5 text-slate-700" />
               Dodijeljeni kamion
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6 space-y-4">
             {driver.primaryTruck ? (
               <div
-                className="p-4 bg-dark-50 rounded-lg cursor-pointer hover:bg-dark-100"
+                className="group p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200 cursor-pointer hover:shadow-md hover:border-slate-300 transition-all"
                 onClick={() => router.push(`/trucks/${driver.primaryTruck!.id}`)}
               >
-                <p className="font-semibold text-dark-900">
+                <p className="font-bold text-slate-900 text-lg mb-1">
                   {driver.primaryTruck.truckNumber}
                 </p>
-                <p className="text-sm text-dark-600">
+                <p className="text-sm text-slate-600">
                   {driver.primaryTruck.make} {driver.primaryTruck.model} ({driver.primaryTruck.year})
                 </p>
+                {driver.primaryTruck.trailers.length > 0 && (
+                  <p className="text-sm text-slate-500 mt-2">
+                    Prikolica: {driver.primaryTruck.trailers[0].trailerNumber} •{" "}
+                    {getTrailerTypeLabel(driver.primaryTruck.trailers[0].type)}
+                    {driver.primaryTruck.trailers.length > 1
+                      ? ` (+${driver.primaryTruck.trailers.length - 1})`
+                      : ""}
+                  </p>
+                )}
               </div>
             ) : (
-              <p className="text-dark-500">Nema dodijeljenog kamiona</p>
+              <div className="p-5 rounded-2xl bg-slate-50/50 border border-slate-100 border-dashed">
+                <p className="text-slate-500 text-sm">Nema dodijeljenog kamiona</p>
+              </div>
             )}
 
-            <div className="mt-4 space-y-2">
-              <label className="block text-xs text-dark-500">Brza dodjela kamiona</label>
-              <div className="flex flex-col gap-2">
-                <select
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
-                  value={truckAssignId}
-                  onChange={(e) => setTruckAssignId(e.target.value)}
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Brza dodjela kamiona</label>
+              <select
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
+                value={truckAssignId}
+                onChange={(e) => setTruckAssignId(e.target.value)}
+              >
+                <option value="">Odaberi kamion</option>
+                {availableTrucks.map((truckOption) => (
+                  <option key={truckOption.id} value={truckOption.id}>
+                    {truckOption.truckNumber} • {truckOption.make} {truckOption.model} (
+                    {truckOption.year})
+                  </option>
+                ))}
+              </select>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                  onClick={handleAssignTruck}
+                  disabled={truckAssignLoading || !truckAssignId}
                 >
-                  <option value="">Odaberi kamion</option>
-                  {availableTrucks.map((truckOption) => (
-                    <option key={truckOption.id} value={truckOption.id}>
-                      {truckOption.truckNumber} • {truckOption.make} {truckOption.model} (
-                      {truckOption.year})
-                    </option>
-                  ))}
-                </select>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button
-                    className="w-full sm:w-auto"
-                    onClick={handleAssignTruck}
-                    disabled={truckAssignLoading || !truckAssignId}
+                  {truckAssignLoading ? "Dodjeljujem..." : "Dodijeli kamion"}
+                </button>
+                {driver.primaryTruck && (
+                  <button
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                    onClick={handleRemoveTruck}
+                    disabled={truckAssignLoading}
                   >
-                    {truckAssignLoading ? "Dodjeljujem..." : "Dodijeli kamion"}
-                  </Button>
-                  {driver.primaryTruck && (
-                    <Button
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={handleRemoveTruck}
-                      disabled={truckAssignLoading}
-                    >
-                      Ukloni dodjelu
-                    </Button>
-                  )}
-                </div>
-                {truckAssignError && (
-                  <p className="text-xs text-red-600">{truckAssignError}</p>
-                )}
-                {truckAssignSuccess && (
-                  <p className="text-xs text-emerald-600">{truckAssignSuccess}</p>
+                    Ukloni dodjelu
+                  </button>
                 )}
               </div>
+              {truckAssignError && (
+                <p className="text-xs text-red-600 font-medium">{truckAssignError}</p>
+              )}
+              {truckAssignSuccess && (
+                <p className="text-xs text-emerald-600 font-medium">{truckAssignSuccess}</p>
+              )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Schengen 90/180 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5" />
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-slate-700" />
               Schengen 90/180
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6">
             {schengenError ? (
               <div className="text-sm text-red-600">{schengenError}</div>
             ) : schengenStats ? (
@@ -1125,20 +1362,20 @@ export default function DriverDetailPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-dark-500">Učitavanje...</p>
+              <p className="text-slate-500">Učitavanje...</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-          {/* Recent Loads */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-              Nedavni loadovi ({driver.loads.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Recent Loads */}
+          <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Package className="w-5 h-5 text-slate-700" />
+                Nedavni loadovi ({driver.loads.length})
+              </h3>
+            </div>
+            <div className="p-6">
             {driver.loads.length > 0 ? (
               <div className="space-y-3 max-h-[300px] overflow-y-auto">
                 {driver.loads.map((load) => (
@@ -1155,7 +1392,7 @@ export default function DriverDetailPage() {
                           load.status
                         )}`}
                       >
-                        {load.status}
+                        {getLoadStatusLabel(load.status)}
                       </span>
                     </div>
                     <div className="text-sm text-dark-600 mb-3">
@@ -1215,75 +1452,89 @@ export default function DriverDetailPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-dark-500">Nema loadova</p>
+              <div className="p-5 rounded-2xl bg-slate-50/50 border border-slate-100 border-dashed">
+                <p className="text-slate-500 text-sm">Nema loadova</p>
+              </div>
             )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
       </div>
 
       {/* Vacation Periods */}
-      <Card>
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle>Periodi odmora</CardTitle>
-            <p className="text-sm text-dark-500">
+            <h3 className="text-lg font-bold text-slate-900">Periodi odmora</h3>
+            <p className="text-sm text-slate-500 mt-1">
               Planirajte odmore i bolovanja za vozača.
             </p>
           </div>
-          <Button
-            variant="outline"
+          <button
             onClick={() => setVacationModalOpen(true)}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
           >
             <Plus className="w-4 h-4" />
             Dodaj period
-          </Button>
-        </CardHeader>
-        <CardContent>
+          </button>
+        </div>
+        <div className="p-6">
           {driver.vacationPeriods.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-dark-200 bg-dark-50/50 px-5 py-6 text-sm text-dark-500">
-              Trenutno nema planiranih perioda odmora ili bolovanja.
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-8 text-center">
+              <p className="text-sm text-slate-500">Trenutno nema planiranih perioda odmora ili bolovanja.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {driver.vacationPeriods.map((period) => (
                 <div
                   key={period.id}
-                  className="p-4 bg-dark-50 rounded-lg flex items-center justify-between"
+                  className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200 hover:shadow-md transition-all"
                 >
-                  <div>
-                    <p className="font-medium text-dark-900">
-                      {period.type === "VACATION" ? "Odmor" : "Bolovanje"}
-                    </p>
-                    <p className="text-sm text-dark-600">
-                      {formatDate(period.startDate)} -{" "}
-                      {formatDate(period.endDate)}
-                    </p>
-                    {period.notes && (
-                      <p className="text-sm text-dark-500 mt-1">{period.notes}</p>
-                    )}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                        period.type === "VACATION"
+                          ? "bg-blue-100 text-blue-700 ring-1 ring-blue-200"
+                          : "bg-amber-100 text-amber-700 ring-1 ring-amber-200"
+                      }`}>
+                        {period.type === "VACATION" ? "Odmor" : "Bolovanje"}
+                      </span>
+                      <p className="text-sm font-semibold text-slate-900 mt-3">
+                        {formatDate(period.startDate)} - {formatDate(period.endDate)}
+                      </p>
+                      {period.notes && (
+                        <p className="text-sm text-slate-600 mt-2">{period.notes}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+          </div>
+      </div>
+
+      {user?.role === "ADMIN" && (
+        <AuditTimelineCard
+          entity="DRIVER"
+          entityId={driver.id}
+          title="Audit vremenska linija vozača"
+        />
+      )}
         </>
       )}
 
       {/* History Tab */}
       {activeTab === "history" && (
-        <Card className="rounded-[2rem] shadow-soft border-none overflow-hidden bg-white">
-          <CardHeader className="bg-dark-50/70 border-b border-dark-50">
-            <CardTitle>Historija vožnji</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-900">Historija vožnji</h3>
+          </div>
+          <div className="space-y-6 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Status</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Status</label>
                 <select
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   value={historyFilters.status}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, status: e.target.value }))
@@ -1297,10 +1548,10 @@ export default function DriverDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Od</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Od</label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   value={historyFilters.from}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, from: e.target.value }))
@@ -1308,10 +1559,10 @@ export default function DriverDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Do</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Do</label>
                 <input
                   type="date"
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   value={historyFilters.to}
                   onChange={(e) =>
                     setHistoryFilters((prev) => ({ ...prev, to: e.target.value }))
@@ -1319,9 +1570,9 @@ export default function DriverDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-dark-500 mb-1">Load #</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Load #</label>
                 <input
-                  className="w-full rounded-xl border border-dark-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/50 focus:border-slate-400"
                   placeholder="Unesi broj"
                   value={historyFilters.loadNumber}
                   onChange={(e) =>
@@ -1331,12 +1582,23 @@ export default function DriverDetailPage() {
               </div>
             </div>
 
-            {historyError && <div className="text-sm text-red-600">{historyError}</div>}
+            {historyError && (
+              <div className="rounded-2xl bg-red-50 border border-red-200 p-4">
+                <p className="text-sm text-red-700 font-medium">{historyError}</p>
+              </div>
+            )}
 
             {historyLoading ? (
-              <div className="text-sm text-dark-500">Učitavanje...</div>
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <Package className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-pulse" />
+                  <p className="text-sm text-slate-500">Učitavanje...</p>
+                </div>
+              </div>
             ) : historyLoads.length === 0 ? (
-              <div className="text-sm text-dark-500">Nema loadova za odabrane filtere.</div>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-8 text-center">
+                <p className="text-sm text-slate-500">Nema loadova za odabrane filtere.</p>
+              </div>
             ) : (
               <>
                 <div className="md:hidden divide-y divide-dark-50">
@@ -1359,7 +1621,7 @@ export default function DriverDetailPage() {
                             load.status
                           )}`}
                         >
-                          {load.status}
+                          {getLoadStatusLabel(load.status)}
                         </span>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dark-600">
@@ -1376,44 +1638,44 @@ export default function DriverDetailPage() {
                     </div>
                   ))}
                 </div>
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-200/60 shadow-sm">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200 text-left text-dark-600">
-                        <th className="py-2 pr-3">Load #</th>
-                        <th className="py-2 pr-3">Status</th>
-                        <th className="py-2 pr-3">Pickup</th>
-                        <th className="py-2 pr-3">Delivery</th>
-                        <th className="py-2 pr-3 text-right">Km</th>
-                        <th className="py-2 pr-3 text-right">Cijena</th>
-                        <th className="py-2 pr-3">Kamion</th>
+                      <tr className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-200">
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Load #</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Pickup</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Delivery</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Km</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Cijena</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Kamion</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100 bg-white">
                       {historyLoads.map((load) => (
-                        <tr key={load.id} className="border-b border-gray-100">
-                          <td className="py-2 pr-3">
+                        <tr key={load.id} className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4">
                             <button
-                              className="text-primary-600 hover:underline"
+                              className="font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors"
                               onClick={() => router.push(`/loads/${load.id}`)}
                             >
                               {load.loadNumber}
                             </button>
                           </td>
-                          <td className="py-2 pr-3">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getLoadStatusBadge(load.status)}`}>
-                              {load.status}
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ring-1 ${getLoadStatusBadge(load.status)}`}>
+                              {getLoadStatusLabel(load.status)}
                             </span>
                           </td>
-                          <td className="py-2 pr-3">{formatDate(load.scheduledPickupDate)}</td>
-                          <td className="py-2 pr-3">{formatDate(load.scheduledDeliveryDate)}</td>
-                          <td className="py-2 pr-3 text-right">
+                          <td className="px-6 py-4 font-medium text-slate-900">{formatDate(load.scheduledPickupDate)}</td>
+                          <td className="px-6 py-4 font-medium text-slate-900">{formatDate(load.scheduledDeliveryDate)}</td>
+                          <td className="px-6 py-4 text-right font-semibold text-slate-900">
                             {load.distance ? load.distance.toLocaleString() : "-"}
                           </td>
-                          <td className="py-2 pr-3 text-right">
+                          <td className="px-6 py-4 text-right font-semibold text-slate-900">
                             {formatCurrency(load.loadRate)}
                           </td>
-                          <td className="py-2 pr-3">
+                          <td className="px-6 py-4 font-medium text-slate-700">
                             {load.truck ? load.truck.truckNumber : "-"}
                           </td>
                         </tr>
@@ -1425,36 +1687,344 @@ export default function DriverDetailPage() {
             )}
 
             {historyPagination && historyPagination.totalPages > 1 && (
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-dark-500">
-                  Stranica {historyPagination.page} od {historyPagination.totalPages}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <p className="text-sm font-medium text-slate-600">
+                  Stranica <span className="font-bold text-slate-900">{historyPagination.page}</span> od <span className="font-bold text-slate-900">{historyPagination.totalPages}</span>
                 </p>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
                     disabled={historyPagination.page <= 1 || historyLoading}
+                    className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                   >
                     Prethodna
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  </button>
+                  <button
                     onClick={() =>
                       setHistoryPage((p) =>
                         historyPagination ? Math.min(historyPagination.totalPages, p + 1) : p + 1
                       )
                     }
                     disabled={historyPagination.page >= historyPagination.totalPages || historyLoading}
+                    className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                   >
                     Sljedeća
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "schengen" && (
+        <div className="space-y-6">
+          <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-slate-700" />
+                Schengen 90/180 i BiH prelazi
+              </h3>
+            </div>
+            <div className="p-6">
+              {schengenError ? (
+                <div className="rounded-2xl bg-red-50 border border-red-200 p-4">
+                  <p className="text-sm text-red-700 font-medium">{schengenError}</p>
+                </div>
+              ) : schengenStats ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/60 p-6 hover:shadow-md transition-all">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-slate-200/20 rounded-full -mr-10 -mt-10 group-hover:bg-slate-300/30 transition-colors" />
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider relative z-10">Iskorišteno dana</p>
+                      <p className="mt-3 text-3xl font-bold text-slate-900 relative z-10">{schengenStats.usedDays}</p>
+                    </div>
+                    <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-50/50 to-slate-100/50 border border-blue-200/40 p-6 hover:shadow-md transition-all">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200/15 rounded-full -mr-10 -mt-10 group-hover:bg-blue-300/25 transition-colors" />
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider relative z-10">Preostalo dana</p>
+                      <p className="mt-3 text-3xl font-bold text-slate-900 relative z-10">{schengenStats.remainingDays}</p>
+                    </div>
+                    <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/60 p-6 hover:shadow-md transition-all">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-slate-200/20 rounded-full -mr-10 -mt-10 group-hover:bg-slate-300/30 transition-colors" />
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider relative z-10">GPS prelazi BiH</p>
+                      <p className="mt-3 text-3xl font-bold text-slate-900 relative z-10">
+                        {schengenStats.borderCrossings?.length || 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
+                    <p className="text-sm font-medium text-slate-700">
+                      Period Schengen obračuna: <span className="font-bold text-slate-900">{formatDate(schengenStats.from)} - {formatDate(schengenStats.to)}</span>
+                    </p>
+                  </div>
+
+                  {schengenStats.manual && (
+                    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 px-5 py-4">
+                      <p className="text-sm font-semibold text-amber-900">
+                        Ručni unos aktivan. Preostalo {schengenStats.manual.remainingDays} dana na dan{" "}
+                        {formatDate(schengenStats.manual.asOf)}.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900">Ulazak i izlazak iz BiH</h3>
+                        <p className="text-sm text-slate-600 mt-1">
+                          Prikaz na osnovu GPS historije{schengenStats.borderWindowFrom
+                            ? ` od ${formatDate(schengenStats.borderWindowFrom)}`
+                            : ""}.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleExportSchengenPdf}
+                        disabled={exportingSchengenPdf}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                      >
+                        <Download className="w-4 h-4" />
+                        {exportingSchengenPdf ? "Generišem PDF..." : "PDF eksport"}
+                      </button>
+                    </div>
+
+                    {!schengenStats.borderCrossings || schengenStats.borderCrossings.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-8 text-center">
+                        <p className="text-sm text-slate-500">Nema evidentiranih prelazaka BiH u dostupnoj GPS historiji.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-200/60 shadow-sm">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-200">
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Događaj</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Datum i vrijeme</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Gdje</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Potvrda</th>
+                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Pouzdanost</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                              {schengenStats.borderCrossings.map((crossing, index) => (
+                                <tr
+                                  key={`${crossing.type}-${crossing.recordedAt}-${index}`}
+                                  className="group cursor-pointer hover:bg-slate-50/50 transition-colors"
+                                  onClick={() => openReplayAroundCrossing(crossing)}
+                                >
+                                  <td className="px-6 py-4">
+                                    <span
+                                      className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${
+                                        crossing.type === "EXIT_BIH"
+                                          ? "bg-red-50 text-red-700 ring-red-200"
+                                          : "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                      }`}
+                                    >
+                                      {crossing.type === "EXIT_BIH" ? "Izašao iz BiH" : "Ušao u BiH"}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 font-semibold text-slate-900">
+                                    {formatDateTimeDMY(crossing.recordedAt)}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <button
+                                      type="button"
+                                      className="text-left text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openReplayAroundCrossing(crossing);
+                                      }}
+                                    >
+                                      {crossing.nearestBorderCrossing?.name || (
+                                        crossing.latitude !== null &&
+                                        crossing.latitude !== undefined &&
+                                        crossing.longitude !== null &&
+                                        crossing.longitude !== undefined
+                                          ? `${crossing.latitude.toFixed(5)}, ${crossing.longitude.toFixed(5)}`
+                                          : "-"
+                                      )}
+                                    </button>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    {(() => {
+                                      const badge = getBorderConfirmationBadge(crossing.confirmation);
+                                      return (
+                                        <span
+                                          className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${badge.className}`}
+                                        >
+                                          {badge.label}
+                                        </span>
+                                      );
+                                    })()}
+                                    {crossing.confirmation?.timeline && (
+                                      <div className="mt-2 text-[11px] text-slate-500 space-y-1">
+                                        <p>Push: {crossing.confirmation.timeline.pushSentAt ? formatDateTimeDMY(crossing.confirmation.timeline.pushSentAt) : "nije poslano"}</p>
+                                        {crossing.confirmation.timeline.confirmationQueuedAt && (
+                                          <p>Offline klik: {formatDateTimeDMY(crossing.confirmation.timeline.confirmationQueuedAt)}</p>
+                                        )}
+                                        {crossing.confirmation.timeline.confirmationSyncedAt && (
+                                          <p>Sync potvrde: {formatDateTimeDMY(crossing.confirmation.timeline.confirmationSyncedAt)}</p>
+                                        )}
+                                        {crossing.confirmation.review?.reviewedAt && (
+                                          <p>Review: {formatDateTimeDMY(crossing.confirmation.review.reviewedAt)}</p>
+                                        )}
+                                      </div>
+                                    )}
+                                    {user?.role === "ADMIN" || user?.role === "DISPATCHER" ? (
+                                      crossing.confirmation?.notificationId ? (
+                                        <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+                                          <input
+                                            type="text"
+                                            value={reviewNotes[crossing.confirmation.notificationId] || ""}
+                                            onChange={(e) =>
+                                              setReviewNotes((prev) => ({
+                                                ...prev,
+                                                [crossing.confirmation!.notificationId]: e.target.value,
+                                              }))
+                                            }
+                                            placeholder="Napomena operative"
+                                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                                          />
+                                          <div className="flex gap-1 flex-wrap">
+                                            <button
+                                              className="px-2 py-1 rounded-lg bg-blue-600 text-white text-xs font-semibold"
+                                              disabled={reviewingNotificationId === crossing.confirmation.notificationId}
+                                              onClick={() =>
+                                                handleReviewBorderCrossing(
+                                                  crossing.confirmation!.notificationId,
+                                                  "APPROVED"
+                                                )
+                                              }
+                                            >
+                                              Potvrdi review
+                                            </button>
+                                            <button
+                                              className="px-2 py-1 rounded-lg bg-rose-600 text-white text-xs font-semibold"
+                                              disabled={reviewingNotificationId === crossing.confirmation.notificationId}
+                                              onClick={() =>
+                                                handleReviewBorderCrossing(
+                                                  crossing.confirmation!.notificationId,
+                                                  "REJECTED"
+                                                )
+                                              }
+                                            >
+                                              Označi za provjeru
+                                            </button>
+                                            <button
+                                              className="px-2 py-1 rounded-lg bg-slate-200 text-slate-700 text-xs font-semibold"
+                                              disabled={reviewingNotificationId === crossing.confirmation.notificationId}
+                                              onClick={() =>
+                                                handleReviewBorderCrossing(
+                                                  crossing.confirmation!.notificationId,
+                                                  "RESET"
+                                                )
+                                              }
+                                            >
+                                              Reset
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : null
+                                    ) : null}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 bg-indigo-50 text-indigo-700 ring-indigo-200">
+                                      {crossing.confidence?.label || "—"}{crossing.confidence?.score ? ` • ${crossing.confidence.score}%` : ""}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="md:hidden space-y-3">
+                          {schengenStats.borderCrossings.map((crossing, index) => (
+                            <div
+                              key={`${crossing.type}-${crossing.recordedAt}-${index}`}
+                              className="rounded-2xl border border-slate-200 bg-white px-5 py-4 cursor-pointer hover:shadow-md hover:border-slate-300 transition-all"
+                              onClick={() => openReplayAroundCrossing(crossing)}
+                            >
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <span
+                                  className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${
+                                    crossing.type === "EXIT_BIH"
+                                      ? "bg-red-50 text-red-700 ring-red-200"
+                                      : "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                  }`}
+                                >
+                                  {crossing.type === "EXIT_BIH" ? "Izašao iz BiH" : "Ušao u BiH"}
+                                </span>
+                              </div>
+                              <p className="text-sm font-semibold text-slate-900 mb-2">
+                                {formatDateTimeDMY(crossing.recordedAt)}
+                              </p>
+                              <button
+                                type="button"
+                                className="text-left text-sm text-blue-600 hover:text-blue-700 hover:underline font-medium transition-colors"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openReplayAroundCrossing(crossing);
+                                }}
+                              >
+                                {crossing.nearestBorderCrossing?.name || (
+                                  crossing.latitude !== null &&
+                                  crossing.latitude !== undefined &&
+                                  crossing.longitude !== null &&
+                                  crossing.longitude !== undefined
+                                    ? `${crossing.latitude.toFixed(5)}, ${crossing.longitude.toFixed(5)}`
+                                    : "-"
+                                )}
+                              </button>
+                              <div className="mt-3">
+                                {(() => {
+                                  const badge = getBorderConfirmationBadge(crossing.confirmation);
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${badge.className}`}
+                                    >
+                                      {badge.label}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                              <div className="mt-3">
+                                <span className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 bg-indigo-50 text-indigo-700 ring-indigo-200">
+                                  {crossing.confidence?.label || "—"}{crossing.confidence?.score ? ` • ${crossing.confidence.score}%` : ""}
+                                </span>
+                              </div>
+                              {crossing.confirmation?.timeline && (
+                                <div className="mt-3 text-[11px] text-slate-500 space-y-1">
+                                  <p>Push: {crossing.confirmation.timeline.pushSentAt ? formatDateTimeDMY(crossing.confirmation.timeline.pushSentAt) : "nije poslano"}</p>
+                                  {crossing.confirmation.timeline.confirmationQueuedAt && (
+                                    <p>Offline klik: {formatDateTimeDMY(crossing.confirmation.timeline.confirmationQueuedAt)}</p>
+                                  )}
+                                  {crossing.confirmation.timeline.confirmationSyncedAt && (
+                                    <p>Sync potvrde: {formatDateTimeDMY(crossing.confirmation.timeline.confirmationSyncedAt)}</p>
+                                  )}
+                                  {crossing.confirmation.review?.reviewedAt && (
+                                    <p>Review: {formatDateTimeDMY(crossing.confirmation.review.reviewedAt)}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <Shield className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-pulse" />
+                    <p className="text-sm text-slate-500">Učitavanje...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Performance Tab */}
@@ -1463,8 +2033,8 @@ export default function DriverDetailPage() {
       )}
 
       {vacationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-900/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-100">
             <div className="flex items-center justify-between border-b border-dark-100 px-6 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-dark-900">Dodaj period odmora</h3>
@@ -1561,6 +2131,17 @@ export default function DriverDetailPage() {
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

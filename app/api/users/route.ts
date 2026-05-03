@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, hashPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { userSchema } from "@/lib/validation/user";
 
 // GET /api/users - Lista svih korisnika (samo ADMIN)
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
@@ -89,16 +81,7 @@ export async function GET(req: NextRequest) {
 // POST /api/users - Kreiranje novog korisnika (samo ADMIN)
 export async function POST(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Neautorizovan pristup" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
@@ -141,6 +124,15 @@ export async function POST(req: NextRequest) {
         phone: phone || null,
         role,
         telegramChatId: telegramChatId || null,
+        clientProfile:
+          role === "CLIENT"
+            ? {
+                create: {
+                  contactPerson: `${firstName} ${lastName}`.trim(),
+                  contactPhone: phone || null,
+                },
+              }
+            : undefined,
       },
       select: {
         id: true,

@@ -16,15 +16,23 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   useEffect(() => {
     const fetchAlertCount = async () => {
-      if (!user || (user.role !== "ADMIN" && user.role !== "DISPATCHER")) {
+      if (!user) {
         setAlertCount(0);
         return;
       }
       try {
-        const res = await fetch("/api/dashboard/alerts", { credentials: "include" });
+        const endpoint =
+          user.role === "CLIENT" ? "/api/client/notifications" : "/api/dashboard/alerts";
+        const res = await fetch(endpoint, { credentials: "include" });
         if (!res.ok) return;
         const data = await res.json();
-        setAlertCount(data?.total ?? 0);
+        if (user.role === "CLIENT") {
+          setAlertCount(data?.unreadCount ?? 0);
+        } else if (user.role === "ADMIN" || user.role === "DISPATCHER") {
+          setAlertCount(data?.total ?? 0);
+        } else {
+          setAlertCount(0);
+        }
       } catch {
         // ignore
       }
@@ -43,8 +51,8 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       {/* Title/Breadcrumb Area */}
       <div className="flex flex-col">
-        <h2 className="text-lg md:text-2xl font-bold text-dark-900">Dashboard</h2>
-        <p className="hidden sm:block text-sm text-dark-500 font-medium">Home &gt; Overview</p>
+        <h2 className="text-lg md:text-2xl font-bold text-dark-900">Kontrolna tabla</h2>
+        <p className="hidden sm:block text-sm text-dark-500 font-medium">Početna &gt; Pregled</p>
       </div>
 
       {/* Search */}
@@ -53,7 +61,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-dark-400 group-focus-within:text-primary-500 transition-colors" />
           <input
             type="text"
-            placeholder="Search anything..."
+            placeholder="Pretraži sistem..."
             className="w-full pl-12 pr-4 py-3.5 text-sm bg-white border-none shadow-soft rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-100 text-dark-900 placeholder:text-dark-400 transition-all"
           />
         </div>
@@ -70,7 +78,9 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* Notifications */}
         <button
           className="relative p-2.5 md:p-3.5 bg-white rounded-full shadow-soft hover:shadow-primary transition-all group"
-          onClick={() => window.location.assign("/alerts")}
+          onClick={() =>
+            window.location.assign(user?.role === "CLIENT" ? "/client/notifications" : "/alerts")
+          }
         >
           <Bell className="w-4 h-4 md:w-5 md:h-5 text-dark-600 group-hover:text-primary-600" />
           {alertCount > 0 && (

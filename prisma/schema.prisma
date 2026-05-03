@@ -12,6 +12,7 @@ enum UserRole {
   ADMIN
   DISPATCHER
   DRIVER
+  CLIENT
 }
 
 enum DriverStatus {
@@ -44,11 +45,52 @@ enum LoadCargoType {
   TERET
 }
 
+enum LoadSourceType {
+  INTERNAL
+  CLIENT_PORTAL
+}
+
+enum LoadApprovalStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
+enum LoadDistanceSource {
+  MANUAL
+  AUTO
+}
+
+enum ClientNotificationType {
+  LOAD_APPROVED
+  LOAD_PICKED_UP
+  LOAD_COMPLETED
+}
+
+enum MobilePushPlatform {
+  ANDROID
+  IOS
+  UNKNOWN
+}
+
+enum AppNotificationType {
+  DRIVER_BORDER_EXIT_EU
+  DRIVER_BORDER_RETURN_BIH
+  DRIVER_SCHENGEN_REMINDER
+}
+
 enum VehicleSize {
   SMALL // sedan, hatchback
   MEDIUM // mid-size SUV
   LARGE // full-size SUV, pickup
   OVERSIZED // lifted trucks, vans
+}
+
+enum TrailerType {
+  CISTERNA
+  CAR_HAULER
+  KOFERAS
+  OTHER
 }
 
 enum DocumentType {
@@ -65,6 +107,12 @@ enum DocumentType {
   INSURANCE
   REGISTRATION
   OTHER
+}
+
+enum DocumentApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum MaintenanceType {
@@ -169,13 +217,19 @@ model User {
   lastName       String
   phone          String?
   telegramChatId String?
+  refreshTokenVersion Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   driver    Driver?
+  clientProfile ClientProfile?
+  requestedLoads Load[] @relation("RequestedLoads")
+  clientNotifications ClientNotification[]
   auditLogs AuditLog[]
   alertAcknowledgements AlertAcknowledgement[] @relation("AlertAcknowledgements")
+  mobilePushDevices MobilePushDevice[]
+  appNotifications AppNotification[]
 
   @@index([email])
 }
@@ -233,6 +287,7 @@ model Driver {
   positions              Position[] // Traccar position history
   geofenceEvents         GeofenceEvent[] // Geofence entry/exit events
   schengenDays           SchengenDay[]
+  appNotifications       AppNotification[]
   inspections            Inspection[]
   incidents              Incident[]
 
@@ -301,11 +356,15 @@ model Trailer {
   id String @id @default(cuid())
 
   trailerNumber String @unique
+  type          TrailerType @default(OTHER)
   vin           String? @unique
   make          String?
   model         String?
   year          Int?
   licensePlate  String?
+  lengthMeters  Float?
+  capacityM3    Float?
+  compartmentCount Int?
 
   registrationExpiry DateTime?
   insuranceExpiry    DateTime?
@@ -506,6 +565,9 @@ model Load {
   loadNumber String @unique
   routeName  String?
   cargoType  LoadCargoType @default(TERET)
+  sourceType LoadSourceType @default(INTERNAL)
+  approvalStatus LoadApprovalStatus @default(APPROVED)
+  distanceSource LoadDistanceSource @default(MANUAL)
 
   // Assignment
   driverId String?
@@ -513,6 +575,13 @@ model Load {
 
   truckId String?
   truck   Truck?  @relation(fields: [truckId], references: [id])
+
+  requestedByUserId String?
+  requestedByUser User? @relation("RequestedLoads", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  requestedAt DateTime?
+  approvedAt DateTime?
+  rejectedAt DateTime?
+  approvalNote String? @db.Text
 
   // Status
   status LoadStatus @default(AVAILABLE)
@@ -556,6 +625,10 @@ model Load {
   // Notes
   notes               String? @db.Text
   specialInstructions String? @db.Text
+  checklist           Json?
+  delayReason         String? @db.Text
+  pickupExceptionReason String? @db.Text
+  deliveryExceptionReason String? @db.Text
 
   // Recurring
   isRecurring      Boolean @default(false)
@@ -570,13 +643,108 @@ model Load {
   documents Document[]
   stops     LoadStop[]
   incidents Incident[]
+  clientNotifications ClientNotification[]
 
   @@index([loadNumber])
   @@index([status])
   @@index([driverId])
   @@index([truckId])
+  @@index([approvalStatus])
+  @@index([sourceType])
+  @@index([distanceSource])
+  @@index([requestedByUserId])
   @@index([actualDeliveryDate])
   @@index([scheduledDeliveryDate])
+}
+
+model ClientProfile {
+  id String @id @default(cuid())
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName String?
+  companyAddress String?
+  city String?
+  state String?
+  zip String?
+  contactPerson String?
+  contactPhone String?
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyName])
+}
+
+model ClientNotification {
+  id String @id @default(cuid())
+
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  loadId String
+  load Load @relation(fields: [loadId], references: [id], onDelete: Cascade)
+
+  type ClientNotificationType
+  title String
+  message String @db.Text
+  isRead Boolean @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, loadId, type])
+  @@index([userId, isRead, createdAt])
+  @@index([loadId])
+}
+
+model MobilePushDevice {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  pushToken String @unique
+  platform  MobilePushPlatform @default(ANDROID)
+  deviceName String?
+  appVersion String?
+  isActive Boolean @default(true)
+  lastRegisteredAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, isActive])
+  @@index([lastSeenAt])
+}
+
+model AppNotification {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
+  type AppNotificationType
+  notificationKey String @unique
+  title   String
+  message String @db.Text
+  data    Json?
+  readAt  DateTime?
+  requiresConfirmation Boolean @default(false)
+  confirmedAt DateTime?
+  pushSentAt DateTime?
+  pushStatus String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([driverId, createdAt])
+  @@index([type, createdAt])
 }
 
 model LoadStop {
@@ -686,6 +854,9 @@ model Document {
 
   // Expiry (for compliance docs)
   expiryDate DateTime?
+  approvalStatus DocumentApprovalStatus @default(PENDING)
+  reviewedAt DateTime?
+  reviewNote String? @db.Text
 
   // Associations
   loadId String?
@@ -701,11 +872,13 @@ model Document {
   incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   uploadedById String?
+  reviewedById String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([type])
+  @@index([approvalStatus])
   @@index([loadId])
   @@index([driverId])
   @@index([inspectionId])

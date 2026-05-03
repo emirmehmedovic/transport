@@ -17,6 +17,7 @@ export type RouteOption = {
 };
 
 const DEFAULT_TRUCK_DURATION_FACTOR = 1.3;
+const FALLBACK_OSRM_BASE_URL = "https://router.project-osrm.org";
 
 function toTruckHours(carDurationSeconds: number): number {
   const truckDurationSeconds = carDurationSeconds * DEFAULT_TRUCK_DURATION_FACTOR;
@@ -24,10 +25,7 @@ function toTruckHours(carDurationSeconds: number): number {
 }
 
 export function buildOsrmRouteUrl(coords: Array<{ lat: number; lng: number }>): string {
-  const baseUrl = process.env.OSRM_BASE_URL;
-  if (!baseUrl) {
-    throw new Error("OSRM_BASE_URL is not configured");
-  }
+  const baseUrl = process.env.OSRM_BASE_URL || FALLBACK_OSRM_BASE_URL;
 
   const coordString = coords
     .map((c) => `${c.lng},${c.lat}`)

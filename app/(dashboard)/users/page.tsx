@@ -95,6 +95,8 @@ export default function UsersPage() {
         return "bg-blue-100 text-blue-700";
       case "DRIVER":
         return "bg-green-100 text-green-700";
+      case "CLIENT":
+        return "bg-amber-100 text-amber-700";
       default:
         return "bg-gray-100 text-gray-700";
     }
@@ -108,6 +110,8 @@ export default function UsersPage() {
         return "Dispatcher";
       case "DRIVER":
         return "Vozač";
+      case "CLIENT":
+        return "Klijent";
       default:
         return role;
     }

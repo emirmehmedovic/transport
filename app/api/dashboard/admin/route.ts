@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { LoadStatus } from "@prisma/client";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const ACTIVE_LOAD_STATUSES: LoadStatus[] = [
   LoadStatus.ASSIGNED,
@@ -71,13 +74,7 @@ async function calculateRevenueSum(startDate: Date, endDate: Date) {
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.cookies.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
+    const decoded = await getVerifiedAuthUserFromRequest(req);
 
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
