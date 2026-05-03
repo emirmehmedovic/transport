@@ -51,9 +51,10 @@ async function handleTelemetry(request: NextRequest) {
     let params: any;
     let telemetryKey: string | null = null;
 
+    const searchParams = request.nextUrl.searchParams;
+
     if (request.method === 'GET') {
       // Parse from query string
-      const searchParams = request.nextUrl.searchParams;
       telemetryKey = searchParams.get('key');
       params = {
         id:
@@ -90,6 +91,7 @@ async function handleTelemetry(request: NextRequest) {
       }
 
       telemetryKey =
+        searchParams.get('key') ||
         body.key ||
         location?.key ||
         body?.params?.key ||
@@ -99,6 +101,9 @@ async function handleTelemetry(request: NextRequest) {
 
       params = {
         id:
+          searchParams.get('id') ||
+          searchParams.get('deviceid') ||
+          searchParams.get('device_id') ||
           body.id ||
           body.deviceid ||
           body.device_id ||
@@ -111,6 +116,7 @@ async function handleTelemetry(request: NextRequest) {
           templateParams?.get('deviceid') ||
           templateParams?.get('device_id'),
         lat:
+          searchParams.get('lat') ||
           body.lat ||
           body.latitude ||
           location?.lat ||
@@ -118,27 +124,48 @@ async function handleTelemetry(request: NextRequest) {
           coords?.latitude ||
           templateParams?.get('lat'),
         lon:
+          searchParams.get('lon') ||
           body.lon ||
           body.longitude ||
           location?.lon ||
           location?.longitude ||
           coords?.longitude ||
           templateParams?.get('lon'),
-        speed: body.speed || location?.speed || coords?.speed || templateParams?.get('speed'),
+        speed:
+          searchParams.get('speed') ||
+          body.speed ||
+          location?.speed ||
+          coords?.speed ||
+          templateParams?.get('speed'),
         bearing:
+          searchParams.get('bearing') ||
           body.bearing ||
           body.heading ||
           location?.bearing ||
           location?.heading ||
           coords?.heading,
-        altitude: body.altitude || location?.altitude || coords?.altitude,
+        altitude:
+          searchParams.get('altitude') ||
+          body.altitude ||
+          location?.altitude ||
+          coords?.altitude,
         battery:
+          searchParams.get('battery') ||
+          searchParams.get('batt') ||
           body.battery ||
           body.batt ||
           location?.battery?.level ||
           coords?.battery?.level,
-        accuracy: body.accuracy || location?.accuracy || coords?.accuracy,
-        timestamp: body.timestamp || location?.timestamp || coords?.timestamp,
+        accuracy:
+          searchParams.get('accuracy') ||
+          body.accuracy ||
+          location?.accuracy ||
+          coords?.accuracy,
+        timestamp:
+          searchParams.get('timestamp') ||
+          body.timestamp ||
+          location?.timestamp ||
+          coords?.timestamp,
       };
       console.log('[Telemetry] Parsed params:', JSON.stringify(params, null, 2));
     }
