@@ -63,6 +63,38 @@ const stopIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+const trailStartIcon = new L.DivIcon({
+  html: `
+    <div style="
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #10B981;
+      border: 3px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    "></div>
+  `,
+  className: "trail-start-icon",
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+});
+
+const trailEndIcon = new L.DivIcon({
+  html: `
+    <div style="
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #EF4444;
+      border: 3px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    "></div>
+  `,
+  className: "trail-end-icon",
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+});
+
 // Helper function to check GPS status
 function getGPSStatus(lastLocationUpdate: Date | null): 'active' | 'warning' | 'offline' {
   if (!lastLocationUpdate) return 'offline';
@@ -244,6 +276,12 @@ interface LiveMapProps {
   focusedDriverId?: string | null;
 }
 
+interface DriverTrail {
+  points: [number, number][];
+  startAt: string | null;
+  endAt: string | null;
+}
+
 export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDriverId: null }) {
   const router = useRouter();
   const [loads, setLoads] = useState<LoadData[]>([]);
@@ -256,6 +294,9 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
     toPickup: [number, number][];
     toDelivery: [number, number][];
   }>>({});
+  const [driverTrails, setDriverTrails] = useState<Record<string, DriverTrail>>({});
+  const [selectedTrailDriverId, setSelectedTrailDriverId] = useState<string | null>(null);
+  const [loadingTrailDriverId, setLoadingTrailDriverId] = useState<string | null>(null);
   const [loadRoutes, setLoadRoutes] = useState<Record<string, [number, number][]>>({});
   const [availableLoads, setAvailableLoads] = useState<LoadData[]>([]);
   const [assigning, setAssigning] = useState(false);
@@ -386,6 +427,7 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
     
     // Set selected load
     setSelectedLoadId(loadWithGPS.id);
+    setSelectedTrailDriverId(null);
 
     try {
       // Route from driver to pickup
@@ -570,6 +612,50 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
     router.push(`/drivers/${driverId}/replay?${params.toString()}`);
   };
 
+  const fetchTodayTrail = async (driverId: string) => {
+    setLoadingTrailDriverId(driverId);
+
+    try {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+
+      const params = new URLSearchParams({
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        limit: "5000",
+      });
+
+      const res = await fetch(`/api/drivers/${driverId}/positions?${params.toString()}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Greška pri učitavanju današnjeg kretanja");
+        return;
+      }
+
+      const points: [number, number][] = (data.positions || [])
+        .filter((position: any) => typeof position.latitude === "number" && typeof position.longitude === "number")
+        .map((position: any) => [position.latitude, position.longitude] as [number, number]);
+
+      setDriverTrails((prev) => ({
+        ...prev,
+        [driverId]: {
+          points,
+          startAt: data.positions?.[0]?.recordedAt || null,
+          endAt: data.positions?.[data.positions.length - 1]?.recordedAt || null,
+        },
+      }));
+      setSelectedTrailDriverId(driverId);
+      setSelectedLoadId(null);
+    } catch (error) {
+      console.error("Error fetching today's trail:", error);
+      alert("Greška pri učitavanju današnjeg kretanja");
+    } finally {
+      setLoadingTrailDriverId(null);
+    }
+  };
+
   return (
     <div className="h-full w-full relative">
       {/* Map - Full Height */}
@@ -692,7 +778,7 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
             return (
               <div key={`route-${driver.driverId}`}>
                 {/* Driver's route to pickup and then to delivery */}
-                {isSelected && loadWithGPS && hasCalculatedRoute && (
+                {isSelected && selectedLoadId && loadWithGPS && hasCalculatedRoute && (
                   <>
                     {/* Route from driver to pickup (calculated) */}
                     <Polyline
@@ -761,6 +847,52 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                       ))}
                   </>
                 )}
+
+                {isSelected &&
+                  selectedTrailDriverId === driver.driverId &&
+                  driverTrails[driver.driverId] &&
+                  driverTrails[driver.driverId].points.length > 0 && (
+                    <>
+                      <Polyline
+                        positions={driverTrails[driver.driverId].points}
+                        pathOptions={{
+                          color: "#06B6D4",
+                          weight: 4,
+                          opacity: 0.85,
+                        }}
+                      />
+                      <Marker
+                        position={driverTrails[driver.driverId].points[0]}
+                        icon={trailStartIcon}
+                      >
+                        <Popup>
+                          <div className="text-sm">
+                            <p className="font-semibold text-green-700">Start dana</p>
+                            {driverTrails[driver.driverId].startAt && (
+                              <p className="text-dark-600">
+                                {new Date(driverTrails[driver.driverId].startAt as string).toLocaleString("bs-BA")}
+                              </p>
+                            )}
+                          </div>
+                        </Popup>
+                      </Marker>
+                      <Marker
+                        position={driverTrails[driver.driverId].points[driverTrails[driver.driverId].points.length - 1]}
+                        icon={trailEndIcon}
+                      >
+                        <Popup>
+                          <div className="text-sm">
+                            <p className="font-semibold text-red-700">Zadnja tačka danas</p>
+                            {driverTrails[driver.driverId].endAt && (
+                              <p className="text-dark-600">
+                                {new Date(driverTrails[driver.driverId].endAt as string).toLocaleString("bs-BA")}
+                              </p>
+                            )}
+                          </div>
+                        </Popup>
+                      </Marker>
+                    </>
+                  )}
               </div>
             );
           })}
@@ -779,12 +911,13 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                     if (driver.driverId === selectedDriverId) {
                       // Deselect
                       setSelectedDriverId(null);
+                      setSelectedLoadId(null);
+                      setSelectedTrailDriverId(null);
                     } else {
-                      // Select and calculate route
+                      // Select driver and show current location/panel only.
+                      // Route preview should be explicit after user chooses a load.
                       setSelectedDriverId(driver.driverId);
-                      if (!driverRoutes[driver.driverId]) {
-                        await calculateDriverRoute(driver);
-                      }
+                      setSelectedLoadId(null);
                     }
                   },
                 }}
@@ -864,6 +997,35 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="pb-3 mb-3 border-b border-white/10">
+                  <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide mb-2">
+                    Današnje kretanje
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fetchTodayTrail(driver.driverId)}
+                      disabled={loadingTrailDriverId === driver.driverId}
+                      className="px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                    >
+                      {loadingTrailDriverId === driver.driverId ? "Učitavanje..." : "Prikaži trasu"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTrailDriverId(null)}
+                      disabled={selectedTrailDriverId !== driver.driverId}
+                      className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 text-white text-xs font-semibold transition-colors"
+                    >
+                      Sakrij trasu
+                    </button>
+                  </div>
+                  {selectedTrailDriverId === driver.driverId && driverTrails[driver.driverId] && (
+                    <p className="text-[11px] text-cyan-200 mt-2">
+                      Prikazano tačaka: {driverTrails[driver.driverId].points.length}
+                    </p>
+                  )}
                 </div>
 
                 {/* Current Loads */}
