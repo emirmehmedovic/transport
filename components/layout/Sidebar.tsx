@@ -25,6 +25,7 @@ import {
   Route,
   Briefcase,
   MapPin,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 
@@ -54,6 +55,7 @@ const navigation: { category?: string; items: NavItem[] }[] = [
       { name: "Prikolice", href: "/trailers", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
       { name: "DVIR", href: "/driver/inspections", icon: Clipboard, roles: ["DRIVER"] },
       { name: "Najznačajnije tačke", href: "/landmarks", icon: MapPin, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Sedmični Planovi", href: "/route-plans", icon: Calendar, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Rute/Transporti", href: "/loads", icon: Package },
       { name: "Dokumenti", href: "/documents", icon: FileText },
       { name: "Korisnici", href: "/users", icon: Users, roles: ["ADMIN"] },

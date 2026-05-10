@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Package, Plus, UserPlus, Eye } from "lucide-react";
+import { Package, Plus, UserPlus, Eye, Calendar } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { LoadStatusBadge } from "@/components/loads/LoadStatusBadge";
 import { DataTable } from "@/components/ui/data-table";
@@ -301,13 +301,22 @@ export default function LoadsPage() {
               Novi zahtjev
             </button>
           ) : (
-            <button
-              onClick={() => router.push("/loads/new")}
-              className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              Kreiraj rutu
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => router.push("/route-plans/new")}
+                className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
+              >
+                <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Sedmični plan</span>
+              </button>
+              <button
+                onClick={() => router.push("/loads/new")}
+                className="flex items-center gap-1.5 md:gap-2 rounded-full px-3 md:px-5 py-2 md:py-2.5 border border-white/15 bg-white/5 text-dark-50 text-xs md:text-sm font-semibold hover:bg-white/10 hover:border-white/25 transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                Kreiraj rutu
+              </button>
+            </div>
           )
         }
       >
