@@ -13,12 +13,19 @@ enum UserRole {
   DISPATCHER
   DRIVER
   CLIENT
+  MANAGER
 }
 
 enum DriverStatus {
   ACTIVE
   VACATION
   SICK_LEAVE
+  INACTIVE
+}
+
+enum ManagerStatus {
+  ACTIVE
+  VACATION
   INACTIVE
 }
 
@@ -77,6 +84,9 @@ enum AppNotificationType {
   DRIVER_BORDER_EXIT_EU
   DRIVER_BORDER_RETURN_BIH
   DRIVER_SCHENGEN_REMINDER
+  ROUTE_PLAN_ASSIGNED
+  ROUTE_PLAN_UPDATED
+  ROUTE_PLAN_CANCELLED
 }
 
 enum VehicleSize {
@@ -199,12 +209,15 @@ enum AuditAction {
 enum AuditEntity {
   USER
   DRIVER
+  MANAGER
   TRUCK
   LOAD
   DOCUMENT
   PAY_STUB
   MAINTENANCE
   EXPENSE
+  LANDMARK
+  ROUTE_PLAN
 }
 
 // Models
@@ -223,6 +236,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   driver    Driver?
+  manager   Manager?
   clientProfile ClientProfile?
   requestedLoads Load[] @relation("RequestedLoads")
   clientNotifications ClientNotification[]
@@ -230,6 +244,9 @@ model User {
   alertAcknowledgements AlertAcknowledgement[] @relation("AlertAcknowledgements")
   mobilePushDevices MobilePushDevice[]
   appNotifications AppNotification[]
+  landmarks Landmark[]
+  createdRoutePlans WeeklyRoutePlan[] @relation("CreatedRoutePlans")
+  assignedRoutePlans WeeklyRoutePlan[] @relation("AssignedRoutePlans")
 
   @@index([email])
 }
@@ -290,6 +307,37 @@ model Driver {
   appNotifications       AppNotification[]
   inspections            Inspection[]
   incidents              Incident[]
+  weeklyRoutePlans       WeeklyRoutePlan[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([traccarDeviceId])
+}
+
+model Manager {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic Info
+  hireDate DateTime
+  status   ManagerStatus @default(ACTIVE)
+
+  // Optional Department/Division
+  department String?
+
+  // GPS Tracking (same as Driver)
+  lastKnownLatitude  Float?
+  lastKnownLongitude Float?
+  lastLocationUpdate DateTime?
+  traccarDeviceId    String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  positions      Position[]
+  geofenceEvents GeofenceEvent[]
 
   @@index([userId])
   @@index([status])
@@ -347,6 +395,7 @@ model Truck {
   trailers               Trailer[]
   inspections            Inspection[]
   incidents              Incident[]
+  weeklyRoutePlans       WeeklyRoutePlan[]
 
   @@index([truckNumber])
   @@index([isActive])
@@ -634,6 +683,10 @@ model Load {
   isRecurring      Boolean @default(false)
   recurringGroupId String?
 
+  // Generated from route plan
+  generatedFromRoutePlanId String?
+  generatedFromRoutePlan WeeklyRoutePlan? @relation("GeneratedFromRoutePlan", fields: [generatedFromRoutePlanId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -655,6 +708,7 @@ model Load {
   @@index([requestedByUserId])
   @@index([actualDeliveryDate])
   @@index([scheduledDeliveryDate])
+  @@index([generatedFromRoutePlanId])
 }
 
 model ClientProfile {
@@ -1075,13 +1129,35 @@ enum RecurringFrequency {
   MONTHLY
 }
 
+enum RoutePlanStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum RoutePlanDayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
 // Traccar Position History
 model Position {
   id String @id @default(cuid())
 
-  // Device Reference
-  driverId String
-  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  // Device Reference (either driver OR manager)
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  managerId String?
+  manager   Manager? @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
   deviceId String // Traccar Device ID (e.g., KAMION-01)
 
   // Location Data
@@ -1099,10 +1175,24 @@ model Position {
   recordedAt DateTime @default(now()) // When position was recorded by device
   receivedAt DateTime @default(now()) // When server received the data
 
-  @@index([driverId])
-  @@index([deviceId])
-  @@index([recordedAt])
-  @@index([driverId, recordedAt])
+  // Single column indexes
+  @@index([driverId], map: "idx_position_driver")
+  @@index([managerId], map: "idx_position_manager")
+  @@index([deviceId], map: "idx_position_device")
+  @@index([recordedAt], map: "idx_position_recorded")
+
+  // Composite indexes for time-based queries
+  @@index([driverId, recordedAt], map: "idx_position_driver_time")
+  @@index([managerId, recordedAt], map: "idx_position_manager_time")
+  @@index([deviceId, recordedAt], map: "idx_position_device_time")
+
+  // Covering indexes (include lat/lon for map queries without table lookup)
+  @@index([driverId, recordedAt, latitude, longitude], map: "idx_position_driver_time_coords")
+  @@index([managerId, recordedAt, latitude, longitude], map: "idx_position_manager_time_coords")
+
+  // Descending time indexes for "latest N positions" queries
+  @@index([driverId, recordedAt(sort: Desc)], map: "idx_position_driver_time_desc")
+  @@index([managerId, recordedAt(sort: Desc)], map: "idx_position_manager_time_desc")
 }
 
 // Geofencing Zones
@@ -1154,8 +1244,11 @@ model GeofenceEvent {
   zoneId String
   zone   Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
 
-  driverId String
-  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  managerId String?
+  manager   Manager? @relation(fields: [managerId], references: [id], onDelete: Cascade)
 
   eventType  GeofenceEventType
   latitude   Float
@@ -1168,11 +1261,174 @@ model GeofenceEvent {
 
   @@index([zoneId])
   @@index([driverId])
+  @@index([managerId])
   @@index([detectedAt])
   @@index([driverId, detectedAt])
+  @@index([managerId, detectedAt])
 }
 
 enum GeofenceEventType {
   ENTRY
   EXIT
+}
+
+enum LandmarkType {
+  FUEL_STATION
+  TERMINAL
+  PORT
+  WAREHOUSE
+  CAR_DEALERSHIP
+  COMPANY
+  OTHER
+}
+
+// Landmarks / Important Points (POIs)
+model Landmark {
+  id          String       @id @default(cuid())
+
+  // Basic Info
+  name        String
+  type        LandmarkType
+  description String?      @db.Text
+  companyName String?      // For COMPANY type
+
+  // Location Data
+  latitude    Float
+  longitude   Float
+  address     String?
+  city        String?
+  state       String?
+  zip         String?
+  country     String?      @default("BA")
+
+  // Contact Info (optional)
+  phone       String?
+  email       String?
+  website     String?
+
+  // Map Display Settings
+  iconColor   String?      @default("#3B82F6")  // Hex color for icon
+  showLabel   Boolean      @default(true)       // Show name label on map
+
+  // Status
+  isActive    Boolean      @default(true)
+
+  // Metadata
+  notes       String?      @db.Text
+
+  // Audit
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdById String
+  createdBy   User         @relation(fields: [createdById], references: [id])
+
+  @@index([type])
+  @@index([isActive])
+  @@index([city])
+  @@index([latitude, longitude])  // For geospatial queries
+  @@index([createdById])
+  @@map("Landmark")
+
+  // Relations
+  routePlanStops RoutePlanStop[]
+}
+
+// Weekly Route Planning System
+model WeeklyRoutePlan {
+  id String @id @default(cuid())
+
+  // Basic Info
+  planName String
+  description String? @db.Text
+  status RoutePlanStatus @default(DRAFT)
+
+  // Date Range
+  startDate DateTime // Monday of start week
+  endDate DateTime   // Sunday of end week
+
+  // Days of week
+  daysOfWeek RoutePlanDayOfWeek[] // [MONDAY, WEDNESDAY, FRIDAY]
+
+  // Route Details
+  cargoType LoadCargoType @default(TERET)
+  distance Int
+  deadheadMiles Int @default(0)
+  loadRate Float
+  customRatePerMile Float?
+  detentionTime Int?
+  detentionPay Float? @default(0)
+  estimatedDurationHours Float?
+
+  // Assignment
+  driverId String?
+  driver Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
+  truckId String?
+  truck Truck? @relation(fields: [truckId], references: [id], onDelete: SetNull)
+
+  assignedAt DateTime?
+  assignedById String?
+  assignedBy User? @relation("AssignedRoutePlans", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  // Notes
+  notes String? @db.Text
+  specialInstructions String? @db.Text
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdById String
+  createdBy User @relation("CreatedRoutePlans", fields: [createdById], references: [id])
+
+  // Relations
+  stops RoutePlanStop[]
+  generatedLoads Load[] @relation("GeneratedFromRoutePlan")
+
+  @@index([status])
+  @@index([driverId])
+  @@index([truckId])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdById])
+  @@map("WeeklyRoutePlan")
+}
+
+model RoutePlanStop {
+  id String @id @default(cuid())
+
+  routePlanId String
+  routePlan WeeklyRoutePlan @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
+
+  type LoadStopType // PICKUP, DELIVERY, INTERMEDIATE
+  sequence Int      // 0 = pickup, 1-N = waypoints, last = delivery
+
+  // Landmark Reference (primary)
+  landmarkId String?
+  landmark Landmark? @relation(fields: [landmarkId], references: [id], onDelete: SetNull)
+
+  // OR Custom Address (fallback)
+  customAddress String?
+  customCity String?
+  customState String?
+  customZip String?
+  customLatitude Float?
+  customLongitude Float?
+
+  // Contact Info
+  contactName String?
+  contactPhone String?
+
+  // Time offset from start (minutes)
+  scheduledTimeOffset Int?
+
+  // Items
+  items String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([routePlanId])
+  @@index([landmarkId])
+  @@index([sequence])
+  @@map("RoutePlanStop")
 }

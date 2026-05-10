@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
   try {
     const decoded = await getVerifiedAuthUserFromRequest(req);
 
-    if (!decoded || decoded.role !== "ADMIN") {
+    if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 

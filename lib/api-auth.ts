@@ -5,7 +5,7 @@ import { verifyRefreshToken, verifyToken } from "@/lib/auth";
 export type AuthTokenPayload = {
   userId: string;
   email: string;
-  role: "ADMIN" | "DISPATCHER" | "DRIVER" | "CLIENT";
+  role: "ADMIN" | "DISPATCHER" | "DRIVER" | "CLIENT" | "MANAGER";
   driverId?: string | null;
   tokenVersion?: number;
   firstName?: string;

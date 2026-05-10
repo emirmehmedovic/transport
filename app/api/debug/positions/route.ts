@@ -27,6 +27,16 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        manager: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -67,7 +77,11 @@ export async function GET(request: NextRequest) {
       })),
       recentPositions: positions.map(p => ({
         id: p.id,
-        driverName: `${p.driver.user.firstName} ${p.driver.user.lastName}`,
+        driverName: p.driver
+          ? `${p.driver.user.firstName} ${p.driver.user.lastName}`
+          : p.manager
+            ? `${p.manager.user.firstName} ${p.manager.user.lastName} (Manager)`
+            : 'Unknown',
         deviceId: p.deviceId,
         latitude: p.latitude,
         longitude: p.longitude,

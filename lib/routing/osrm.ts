@@ -16,6 +16,10 @@ export type RouteOption = {
   type: string;
 };
 
+type FetchOsrmRoutesOptions = {
+  alternatives?: boolean;
+};
+
 const DEFAULT_TRUCK_DURATION_FACTOR = 1.3;
 const FALLBACK_OSRM_BASE_URL = "https://router.project-osrm.org";
 
@@ -24,24 +28,29 @@ function toTruckHours(carDurationSeconds: number): number {
   return Math.round((truckDurationSeconds / 3600) * 10) / 10;
 }
 
-export function buildOsrmRouteUrl(coords: Array<{ lat: number; lng: number }>): string {
+export function buildOsrmRouteUrl(
+  coords: Array<{ lat: number; lng: number }>,
+  options: FetchOsrmRoutesOptions = {}
+): string {
   const baseUrl = process.env.OSRM_BASE_URL || FALLBACK_OSRM_BASE_URL;
+  const alternatives = options.alternatives ?? true;
 
   const coordString = coords
     .map((c) => `${c.lng},${c.lat}`)
     .join(";");
 
-  return `${baseUrl.replace(/\/$/, "")}/route/v1/driving/${coordString}?overview=full&geometries=geojson&alternatives=true`;
+  return `${baseUrl.replace(/\/$/, "")}/route/v1/driving/${coordString}?overview=full&geometries=geojson&alternatives=${alternatives ? "true" : "false"}`;
 }
 
 export async function fetchOsrmRoutes(
-  coords: Array<{ lat: number; lng: number }>
+  coords: Array<{ lat: number; lng: number }>,
+  options: FetchOsrmRoutesOptions = {}
 ): Promise<RouteOption[]> {
   if (coords.length < 2) {
     throw new Error("At least two coordinates are required");
   }
 
-  const url = buildOsrmRouteUrl(coords);
+  const url = buildOsrmRouteUrl(coords, options);
   const res = await fetch(url);
   const data: OsrmResponse = await res.json();
 

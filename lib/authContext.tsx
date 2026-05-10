@@ -9,6 +9,7 @@ interface User {
   role: string;
   firstName: string;
   lastName: string;
+  phone?: string | null;
   driver?: any;
 }
 
@@ -17,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -142,6 +144,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) return;
+
+      const res = await fetch("/api/auth/me", {
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user || null);
+        if (typeof window !== 'undefined' && data.user) {
+          localStorage.setItem("user", JSON.stringify(data.user));
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing user:", error);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -149,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         logout,
+        refreshUser,
         isAuthenticated: !!user,
       }}
     >

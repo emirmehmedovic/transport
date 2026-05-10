@@ -20,7 +20,7 @@ export const userSchema = z
     firstName: z.string().min(1, "Ime je obavezno"),
     lastName: z.string().min(1, "Prezime je obavezno"),
     phone: optionalNullableString,
-    role: z.enum(["ADMIN", "DISPATCHER", "DRIVER", "CLIENT"]),
+    role: z.enum(["ADMIN", "DISPATCHER", "DRIVER", "CLIENT", "MANAGER"]),
     telegramChatId: optionalNullableString,
   })
   .strict();

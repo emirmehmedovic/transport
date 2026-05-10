@@ -150,18 +150,48 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // Get managers (only for ADMIN)
+    const managers = decoded.role === "ADMIN"
+      ? await prisma.manager.findMany({
+          where: {
+            status: "ACTIVE",
+            lastKnownLatitude: { not: null },
+            lastKnownLongitude: { not: null },
+          },
+          select: {
+            id: true,
+            lastKnownLatitude: true,
+            lastKnownLongitude: true,
+            lastLocationUpdate: true,
+            department: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        })
+      : [];
+
     // Format response with all loads info
     const formattedDrivers = drivers.map((driver) => ({
-      id: driver.id,
-      lastKnownLatitude: driver.lastKnownLatitude,
-      lastKnownLongitude: driver.lastKnownLongitude,
-      lastLocationUpdate: driver.lastLocationUpdate,
-      user: driver.user,
-      primaryTruck: driver.primaryTruck,
+      ...driver,
+      type: 'DRIVER' as const,
       loads: driver.loads, // Return all loads instead of just first one
     }));
 
-    const response = NextResponse.json({ drivers: formattedDrivers });
+    const formattedManagers = managers.map((manager) => ({
+      ...manager,
+      type: 'MANAGER' as const,
+      primaryTruck: null,
+      loads: [],
+    }));
+
+    const response = NextResponse.json({
+      drivers: formattedDrivers,
+      managers: formattedManagers,
+    });
 
     // Prevent caching to ensure fresh data
     response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');

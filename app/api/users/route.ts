@@ -4,11 +4,11 @@ import { hashPassword } from "@/lib/auth";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { userSchema } from "@/lib/validation/user";
 
-// GET /api/users - Lista svih korisnika (samo ADMIN)
+// GET /api/users - Lista svih korisnika (ADMIN i DISPATCHER)
 export async function GET(req: NextRequest) {
   try {
     const decoded = await getVerifiedAuthUserFromRequest(req);
-    if (!decoded || decoded.role !== "ADMIN") {
+    if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
         { status: 403 }

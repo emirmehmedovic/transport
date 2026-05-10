@@ -3,7 +3,7 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { fetchOsrmRoutes } from "@/lib/routing/osrm";
 
 // POST /api/routing/osrm
-// Body: { coordinates: [{ lat, lng }] }
+// Body: { coordinates: [{ lat, lng }], alternatives?: boolean }
 export async function POST(req: NextRequest) {
   try {
     const decoded = await getVerifiedAuthUserFromRequest(req);
@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const coordinates = Array.isArray(body?.coordinates) ? body.coordinates : [];
+    const alternatives = body?.alternatives !== false;
 
     if (coordinates.length < 2) {
       return NextResponse.json(
@@ -25,7 +26,8 @@ export async function POST(req: NextRequest) {
       coordinates.map((c: any) => ({
         lat: Number(c.lat),
         lng: Number(c.lng),
-      }))
+      })),
+      { alternatives }
     );
 
     return NextResponse.json({ routes });

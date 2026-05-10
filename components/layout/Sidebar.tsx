@@ -22,6 +22,9 @@ import {
   Shield,
   Plus,
   Bell,
+  Route,
+  Briefcase,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 
@@ -38,6 +41,7 @@ const navigation: { category?: string; items: NavItem[] }[] = [
     items: [
       { name: "Kontrolna tabla", href: "/dashboard", icon: LayoutDashboard },
       { name: "Live Mapa", href: "/live-map", icon: Map, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Route Replay", href: "/route-replay", icon: Route, roles: ["ADMIN", "DISPATCHER", "DRIVER"] },
       { name: "Schengen 90/180", href: "/schengen", icon: Shield, roles: ["ADMIN", "DISPATCHER", "DRIVER"] },
     ],
   },
@@ -45,9 +49,11 @@ const navigation: { category?: string; items: NavItem[] }[] = [
     category: "MANAGEMENT",
     items: [
       { name: "Vozači", href: "/drivers", icon: Users, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Manageri", href: "/managers", icon: Briefcase, roles: ["ADMIN"] },
       { name: "Kamioni", href: "/trucks", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Prikolice", href: "/trailers", icon: Truck, roles: ["ADMIN", "DISPATCHER"] },
       { name: "DVIR", href: "/driver/inspections", icon: Clipboard, roles: ["DRIVER"] },
+      { name: "Najznačajnije tačke", href: "/landmarks", icon: MapPin, roles: ["ADMIN", "DISPATCHER"] },
       { name: "Rute/Transporti", href: "/loads", icon: Package },
       { name: "Dokumenti", href: "/documents", icon: FileText },
       { name: "Korisnici", href: "/users", icon: Users, roles: ["ADMIN"] },

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/generate-route-plan-loads",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}

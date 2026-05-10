@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Truck, Package, Navigation, ChevronDown, ChevronUp } from "lucide-react";
+import { Truck, Package, Navigation, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { getLoadStatusLabel as getMappedLoadStatusLabel } from "@/lib/ui-labels";
 
 // Component to control map view
@@ -14,9 +14,9 @@ function MapController({ focusedDriverId, driverLocations }: { focusedDriverId: 
 
   useEffect(() => {
     if (focusedDriverId) {
-      const driver = driverLocations.find(d => d.driverId === focusedDriverId);
-      if (driver) {
-        map.setView([driver.latitude, driver.longitude], 12, {
+      const entity = driverLocations.find(d => d.id === focusedDriverId);
+      if (entity) {
+        map.setView([entity.latitude, entity.longitude], 12, {
           animate: true,
           duration: 1,
         });
@@ -108,6 +108,58 @@ function getGPSStatus(lastLocationUpdate: Date | null): 'active' | 'warning' | '
   return 'offline'; // 60+ minutes
 }
 
+// Helper functions for landmarks
+import { getLandmarkIcon, getLandmarkColor, getLandmarkLabel } from "@/lib/landmark-icons";
+
+const createLandmarkIcon = (landmark: any) => {
+  const iconColor = landmark.iconColor || getLandmarkColor(landmark.type);
+  const svgIcon = getLandmarkIcon(landmark.type);
+
+  return L.divIcon({
+    html: `
+      <div style="position: relative; text-align: center;">
+        ${landmark.showLabel ? `
+          <div style="
+            position: absolute;
+            bottom: 28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${iconColor};
+            color: white;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-size: 9px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            border: 1.5px solid white;
+          ">
+            ${landmark.name}
+          </div>
+        ` : ''}
+        <div style="
+          width: 24px;
+          height: 24px;
+          background: ${iconColor};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+          border: 2px solid white;
+          color: white;
+        ">
+          ${svgIcon}
+        </div>
+      </div>
+    `,
+    className: 'landmark-icon',
+    iconSize: [24, 24],
+    iconAnchor: [12, 24],
+    popupAnchor: [0, -24],
+  });
+};
+
 // Custom truck icon for drivers using SVG
 const createDriverIcon = (
   driverName: string,
@@ -188,6 +240,82 @@ const createDriverIcon = (
   });
 };
 
+// Custom briefcase icon for managers using SVG
+const createManagerIcon = (
+  managerName: string,
+  isSelected: boolean = false,
+  lastLocationUpdate: Date | null = null
+) => {
+  const iconColor = isSelected ? '#EF4444' : '#F59E0B'; // Red if selected, orange otherwise
+
+  // Get GPS status
+  const gpsStatus = getGPSStatus(lastLocationUpdate);
+  const gpsStatusColor = gpsStatus === 'active' ? '#10B981' : gpsStatus === 'warning' ? '#F59E0B' : '#EF4444';
+  const gpsStatusPulse = gpsStatus === 'active' ? 'animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;' : '';
+
+  return L.divIcon({
+    html: `
+      <style>
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      </style>
+      <div style="position: relative; text-align: center;">
+        <div style="
+          position: absolute;
+          bottom: 48px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: ${iconColor};
+          color: white;
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          border: 2px solid white;
+        ">
+          ${managerName}
+        </div>
+        <div style="
+          width: 40px;
+          height: 40px;
+          background: ${iconColor};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          border: 3px solid white;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+          </svg>
+        </div>
+        <!-- GPS Status Indicator -->
+        <div style="
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          width: 14px;
+          height: 14px;
+          background: ${gpsStatusColor};
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          ${gpsStatusPulse}
+        "></div>
+      </div>
+    `,
+    className: 'custom-manager-icon',
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+  });
+};
+
 interface LoadData {
   id: string;
   loadNumber: string;
@@ -259,8 +387,12 @@ interface LoadInfo {
   }[];
 }
 
+type EntityType = 'DRIVER' | 'MANAGER';
+
 interface DriverLocation {
-  driverId: string;
+  id: string;
+  type: EntityType;
+  driverId?: string;
   driverName: string;
   truckNumber: string | null;
   truckId: string | null;
@@ -270,10 +402,17 @@ interface DriverLocation {
   longitude: number;
   lastUpdate: string;
   loads: LoadInfo[];
+  department?: string | null;
 }
 
 interface LiveMapProps {
   focusedDriverId?: string | null;
+  hideAllDrivers?: boolean;
+  hideRoutes?: boolean;
+  hideLandmarks?: boolean;
+  hideOtherDrivers?: boolean;
+  hiddenDriverIds?: Set<string>;
+  onDriverSelected?: (driverId: string) => void;
 }
 
 interface DriverTrail {
@@ -282,7 +421,15 @@ interface DriverTrail {
   endAt: string | null;
 }
 
-export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDriverId: null }) {
+export default function LiveMap({
+  focusedDriverId,
+  hideAllDrivers = false,
+  hideRoutes = false,
+  hideLandmarks = false,
+  hideOtherDrivers = false,
+  hiddenDriverIds = new Set(),
+  onDriverSelected,
+}: LiveMapProps = {}) {
   const router = useRouter();
   const [loads, setLoads] = useState<LoadData[]>([]);
   const [driverLocations, setDriverLocations] = useState<DriverLocation[]>([]);
@@ -304,9 +451,11 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const fetchInFlightRef = useRef(false);
+  const [landmarks, setLandmarks] = useState<any[]>([]);
 
   useEffect(() => {
     fetchData();
+    fetchLandmarks();
     // Refresh every 5 seconds for real-time updates
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
@@ -363,12 +512,15 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
         setLoads(loadsWithGPS);
       }
 
-      // Fetch driver locations (with cache busting)
+      // Fetch driver locations and managers (with cache busting)
       const driversRes = await fetch(`/api/drivers/location?t=${Date.now()}`);
       const driversData = await driversRes.json();
-      
+
       if (driversRes.ok && driversData.drivers) {
+        // Map drivers
         const driverLocs = driversData.drivers.map((driver: any) => ({
+          id: driver.id,
+          type: 'DRIVER' as const,
           driverId: driver.id,
           driverName: `${driver.user.firstName} ${driver.user.lastName}`,
           truckNumber: driver.primaryTruck?.truckNumber || null,
@@ -380,9 +532,29 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
           lastUpdate: driver.lastLocationUpdate,
           loads: driver.loads || [],
         }));
-        
-        console.log("Driver locations:", driverLocs);
-        setDriverLocations(driverLocs);
+
+        // Map managers (only for ADMIN)
+        const managerLocs = (driversData.managers || []).map((manager: any) => ({
+          id: manager.id,
+          type: 'MANAGER' as const,
+          driverName: `${manager.user.firstName} ${manager.user.lastName}`,
+          truckNumber: null,
+          truckId: null,
+          truckMake: null,
+          truckModel: null,
+          latitude: manager.lastKnownLatitude,
+          longitude: manager.lastKnownLongitude,
+          lastUpdate: manager.lastLocationUpdate,
+          loads: [],
+          department: manager.department,
+        }));
+
+        // Combine drivers and managers
+        const allEntities = [...driverLocs, ...managerLocs];
+
+        console.log("Driver locations:", driverLocs.length);
+        console.log("Manager locations:", managerLocs.length);
+        setDriverLocations(allEntities);
       }
 
       // Fetch available loads (not assigned)
@@ -401,6 +573,18 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
     } finally {
       fetchInFlightRef.current = false;
       setRefreshing(false);
+    }
+  };
+
+  const fetchLandmarks = async () => {
+    try {
+      const res = await fetch("/api/landmarks?activeOnly=true&pageSize=500");
+      const data = await res.json();
+      if (res.ok) {
+        setLandmarks(data.landmarks || []);
+      }
+    } catch (error) {
+      console.error("Error fetching landmarks:", error);
     }
   };
 
@@ -457,13 +641,15 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
           (coord: [number, number]) => [coord[1], coord[0]] as [number, number]
         );
 
-        setDriverRoutes(prev => ({
-          ...prev,
-          [driver.driverId]: {
-            toPickup: toPickupCoords,
-            toDelivery: toDeliveryCoords,
-          }
-        }));
+        if (driver.driverId) {
+          setDriverRoutes(prev => ({
+            ...prev,
+            [driver.driverId!]: {
+              toPickup: toPickupCoords,
+              toDelivery: toDeliveryCoords,
+            }
+          }));
+        }
       }
     } catch (error) {
       console.error("Error calculating driver route:", error);
@@ -656,6 +842,51 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
     }
   };
 
+  const fetchManagerTrail = async (managerId: string) => {
+    setLoadingTrailDriverId(managerId);
+
+    try {
+      // Full day (24 hours) for managers
+      const end = new Date();
+      const start = new Date();
+      start.setHours(0, 0, 0, 0); // Start of today
+
+      const params = new URLSearchParams({
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        limit: "50000", // Full day with high limit
+      });
+
+      const res = await fetch(`/api/entities/${managerId}/positions?${params.toString()}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Greška pri učitavanju kretanja managera");
+        return;
+      }
+
+      const points: [number, number][] = (data.positions || [])
+        .filter((position: any) => typeof position.latitude === "number" && typeof position.longitude === "number")
+        .map((position: any) => [position.latitude, position.longitude] as [number, number]);
+
+      setDriverTrails((prev) => ({
+        ...prev,
+        [managerId]: {
+          points,
+          startAt: data.positions?.[0]?.recordedAt || null,
+          endAt: data.positions?.[data.positions.length - 1]?.recordedAt || null,
+        },
+      }));
+      setSelectedTrailDriverId(managerId);
+      setSelectedLoadId(null);
+    } catch (error) {
+      console.error("Error fetching manager trail:", error);
+      alert("Greška pri učitavanju kretanja managera");
+    } finally {
+      setLoadingTrailDriverId(null);
+    }
+  };
+
   return (
     <div className="h-full w-full relative">
       {/* Map - Full Height */}
@@ -728,7 +959,8 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                 ))}
 
               {/* Route Line - Use calculated route if available, otherwise direct line */}
-              {load.pickupLatitude &&
+              {!hideRoutes &&
+                load.pickupLatitude &&
                 load.pickupLongitude &&
                 load.deliveryLatitude &&
                 load.deliveryLongitude && (
@@ -762,21 +994,21 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
           ))}
 
           {/* Render driver routes (when selected) */}
-          {driverLocations.map((driver) => {
+          {!hideRoutes && driverLocations.map((driver) => {
             const isSelected = selectedDriverId === driver.driverId;
             // Find selected load or first load with GPS
-            const loadWithGPS = selectedLoadId 
+            const loadWithGPS = selectedLoadId
               ? driver.loads.find(load => load.id === selectedLoadId)
-              : driver.loads.find(load => 
+              : driver.loads.find(load =>
                   load.pickupLatitude &&
                   load.pickupLongitude &&
                   load.deliveryLatitude &&
                   load.deliveryLongitude
                 );
-            const hasCalculatedRoute = driverRoutes[driver.driverId];
+            const hasCalculatedRoute = driver.driverId ? driverRoutes[driver.driverId] : undefined;
 
             return (
-              <div key={`route-${driver.driverId}`}>
+              <div key={`route-${driver.id}`}>
                 {/* Driver's route to pickup and then to delivery */}
                 {isSelected && selectedLoadId && loadWithGPS && hasCalculatedRoute && (
                   <>
@@ -897,41 +1129,109 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
             );
           })}
 
-          {/* Render driver locations */}
-          {driverLocations.map((driver) => {
-            const isSelected = selectedDriverId === driver.driverId || focusedDriverId === driver.driverId;
-            const lastLocationUpdate = driver.lastUpdate ? new Date(driver.lastUpdate) : null;
+          {/* Render driver and manager locations */}
+          {!hideAllDrivers && driverLocations.map((entity) => {
+            const isSelected = selectedDriverId === entity.id || focusedDriverId === entity.id;
+            const lastLocationUpdate = entity.lastUpdate ? new Date(entity.lastUpdate) : null;
+
+            // Hide if this driver is in the hiddenDriverIds set
+            if (hiddenDriverIds.has(entity.id)) {
+              return null;
+            }
+
+            // Hide other drivers if hideOtherDrivers is true and this one is not selected
+            if (hideOtherDrivers && selectedDriverId && entity.id !== selectedDriverId) {
+              return null;
+            }
+
+            const icon = entity.type === 'MANAGER'
+              ? createManagerIcon(entity.driverName, isSelected, lastLocationUpdate)
+              : createDriverIcon(entity.driverName, entity.loads.length > 0, isSelected, lastLocationUpdate);
+
             return (
               <Marker
-                key={driver.driverId}
-                position={[driver.latitude, driver.longitude]}
-                icon={createDriverIcon(driver.driverName, driver.loads.length > 0, isSelected, lastLocationUpdate)}
+                key={entity.id}
+                position={[entity.latitude, entity.longitude]}
+                icon={icon}
                 eventHandlers={{
                   click: async () => {
-                    if (driver.driverId === selectedDriverId) {
+                    if (entity.id === selectedDriverId) {
                       // Deselect
                       setSelectedDriverId(null);
                       setSelectedLoadId(null);
                       setSelectedTrailDriverId(null);
+                      // Notify parent to show all drivers again
+                      if (onDriverSelected) {
+                        onDriverSelected("");
+                      }
                     } else {
-                      // Select driver and show current location/panel only.
-                      // Route preview should be explicit after user chooses a load.
-                      setSelectedDriverId(driver.driverId);
+                      // Select entity and show current location/panel only.
+                      setSelectedDriverId(entity.id);
                       setSelectedLoadId(null);
+                      // Call onDriverSelected callback if provided
+                      if (onDriverSelected) {
+                        onDriverSelected(entity.id);
+                      }
                     }
                   },
                 }}
               />
             );
           })}
+
+          {/* Render landmarks */}
+          {!hideLandmarks && landmarks.map((landmark) => (
+            <Marker
+              key={`landmark-${landmark.id}`}
+              position={[landmark.latitude, landmark.longitude]}
+              icon={createLandmarkIcon(landmark)}
+            >
+              <Popup>
+                <div className="p-2 min-w-[200px]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: getLandmarkColor(landmark.type),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: getLandmarkIcon(landmark.type) }}
+                    />
+                    <h3 className="font-bold text-sm">{landmark.name}</h3>
+                  </div>
+                  <p className="text-xs text-dark-600 mb-2">
+                    {getLandmarkLabel(landmark.type)}
+                  </p>
+                  {landmark.address && (
+                    <p className="text-xs text-dark-500 mb-1">📍 {landmark.address}</p>
+                  )}
+                  {landmark.city && (
+                    <p className="text-xs text-dark-500 mb-1">🏙️ {landmark.city}</p>
+                  )}
+                  {landmark.phone && (
+                    <p className="text-xs text-dark-500 mb-1">📞 {landmark.phone}</p>
+                  )}
+                  {landmark.description && (
+                    <p className="text-xs text-dark-400 mt-2 italic">{landmark.description}</p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          ))}
       </MapContainer>
 
-      {/* Floating Driver Info Panel - Bottom Left */}
-      {selectedDriverId && driverLocations.find(d => d.driverId === selectedDriverId) && (
+      {/* Floating Driver/Manager Info Panel - Bottom Left */}
+      {selectedDriverId && driverLocations.find(d => d.id === selectedDriverId) && (
         <div className="absolute top-4 bottom-4 left-4 z-[1000] w-[420px]">
           {(() => {
-            const driver = driverLocations.find(d => d.driverId === selectedDriverId)!;
-            const driverActive = driver.loads.length > 0;
+            const entity = driverLocations.find(d => d.id === selectedDriverId)!;
+            const isDriver = entity.type === 'DRIVER';
+            const entityActive = isDriver && entity.loads.length > 0;
 
             return (
               <div className="relative h-full rounded-3xl bg-dark-900/95 text-white border border-white/10 shadow-soft-xl backdrop-blur p-4 overflow-y-auto">
@@ -943,203 +1243,223 @@ export default function LiveMap({ focusedDriverId }: LiveMapProps = { focusedDri
                 </button>
 
                 <div className="flex items-center gap-3 pb-3 mb-3 border-b border-white/10">
-                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-soft ${driverActive ? 'bg-emerald-500/20 text-emerald-200' : 'bg-electric-500/20 text-electric-100'}`}>
-                    <Truck className="w-5 h-5" />
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-soft ${
+                    entity.type === 'MANAGER'
+                      ? 'bg-orange-500/20 text-orange-200'
+                      : entityActive
+                        ? 'bg-emerald-500/20 text-emerald-200'
+                        : 'bg-electric-500/20 text-electric-100'
+                  }`}>
+                    {entity.type === 'MANAGER' ? <Package className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
                   </div>
                   <div className="flex-1">
-                    <p className="text-base font-bold">{driver.driverName}</p>
+                    <p className="text-base font-bold">{entity.driverName}</p>
                     <p className="text-xs text-dark-200">
-                      {driver.truckNumber
-                        ? `Kamion ${driver.truckNumber}${driver.truckMake ? ` • ${driver.truckMake} ${driver.truckModel || ""}` : ""}`
-                        : "Bez dodijeljenog kamiona"}
+                      {entity.type === 'MANAGER'
+                        ? `Manager${entity.department ? ` • ${entity.department}` : ''}`
+                        : entity.truckNumber
+                          ? `Kamion ${entity.truckNumber}${entity.truckMake ? ` • ${entity.truckMake} ${entity.truckModel || ""}` : ""}`
+                          : "Bez dodijeljenog kamiona"}
                     </p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide ${driverActive ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/40' : 'bg-electric-500/15 text-electric-100 border border-electric-500/40'}`}>
-                    {driverActive ? 'Aktivan' : 'Dostupan'}
+                  <span className={`px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide ${
+                    entity.type === 'MANAGER'
+                      ? 'bg-orange-500/15 text-orange-200 border border-orange-500/40'
+                      : entityActive
+                        ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/40'
+                        : 'bg-electric-500/15 text-electric-100 border border-electric-500/40'
+                  }`}>
+                    {entity.type === 'MANAGER' ? 'Manager' : entityActive ? 'Aktivan' : 'Dostupan'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-3 mb-3 border-b border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/drivers/${driver.driverId}`)}
-                    className="px-3 py-2 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
-                  >
-                    Detalji vozača
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (driver.truckId) {
-                        router.push(`/trucks/${driver.truckId}`);
-                      }
-                    }}
-                    disabled={!driver.truckId}
-                    className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
-                  >
-                    Detalji kamiona
-                  </button>
-                </div>
-
-                <div className="pb-3 mb-3 border-b border-white/10">
-                  <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide mb-2">
-                    Brzi replay
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[1, 3, 6].map((hours) => (
+                {isDriver && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-3 mb-3 border-b border-white/10">
                       <button
-                        key={hours}
                         type="button"
-                        onClick={() => openReplayWindow(driver.driverId, hours)}
-                        className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
+                        onClick={() => router.push(`/drivers/${entity.driverId}`)}
+                        className="px-3 py-2 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
                       >
+                        Detalji vozača
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (entity.truckId) {
+                            router.push(`/trucks/${entity.truckId}`);
+                          }
+                        }}
+                        disabled={!entity.truckId}
+                        className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+                      >
+                        Detalji kamiona
+                      </button>
+                    </div>
+
+                    <div className="pb-3 mb-3 border-b border-white/10">
+                      <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide mb-2">
+                        Brzi replay
+                      </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[1, 3, 6].map((hours) => (
+                          <button
+                            key={hours}
+                            type="button"
+                            onClick={() => openReplayWindow(entity.driverId!, hours)}
+                            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors"
+                          >
                         {hours}h
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="pb-3 mb-3 border-b border-white/10">
-                  <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide mb-2">
-                    Današnje kretanje
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fetchTodayTrail(driver.driverId)}
-                      disabled={loadingTrailDriverId === driver.driverId}
-                      className="px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-                    >
-                      {loadingTrailDriverId === driver.driverId ? "Učitavanje..." : "Prikaži trasu"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTrailDriverId(null)}
-                      disabled={selectedTrailDriverId !== driver.driverId}
-                      className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 text-white text-xs font-semibold transition-colors"
-                    >
-                      Sakrij trasu
-                    </button>
-                  </div>
-                  {selectedTrailDriverId === driver.driverId && driverTrails[driver.driverId] && (
-                    <p className="text-[11px] text-cyan-200 mt-2">
-                      Prikazano tačaka: {driverTrails[driver.driverId].points.length}
-                    </p>
-                  )}
-                </div>
-
-                {/* Current Loads */}
-                {driver.loads.length > 0 && (
-                  <div className="space-y-2 mb-4">
-                    <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">
-                      Aktivni loadovi ({driver.loads.length})
-                    </p>
-                    {driver.loads.map((load, index) => {
-                      const isSelectedLoad = selectedLoadId === load.id;
-                      const hasGPS = load.pickupLatitude && load.pickupLongitude && 
-                                    load.deliveryLatitude && load.deliveryLongitude;
-
-                      return (
-                        <div
-                          key={load.id}
-                          className={`rounded-2xl p-3 cursor-pointer transition-all border ${isSelectedLoad ? 'bg-primary-500/10 border-primary-500/60' : 'bg-white/5 border-white/10 hover:border-primary-400/60'}`}
-                          onClick={() => {
-                            if (hasGPS) {
-                              calculateDriverRoute(driver, load.id);
-                            }
-                          }}
+                    <div className="pb-3 mb-3 border-b border-white/10">
+                      <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide mb-2">
+                        Današnje kretanje
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => entity.type === 'MANAGER' ? fetchManagerTrail(entity.id) : fetchTodayTrail(entity.driverId!)}
+                          disabled={loadingTrailDriverId === entity.id}
+                          className="px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
                         >
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">Load #{index + 1}</span>
-                              {!hasGPS && (
-                                <span className="text-[10px] text-orange-200 bg-orange-500/20 border border-orange-400/40 px-2 py-0.5 rounded-full">Nema GPS</span>
-                              )}
-                            </div>
-                            <a
-                              href={`/loads/${load.id}`}
-                              className="text-[11px] text-primary-200 hover:text-primary-50 font-semibold"
-                              onClick={(e) => e.stopPropagation()}
+                          {loadingTrailDriverId === entity.id ? "Učitavanje..." : "Prikaži trasu"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTrailDriverId(null)}
+                          disabled={selectedTrailDriverId !== entity.id}
+                          className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 text-white text-xs font-semibold transition-colors"
+                        >
+                          Sakrij trasu
+                        </button>
+                      </div>
+                      {selectedTrailDriverId === entity.id && driverTrails[entity.id] && (
+                        <p className="text-[11px] text-cyan-200 mt-2">
+                          Prikazano tačaka: {driverTrails[entity.id].points.length}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Current Loads */}
+                    {entity.loads.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">
+                          Aktivni loadovi ({entity.loads.length})
+                        </p>
+                        {entity.loads.map((load, index) => {
+                          const isSelectedLoad = selectedLoadId === load.id;
+                          const hasGPS = load.pickupLatitude && load.pickupLongitude &&
+                                        load.deliveryLatitude && load.deliveryLongitude;
+
+                          return (
+                            <div
+                              key={load.id}
+                              className={`rounded-2xl p-3 cursor-pointer transition-all border ${isSelectedLoad ? 'bg-primary-500/10 border-primary-500/60' : 'bg-white/5 border-white/10 hover:border-primary-400/60'}`}
+                              onClick={() => {
+                                if (hasGPS) {
+                                  calculateDriverRoute(entity, load.id);
+                                }
+                              }}
                             >
-                              Detalji →
-                            </a>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-primary-200">
-                              <Package className="w-4 h-4" />
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">Load #{index + 1}</span>
+                                  {!hasGPS && (
+                                    <span className="text-[10px] text-orange-200 bg-orange-500/20 border border-orange-400/40 px-2 py-0.5 rounded-full">Nema GPS</span>
+                                  )}
+                                </div>
+                                <a
+                                  href={`/loads/${load.id}`}
+                                  className="text-[11px] text-primary-200 hover:text-primary-50 font-semibold"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Detalji →
+                                </a>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-primary-200">
+                                  <Package className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-white">{load.loadNumber}</p>
+                                  <p className="text-xs text-dark-200">{load.pickupCity} → {load.deliveryCity}</p>
+                                  <p className="text-[11px] text-dark-300 mt-0.5">Status: {getStatusLabel(load.status)}</p>
+                                  {hasGPS && !isSelectedLoad && (
+                                    <p className="text-[11px] text-primary-200 mt-1 font-semibold">Klikni za prikaz rute</p>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm font-semibold text-white">{load.loadNumber}</p>
-                              <p className="text-xs text-dark-200">{load.pickupCity} → {load.deliveryCity}</p>
-                              <p className="text-[11px] text-dark-300 mt-0.5">Status: {getStatusLabel(load.status)}</p>
-                              {hasGPS && !isSelectedLoad && (
-                                <p className="text-[11px] text-primary-200 mt-1 font-semibold">Klikni za prikaz rute</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* Assign Load */}
-                <div className="space-y-3 bg-white/5 border border-white/10 rounded-2xl p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">
-                      {driver.loads.length === 0 ? "Dodijeli load" : "Dodaj dodatni load"}
-                    </p>
-                    <span
-                      className="text-[10px] text-dark-300 flex items-center gap-1"
-                      title={new Date(driver.lastUpdate).toLocaleString("bs-BA")}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-                      {getTimeAgo(driver.lastUpdate)}
-                    </span>
-                  </div>
-
-                  {availableLoads.length > 0 ? (
-                    <div className="space-y-2">
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value && driver.truckId) {
-                            const selectedLoad = availableLoads.find(l => l.id === e.target.value);
-                            if (selectedLoad) {
-                              if (driver.loads.length > 0) {
-                                const loadsList = driver.loads.map(l => l.loadNumber).join(', ');
-                                const confirmed = window.confirm(`Dodijeli ${selectedLoad.loadNumber} vozaču ${driver.driverName}?\n\nVozač već ima ${driver.loads.length} aktivnih loada: ${loadsList}`);
-                                if (!confirmed) {
-                                  e.target.value = "";
-                                  return;
-                                }
-                              }
-                              assignLoadToDriver(e.target.value, driver.driverId, driver.truckId);
-                            }
-                            e.target.value = "";
-                          }
-                        }}
-                        disabled={assigning}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-dark-900 border border-white/15 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                {/* Assign Load (only for drivers) */}
+                {isDriver && (
+                  <div className="space-y-3 bg-white/5 border border-white/10 rounded-2xl p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">
+                        {entity.loads.length === 0 ? "Dodijeli load" : "Dodaj dodatni load"}
+                      </p>
+                      <span
+                        className="text-[10px] text-dark-300 flex items-center gap-1"
+                        title={new Date(entity.lastUpdate).toLocaleString("bs-BA")}
                       >
-                        <option value="">{driver.loads.length === 0 ? "Odaberi load..." : "Odaberi dodatni load..."}</option>
-                        {availableLoads.map((load) => (
-                          <option key={load.id} value={load.id}>
-                            {load.loadNumber} - {load.pickupCity} → {load.deliveryCity}
-                          </option>
-                        ))}
-                      </select>
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                        {getTimeAgo(entity.lastUpdate)}
+                      </span>
                     </div>
-                  ) : (
-                    <p className="text-xs text-dark-300 italic">Nema dostupnih loadova</p>
-                  )}
 
-                  <a
-                    href="/loads/new"
-                    className="block w-full text-center bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold py-2 px-3 rounded-xl transition-colors shadow-primary"
-                  >
-                    + Kreiraj novi load
-                  </a>
-                </div>
+                    {availableLoads.length > 0 ? (
+                      <div className="space-y-2">
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value && entity.truckId && entity.driverId) {
+                              const selectedLoad = availableLoads.find(l => l.id === e.target.value);
+                              if (selectedLoad) {
+                                if (entity.loads.length > 0) {
+                                  const loadsList = entity.loads.map(l => l.loadNumber).join(', ');
+                                  const confirmed = window.confirm(`Dodijeli ${selectedLoad.loadNumber} vozaču ${entity.driverName}?\n\nVozač već ima ${entity.loads.length} aktivnih loada: ${loadsList}`);
+                                  if (!confirmed) {
+                                    e.target.value = "";
+                                    return;
+                                  }
+                                }
+                                assignLoadToDriver(e.target.value, entity.driverId, entity.truckId);
+                              }
+                              e.target.value = "";
+                            }
+                          }}
+                          disabled={assigning}
+                          className="w-full px-3 py-2 text-xs rounded-xl bg-dark-900 border border-white/15 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        >
+                          <option value="">{entity.loads.length === 0 ? "Odaberi load..." : "Odaberi dodatni load..."}</option>
+                          {availableLoads.map((load) => (
+                            <option key={load.id} value={load.id}>
+                              {load.loadNumber} - {load.pickupCity} → {load.deliveryCity}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-dark-300 italic">Nema dostupnih loadova</p>
+                    )}
+
+                    <a
+                      href="/loads/new"
+                      className="block w-full text-center bg-primary-500 hover:bg-primary-600 text-white text-xs font-semibold py-2 px-3 rounded-xl transition-colors shadow-primary"
+                    >
+                      + Kreiraj novi load
+                    </a>
+                  </div>
+                )}
               </div>
             );
           })()}

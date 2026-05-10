@@ -82,3 +82,9 @@ Ako se lokacija ne pojavljuje, provjeriti:
 - `Device Identifier` je različit za svakog vozača
 - sigurnosni ključ ne treba slati u dokumentima, e-mailovima ili chat porukama bez potrebe
 - ako se sigurnosni ključ ikad promijeni, mora se ažurirati i server i `Server URL` u `Traccar Client` aplikaciji
+
+## 6. Background Rad
+
+Za detaljna podešavanja kako da `Traccar Client` što pouzdanije radi u pozadini na `iOS` i `Android` uređajima pogledati:
+
+- [docs/traccar-background-reliability.md](/Users/emir_mw/transport/docs/traccar-background-reliability.md)

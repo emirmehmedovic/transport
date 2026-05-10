@@ -15,6 +15,16 @@ export type DriverReplayResponse = {
   };
   totalAvailable: number;
   limited: boolean;
+  stops: Array<{
+    startAt: string;
+    endAt: string;
+    durationMinutes: number;
+    latitude: number;
+    longitude: number;
+    positionCount: number;
+    avgSpeed: number;
+    radiusMeters: number;
+  }>;
   positions: Array<{
     id: string;
     latitude: number;

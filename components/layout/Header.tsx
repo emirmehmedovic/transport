@@ -1,9 +1,10 @@
 "use client";
 
-import { Bell, Search, Calendar, ChevronDown, Menu } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, Search, Calendar, ChevronDown, Menu, Settings, LogOut } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/authContext";
 import { formatDateDMY } from "@/lib/date";
+import { useRouter } from "next/navigation";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -11,7 +12,10 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [alertCount, setAlertCount] = useState(0);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const today = formatDateDMY(new Date());
 
   useEffect(() => {
@@ -39,6 +43,35 @@ export function Header({ onMenuClick }: HeaderProps) {
     };
     fetchAlertCount();
   }, [user]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      router.push("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   return (
     <header className="h-16 md:h-24 bg-dark-50 flex items-center px-4 md:px-8 gap-3 md:gap-8">
@@ -90,17 +123,64 @@ export function Header({ onMenuClick }: HeaderProps) {
           )}
         </button>
 
-        {/* User Profile Dropdown Trigger */}
-        <button className="flex items-center gap-2 md:gap-3 pl-2 pr-3 md:pr-4 py-1.5 md:py-2 bg-white rounded-full shadow-soft hover:shadow-md transition-all">
-          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold">
-            {user?.firstName?.[0] || "U"}
-          </div>
-          <div className="hidden lg:block text-left">
-            <p className="text-sm font-bold text-dark-900 leading-none">{user?.firstName} {user?.lastName}</p>
-            <p className="text-[10px] font-medium text-dark-500 uppercase mt-1">{user?.role}</p>
-          </div>
-          <ChevronDown className="hidden md:block w-4 h-4 text-dark-400 ml-1" />
-        </button>
+        {/* User Profile Dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="flex items-center gap-2 md:gap-3 pl-2 pr-3 md:pr-4 py-1.5 md:py-2 bg-white rounded-full shadow-soft hover:shadow-md transition-all"
+          >
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold">
+              {user?.firstName?.[0] || "U"}
+            </div>
+            <div className="hidden lg:block text-left">
+              <p className="text-sm font-bold text-dark-900 leading-none">
+                {user?.firstName} {user?.lastName}
+              </p>
+              <p className="text-[10px] font-medium text-dark-500 uppercase mt-1">{user?.role}</p>
+            </div>
+            <ChevronDown
+              className={`hidden md:block w-4 h-4 text-dark-400 ml-1 transition-transform ${
+                isDropdownOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {/* Dropdown Menu */}
+          {isDropdownOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-dark-100 overflow-hidden z-50">
+              <div className="p-3 border-b border-dark-100">
+                <p className="text-sm font-bold text-dark-900">
+                  {user?.firstName} {user?.lastName}
+                </p>
+                <p className="text-xs text-dark-500">{user?.email}</p>
+              </div>
+
+              <div className="py-2">
+                <button
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    router.push("/settings");
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-dark-700 hover:bg-dark-50 transition-colors"
+                >
+                  <Settings className="w-4 h-4 text-dark-500" />
+                  Podešavanja
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Odjavi se
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

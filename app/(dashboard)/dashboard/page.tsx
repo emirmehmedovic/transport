@@ -216,7 +216,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (user.role === "ADMIN") {
+  if (user.role === "ADMIN" || user.role === "DISPATCHER") {
     return <AdminDashboard user={user} />;
   }
 
