@@ -83,7 +83,7 @@ export async function GET(
     });
 
     // Optionally fetch upcoming loads for the driver
-    let upcomingLoads = [];
+    let upcomingLoads: any[] = [];
     if (includeLoads) {
       const now = new Date();
       upcomingLoads = await prisma.load.findMany({

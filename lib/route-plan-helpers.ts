@@ -1,5 +1,4 @@
 import { PrismaClient, RoutePlanDayOfWeek, WeeklyRoutePlan, Load } from "@prisma/client";
-import { generateLoadNumber } from "./load-helpers";
 
 // Day of week mapping
 const DAY_OF_WEEK_MAP: Record<RoutePlanDayOfWeek, number> = {
@@ -11,6 +10,34 @@ const DAY_OF_WEEK_MAP: Record<RoutePlanDayOfWeek, number> = {
   FRIDAY: 5,
   SATURDAY: 6,
 };
+
+/**
+ * Generate unique load number
+ * @param prisma - Prisma client
+ * @returns Load number in format LOAD-YYYY-NNNN
+ */
+async function generateLoadNumber(prisma: PrismaClient): Promise<string> {
+  const year = new Date().getFullYear();
+
+  const lastLoad = await prisma.load.findFirst({
+    where: {
+      loadNumber: {
+        startsWith: `LOAD-${year}-`,
+      },
+    },
+    orderBy: {
+      loadNumber: "desc",
+    },
+  });
+
+  let nextNumber = 1;
+  if (lastLoad) {
+    const lastNumber = parseInt(lastLoad.loadNumber.split("-")[2]);
+    nextNumber = lastNumber + 1;
+  }
+
+  return `LOAD-${year}-${nextNumber.toString().padStart(4, "0")}`;
+}
 
 /**
  * Get all dates for specified days of week within a date range

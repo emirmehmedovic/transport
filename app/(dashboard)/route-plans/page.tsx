@@ -150,9 +150,9 @@ export default function RoutePlansPage() {
   // Desktop columns for DataTable
   const columns = [
     {
+      key: "planName",
       header: "Plan",
-      accessorKey: "planName",
-      cell: (row: RoutePlan) => (
+      render: (row: RoutePlan) => (
         <div>
           <p className="font-semibold text-dark-900">{row.planName}</p>
           <p className="text-xs text-dark-500">ID: {row.id.slice(0, 8)}</p>
@@ -160,14 +160,14 @@ export default function RoutePlansPage() {
       ),
     },
     {
+      key: "status",
       header: "Status",
-      accessorKey: "status",
-      cell: (row: RoutePlan) => <RoutePlanStatusBadge status={row.status} />,
+      render: (row: RoutePlan) => <RoutePlanStatusBadge status={row.status} />,
     },
     {
+      key: "period",
       header: "Period",
-      accessorKey: "startDate",
-      cell: (row: RoutePlan) => (
+      render: (row: RoutePlan) => (
         <div>
           <p className="text-sm text-dark-900">
             {formatDate(row.startDate)} - {formatDate(row.endDate)}
@@ -177,9 +177,9 @@ export default function RoutePlansPage() {
       ),
     },
     {
+      key: "assignment",
       header: "Vozač / Kamion",
-      accessorKey: "driver",
-      cell: (row: RoutePlan) => (
+      render: (row: RoutePlan) => (
         <div>
           {row.driver ? (
             <>
@@ -197,23 +197,26 @@ export default function RoutePlansPage() {
       ),
     },
     {
+      key: "loads",
       header: "Loadovi",
-      accessorKey: "_count",
-      cell: (row: RoutePlan) => (
+      render: (row: RoutePlan) => (
         <span className="text-sm text-dark-900">
           {row._count?.generatedLoads || 0}
         </span>
       ),
     },
     {
+      key: "actions",
       header: "Akcije",
-      accessorKey: "actions",
-      cell: (row: RoutePlan) => (
+      render: (row: RoutePlan) => (
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/route-plans/${row.id}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/route-plans/${row.id}`);
+            }}
           >
             <Eye className="w-4 h-4" />
           </Button>
@@ -397,7 +400,12 @@ export default function RoutePlansPage() {
 
           {/* Desktop Table */}
           <div className="hidden md:block">
-            <DataTable columns={columns} data={routePlans} />
+            <DataTable
+              columns={columns}
+              data={routePlans}
+              rowKey={(row) => row.id}
+              onRowClick={(row) => router.push(`/route-plans/${row.id}`)}
+            />
           </div>
         </CardContent>
       </Card>
