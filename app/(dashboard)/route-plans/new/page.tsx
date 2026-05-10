@@ -117,10 +117,23 @@ export default function NewRoutePlanPage() {
       setSubmitting(true);
       setError("");
 
+      // Convert dates to ISO datetime format
+      const startDateTime = new Date(formData.startDate);
+      startDateTime.setHours(0, 0, 0, 0);
+
+      const endDateTime = new Date(formData.endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+
+      const payload = {
+        ...formData,
+        startDate: startDateTime.toISOString(),
+        endDate: endDateTime.toISOString(),
+      };
+
       const response = await fetch("/api/route-plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -233,7 +246,7 @@ export default function NewRoutePlanPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Početni datum (Ponedjeljak) *
+                      Početni datum *
                     </label>
                     <input
                       type="date"
@@ -243,10 +256,11 @@ export default function NewRoutePlanPage() {
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Prvi dan perioda</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Krajnji datum (Nedjelja) *
+                      Krajnji datum *
                     </label>
                     <input
                       type="date"
@@ -256,6 +270,7 @@ export default function NewRoutePlanPage() {
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Zadnji dan perioda</p>
                   </div>
                 </div>
 

@@ -51,9 +51,9 @@ export const routePlanSchema = z.object({
   (data) => {
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
-    return start.getDay() === 1 && end.getDay() === 0 && end >= start;
+    return end >= start;
   },
-  { message: "startDate mora biti ponedjeljak (Monday), endDate nedjelja (Sunday), i end >= start" }
+  { message: "Krajnji datum mora biti isti ili nakon početnog datuma" }
 ).refine(
   (data) => data.stops.some(s => s.type === "PICKUP"),
   { message: "Mora postojati bar jedan PICKUP stop" }
