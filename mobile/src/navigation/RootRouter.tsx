@@ -8,6 +8,7 @@ import { AdminDispatcherPlaceholderScreen } from "@/screens/AdminDispatcherPlace
 import { ClientHomeScreen } from "@/screens/ClientHomeScreen";
 import { DriverHomeScreen } from "@/screens/DriverHomeScreen";
 import { LoginScreen } from "@/screens/LoginScreen";
+import { RoutePlansScreen } from "@/screens/RoutePlansScreen";
 
 const DriverTab = createBottomTabNavigator();
 const DriverStack = createNativeStackNavigator();
@@ -40,7 +41,7 @@ function DriverMoreScreen({
   navigation,
 }: {
   navigation: {
-    navigate: (screen: "DriverReplay" | "DriverInspections" | "DriverInbox") => void;
+    navigate: (screen: "DriverReplay" | "DriverInspections" | "DriverInbox" | "DriverRoutePlans") => void;
   };
 }) {
   const signOut = useAuthStore((state) => state.signOut);
@@ -48,6 +49,7 @@ function DriverMoreScreen({
   return (
     <View style={{ flex: 1, backgroundColor: "#f7f7f5", padding: 20, gap: 12 }}>
       {[
+        { label: "Sedmični planovi", screen: "DriverRoutePlans" as const },
         { label: "Replay rute", screen: "DriverReplay" as const },
         { label: "Inspekcije", screen: "DriverInspections" as const },
         { label: "Inbox notifikacija", screen: "DriverInbox" as const },
@@ -126,6 +128,11 @@ function DriverNavigator() {
       <DriverStack.Screen name="DriverReplay" options={{ title: "Replay rute" }}>
         {() => <DriverHomeScreen lockedSection="replay" showSectionTabs={false} />}
       </DriverStack.Screen>
+      <DriverStack.Screen
+        name="DriverRoutePlans"
+        component={RoutePlansScreen}
+        options={{ title: "Sedmični planovi" }}
+      />
       <DriverStack.Screen name="DriverInspections" options={{ title: "Inspekcije" }}>
         {() => <DriverHomeScreen lockedSection="inspections" showSectionTabs={false} />}
       </DriverStack.Screen>

@@ -183,6 +183,27 @@ type DriverDashboardResponse = {
   }[];
 };
 
+type DriverRoutePlanSummary = {
+  id: string;
+  planName: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  daysOfWeek: string[];
+  distance: number;
+  loadRate: number;
+  truck: {
+    truckNumber: string | null;
+  } | null;
+  stops: {
+    type: string;
+    sequence: number;
+    landmark?: { name: string | null; city: string | null } | null;
+    customCity?: string | null;
+    customAddress?: string | null;
+  }[];
+};
+
 const STATUS_LABELS: Record<string, string> = {
   AVAILABLE: "Dostupan",
   ASSIGNED: "Dodijeljen",
@@ -760,6 +781,7 @@ function AdminDashboard({ user }: { user: AuthUser }) {
 function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string }) {
   const router = useRouter();
   const [data, setData] = useState<DriverDashboardResponse | null>(null);
+  const [routePlans, setRoutePlans] = useState<DriverRoutePlanSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -777,9 +799,14 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/dashboard/driver/${driverId}`, {
-        credentials: "include",
-      });
+      const [res, routePlansRes] = await Promise.all([
+        fetch(`/api/dashboard/driver/${driverId}`, {
+          credentials: "include",
+        }),
+        fetch(`/api/drivers/${driverId}/route-plans`, {
+          credentials: "include",
+        }),
+      ]);
 
       if (!res.ok) {
         const body = await res.json();
@@ -788,6 +815,11 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
 
       const json: DriverDashboardResponse = await res.json();
       setData(json);
+
+      if (routePlansRes.ok) {
+        const routePlansJson = await routePlansRes.json();
+        setRoutePlans((routePlansJson.routePlans || []).slice(0, 3));
+      }
     } catch (err) {
       console.error("Driver dashboard load error", err);
       setError(err instanceof Error ? err.message : "Došlo je do greške");
@@ -823,6 +855,12 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
       currency: "BAM",
       maximumFractionDigits: 0,
     }).format(value || 0);
+
+  const formatRoutePlanStop = (plan: DriverRoutePlanSummary, type: string) => {
+    const stop = plan.stops.find((item) => item.type === type);
+    if (!stop) return "Nije definisano";
+    return stop.landmark?.name || stop.customCity || stop.customAddress || "Lokacija bez naziva";
+  };
 
   const handleStatusUpdate = async () => {
     if (!statusSelection || !data?.currentLoad) return;
@@ -1117,6 +1155,56 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
               {startRouteMessage}
             </p>
           )}
+        </section>
+      )}
+
+      {routePlans.length > 0 && (
+        <section className="rounded-2xl md:rounded-3xl border border-dark-200 bg-white p-4 md:p-6 shadow-soft">
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary-600">
+                Sedmični planovi
+              </p>
+              <h2 className="text-lg md:text-xl font-bold text-dark-900">
+                Moje planirane rute
+              </h2>
+            </div>
+            <Link
+              href="/route-plans"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-primary-700 hover:text-primary-900"
+            >
+              Prikaži sve <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {routePlans.map((plan) => (
+              <Link
+                key={plan.id}
+                href={`/route-plans/${plan.id}`}
+                className="rounded-2xl border border-dark-100 bg-dark-50 p-4 transition-colors hover:border-primary-200 hover:bg-primary-50/40"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-dark-900">{plan.planName}</p>
+                    <p className="text-xs text-dark-500">
+                      {formatDate(plan.startDate)} - {formatDate(plan.endDate)}
+                    </p>
+                  </div>
+                  <CalendarRange className="h-5 w-5 flex-shrink-0 text-primary-600" />
+                </div>
+                <p className="text-sm text-dark-700">
+                  {formatRoutePlanStop(plan, "PICKUP")} → {formatRoutePlanStop(plan, "DELIVERY")}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-dark-600">
+                  <span className="rounded-full bg-white px-2 py-1">{plan.distance} km</span>
+                  {plan.truck?.truckNumber && (
+                    <span className="rounded-full bg-white px-2 py-1">Kamion {plan.truck.truckNumber}</span>
+                  )}
+                  <span className="rounded-full bg-white px-2 py-1">{plan.status}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

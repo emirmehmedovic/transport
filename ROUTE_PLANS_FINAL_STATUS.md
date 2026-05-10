@@ -715,87 +715,94 @@ Dugme "Sedmični plan" pored "Kreiraj rutu" u header-u.
 
 ---
 
-## ⚠️ ŠTA OSTAJE (Opcionalno)
+## ✅ DODATNO DOVRŠENO (2026-05-10)
 
-### 1. Mobile App Screen (0%)
+### 1. Mobile App Screen (100%)
 
-**Potrebno kreirati:**
+**Kreirano:**
 - `/mobile/src/screens/RoutePlansScreen.tsx`
+- `/mobile/src/features/driver/route-plans-api.ts`
+- `/mobile/src/types/route-plan.ts`
+- Navigacija dodana u `/mobile/src/navigation/RootRouter.tsx`
 
 **Features:**
-- Current week's plan (card)
-- Upcoming plans (list)
-- Today's loads
-- This week's loads
-- Calendar view
+- Current week's plan (card) ✅
+- Upcoming plans (list) ✅
+- Today's loads ✅
+- This week's loads ✅
+- Stopovi i specijalne instrukcije ✅
+- Pull-to-refresh ✅
 
 **API već postoji:** `/api/mobile/driver/route-plans` ✅
 
-**Prioritet:** LOW (vozači mogu koristiti web verziju)
+**Status:** DONE
 
 ---
 
-### 2. Map Preview Komponenta (0%)
+### 2. Map Preview Komponenta (100%)
 
-**Potrebno kreirati:**
+**Kreirano:**
 - `components/route-plans/RoutePlanPreviewMap.tsx`
 
 **Features:**
-- Leaflet map
-- Markers za stopove (colored by type)
-- Polyline connecting stops
-- Nearby landmarks
+- Leaflet map ✅
+- Markers za stopove colored by type ✅
+- Polyline connecting stops ✅
+- Ugrađeno u create review, detail i edit page ✅
 
-**Prioritet:** MEDIUM (nice to have)
+**Status:** DONE
 
 ---
 
-### 3. Dashboard Integration (0%)
+### 3. Dashboard Integration (100%)
 
-**Potrebno dodati u:**
+**Dodano u:**
 - `app/(dashboard)/dashboard/page.tsx` (driver view)
+- `components/layout/Sidebar.tsx` (driver link za Sedmične Planove)
 
-**Sekcija:** "My Weekly Routes"
-- Current week's route plan (card)
-- Days of week badges
-- Today's loads lista
-- "View Full Schedule" button
+**Sekcija:** "Moje planirane rute"
+- Prikaz zadnja 3 route plana za vozača ✅
+- Pickup → delivery summary ✅
+- Period, status, km i kamion ✅
+- Link na puni schedule/detail ✅
 
-**Prioritet:** MEDIUM
+**Status:** DONE
 
 ---
 
-### 4. Edit Functionality (0%)
+### 4. Edit Functionality (100%)
 
-**Potrebno kreirati:**
+**Kreirano:**
 - `/app/(dashboard)/route-plans/[id]/edit/page.tsx`
 
-**Reuse:** Creation wizard komponente
-**Constraint:** Samo DRAFT planovi
+**Features:**
+- Edit osnovnih informacija ✅
+- Edit/add/remove stopova ✅
+- Edit transport detalja i instrukcija ✅
+- Preview mapa na edit strani ✅
+- Constraint: samo DRAFT planovi ✅
 
-**Prioritet:** MEDIUM
+**Status:** DONE
 
 ---
 
-### 5. Bulk Operations (0%)
+## ⚠️ OSTALO KAO FUTURE/LOW PRIORITY
 
-**Features:**
+### 1. Bulk Operations (nije implementirano)
 - Bulk assign multiple plans
 - Bulk generate loads
 - Bulk cancel
 
-**Prioritet:** LOW
+**Napomena:** Ovo traži dodatni UX za selekciju više planova, potvrde i partial failure izvještaj. Nije blokirajuće za osnovni route-plan workflow.
 
 ---
 
-### 6. Analytics & Reporting (0%)
-
-**Features:**
+### 2. Analytics & Reporting (nije implementirano)
 - Route plan efficiency metrics
 - Cost per km analysis
 - Driver utilization rates
 
-**Prioritet:** LOW
+**Napomena:** Ovo treba definisati kroz odvojene KPI-jeve i period filtere da ne bude površna statistika.
 
 ---
 

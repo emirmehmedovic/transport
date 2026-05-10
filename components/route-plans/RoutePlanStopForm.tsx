@@ -9,6 +9,7 @@ export interface RoutePlanStopData {
   type: LoadStopType;
   sequence: number;
   landmarkId?: string;
+  landmark?: Landmark;
   customAddress?: string;
   customCity?: string;
   customState?: string;
@@ -46,6 +47,12 @@ export function RoutePlanStopForm({
     ...initialData,
   });
 
+  useEffect(() => {
+    if (initialData?.landmark) {
+      setSelectedLandmark(initialData.landmark);
+    }
+  }, [initialData?.landmark]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -60,6 +67,7 @@ export function RoutePlanStopForm({
 
     if (useType === "landmark" && selectedLandmark) {
       data.landmarkId = selectedLandmark.id;
+      data.landmark = selectedLandmark;
     } else {
       data.customAddress = formData.customAddress;
       data.customCity = formData.customCity;

@@ -257,7 +257,7 @@ export default function SchengenOverviewPage() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      Период прачења
+                      Period praćenja
                     </p>
                     <p className="text-sm font-medium text-slate-900 mt-0.5">
                       {formatDateDMY(driverStats.from)} - {formatDateDMY(driverStats.to)}
@@ -274,9 +274,9 @@ export default function SchengenOverviewPage() {
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-amber-900">Ручни унос активан</p>
+                      <p className="text-sm font-semibold text-amber-900">Ručni unos aktivan</p>
                       <p className="text-sm text-amber-800 mt-1">
-                        Активан од {formatDateDMY(driverStats.manual.asOf)}. Почетно преостало дана: {driverStats.manual.remainingDays}.
+                        Aktivan od {formatDateDMY(driverStats.manual.asOf)}. Početno preostalo dana: {driverStats.manual.remainingDays}.
                       </p>
                     </div>
                   </div>
@@ -291,9 +291,9 @@ export default function SchengenOverviewPage() {
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-amber-900">Упозорење</p>
+                      <p className="text-sm font-semibold text-amber-900">Upozorenje</p>
                       <p className="text-sm text-amber-800 mt-1">
-                        Имате мање од 7 преосталих дана у Шенген зони. Контактирајте вашег менаџера.
+                        Imate manje od 7 preostalih dana u Schengen zoni. Kontaktirajte vašeg menadžera.
                       </p>
                     </div>
                   </div>
@@ -304,7 +304,7 @@ export default function SchengenOverviewPage() {
         ) : (
           <Card className="rounded-3xl shadow-sm border border-slate-100 bg-white/80 backdrop-blur-sm">
             <CardContent className="p-6">
-              <p className="text-sm text-slate-500">Нема података.</p>
+              <p className="text-sm text-slate-500">Nema podataka.</p>
             </CardContent>
           </Card>
         )}

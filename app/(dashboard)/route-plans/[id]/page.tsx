@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Calendar, MapPin, Truck, User, Package, Edit, UserPlus, Play, XCircle, Loader2, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { RoutePlanStatusBadge } from "@/components/route-plans/RoutePlanStatusBadge";
@@ -10,6 +11,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDateDMY } from "@/lib/date";
 import { useAuth } from "@/lib/authContext";
+
+const RoutePlanPreviewMap = dynamic(
+  () => import("@/components/route-plans/RoutePlanPreviewMap").then((mod) => mod.RoutePlanPreviewMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[340px] items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-500">
+        Učitavanje mape...
+      </div>
+    ),
+  }
+);
 
 const DAY_LABELS: Record<string, string> = {
   MONDAY: "Pon",
@@ -246,6 +259,15 @@ export default function RoutePlanDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pregled rute na mapi</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RoutePlanPreviewMap stops={routePlan.stops || []} />
+        </CardContent>
+      </Card>
 
       {/* Assignment Info */}
       <Card>

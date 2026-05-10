@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Calendar, ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { WeekDaySelector } from "@/components/route-plans/WeekDaySelector";
@@ -9,6 +10,18 @@ import { RoutePlanStopForm, RoutePlanStopData } from "@/components/route-plans/R
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadCargoType, RoutePlanDayOfWeek, LoadStopType } from "@prisma/client";
+
+const RoutePlanPreviewMap = dynamic(
+  () => import("@/components/route-plans/RoutePlanPreviewMap").then((mod) => mod.RoutePlanPreviewMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[300px] items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-500">
+        Učitavanje mape...
+      </div>
+    ),
+  }
+);
 
 const STEPS = [
   { id: 1, name: "Osnovne informacije" },
@@ -653,6 +666,11 @@ export default function NewRoutePlanPage() {
                       {stop.customAddress || stop.landmarkId}
                     </div>
                   ))}
+                </div>
+
+                <div className="border-b pb-4">
+                  <h4 className="text-sm font-semibold mb-2">Mapa</h4>
+                  <RoutePlanPreviewMap stops={formData.stops} height={300} />
                 </div>
 
                 <div>
