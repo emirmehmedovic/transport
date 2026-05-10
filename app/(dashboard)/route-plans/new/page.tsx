@@ -44,6 +44,7 @@ export default function NewRoutePlanPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [addingWaypoint, setAddingWaypoint] = useState(false);
 
   const [formData, setFormData] = useState<FormData>({
     planName: "",
@@ -363,6 +364,8 @@ export default function NewRoutePlanPage() {
                     <h4 className="text-sm font-semibold mb-4">
                       Međustanice (opcionalno)
                     </h4>
+
+                    {/* List of existing waypoints */}
                     {formData.stops
                       .filter((s) => s.type === "INTERMEDIATE")
                       .map((stop, index) => (
@@ -392,14 +395,32 @@ export default function NewRoutePlanPage() {
                           </Button>
                         </div>
                       ))}
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        // Add waypoint logic
-                      }}
-                    >
-                      + Dodaj međustanicu
-                    </Button>
+
+                    {/* Add waypoint form */}
+                    {addingWaypoint ? (
+                      <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+                        <RoutePlanStopForm
+                          type="INTERMEDIATE"
+                          sequence={formData.stops.length}
+                          onSave={(stop) => {
+                            setFormData({
+                              ...formData,
+                              stops: [...formData.stops, stop],
+                            });
+                            setAddingWaypoint(false);
+                          }}
+                          onCancel={() => setAddingWaypoint(false)}
+                        />
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => setAddingWaypoint(true)}
+                        className="w-full"
+                      >
+                        + Dodaj međustanicu
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -423,11 +444,12 @@ export default function NewRoutePlanPage() {
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="npr. 450"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Deadhead milje
+                      Deadhead kilometri
                     </label>
                     <input
                       type="number"
@@ -439,7 +461,9 @@ export default function NewRoutePlanPage() {
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="npr. 50"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Prazan put do pickup lokacije</p>
                   </div>
                 </div>
 
@@ -459,11 +483,13 @@ export default function NewRoutePlanPage() {
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="npr. 800.00"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Ukupna cijena transporta</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Custom Rate per Mile (EUR)
+                      Custom Rate po km (EUR) <span className="text-gray-400 font-normal">(opcionalno)</span>
                     </label>
                     <input
                       type="number"
@@ -478,14 +504,16 @@ export default function NewRoutePlanPage() {
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="npr. 1.50"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Za override driver rate-a (ostavi prazno za default)</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Detention Time (sati)
+                      Detention Time (sati) <span className="text-gray-400 font-normal">(opcionalno)</span>
                     </label>
                     <input
                       type="number"
@@ -499,11 +527,13 @@ export default function NewRoutePlanPage() {
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="npr. 2"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Sati čekanja tokom utovara/istovara</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Detention Pay (EUR)
+                      Detention Pay (EUR) <span className="text-gray-400 font-normal">(opcionalno)</span>
                     </label>
                     <input
                       type="number"
@@ -518,13 +548,15 @@ export default function NewRoutePlanPage() {
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="npr. 50.00"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Dodatna naknada za detention time</p>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Procijenjeno trajanje (sati)
+                    Procijenjeno trajanje (sati) <span className="text-gray-400 font-normal">(opcionalno)</span>
                   </label>
                   <input
                     type="number"
@@ -539,7 +571,9 @@ export default function NewRoutePlanPage() {
                       })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="npr. 8"
                   />
+                  <p className="text-xs text-gray-500 mt-1">Ukupno vrijeme potrebno za cijeli transport</p>
                 </div>
 
                 <div>
