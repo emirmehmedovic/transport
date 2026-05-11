@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
-import { calculateDriverPerformance } from '@/lib/performanceCalculator';
+import { calculateDriverPerformanceBatch } from '@/lib/performanceCalculator';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = "nodejs";
@@ -98,23 +98,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate performance for each driver
-    const comparisons = await Promise.all(
-      drivers.map(async (driver) => {
-        const performance = await calculateDriverPerformance(
-          driver.id,
-          startDate,
-          endDate
-        );
-
-        return {
-          driverId: driver.id,
-          driverName: `${driver.user.firstName} ${driver.user.lastName}`,
-          email: driver.user.email,
-          status: driver.status,
-          performance,
-        };
-      })
+    const performanceByDriver = await calculateDriverPerformanceBatch(
+      drivers.map((driver) => driver.id),
+      startDate,
+      endDate
     );
+
+    const comparisons = drivers.map((driver) => ({
+      driverId: driver.id,
+      driverName: `${driver.user.firstName} ${driver.user.lastName}`,
+      email: driver.user.email,
+      status: driver.status,
+      performance: performanceByDriver.get(driver.id)!,
+    }));
 
     // Calculate rankings
     const rankings = {

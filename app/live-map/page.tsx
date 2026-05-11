@@ -90,6 +90,15 @@ function getLoadStatusLabel(status: string): string {
   return labels[status] || status;
 }
 
+function getLocalDateParam() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export default function LiveMapFullScreenPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -144,7 +153,10 @@ export default function LiveMapFullScreenPage() {
     loadsFetchInFlightRef.current = true;
 
     try {
-      const res = await fetch("/api/loads?status=ASSIGNED,PICKED_UP,IN_TRANSIT");
+      const activeOn = getLocalDateParam();
+      const res = await fetch(
+        `/api/loads?status=ASSIGNED,PICKED_UP,IN_TRANSIT&activeOn=${activeOn}`
+      );
       const data = await res.json();
 
       if (res.ok) {

@@ -161,8 +161,6 @@ export default function EditRoutePlanPage() {
       formData.startDate &&
       formData.endDate &&
       formData.daysOfWeek.length > 0 &&
-      formData.distance > 0 &&
-      formData.loadRate > 0 &&
       formData.stops.some((stop) => stop.type === "PICKUP") &&
       formData.stops.some((stop) => stop.type === "DELIVERY")
     );
@@ -399,9 +397,9 @@ export default function EditRoutePlanPage() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
-                <NumberField label="Distanca (km) *" value={formData.distance} onChange={(value) => setFormData({ ...formData, distance: value ?? 0 })} />
+                <NumberField label="Distanca (km)" value={formData.distance} onChange={(value) => setFormData({ ...formData, distance: value ?? 0 })} />
                 <NumberField label="Deadhead kilometri" value={formData.deadheadMiles} onChange={(value) => setFormData({ ...formData, deadheadMiles: value ?? 0 })} />
-                <NumberField label="Load Rate (EUR) *" value={formData.loadRate} step="0.01" onChange={(value) => setFormData({ ...formData, loadRate: value ?? 0 })} />
+                <NumberField label="Load Rate (EUR)" value={formData.loadRate} step="0.01" onChange={(value) => setFormData({ ...formData, loadRate: value ?? 0 })} />
                 <NumberField label="Custom Rate po km" value={formData.customRatePerMile} step="0.01" optional onChange={(value) => setFormData({ ...formData, customRatePerMile: value })} />
                 <NumberField label="Detention Time (sati)" value={formData.detentionTime} optional onChange={(value) => setFormData({ ...formData, detentionTime: value })} />
                 <NumberField label="Detention Pay (EUR)" value={formData.detentionPay} step="0.01" optional onChange={(value) => setFormData({ ...formData, detentionPay: value })} />
@@ -428,7 +426,7 @@ export default function EditRoutePlanPage() {
           </Button>
           {!canSave && (
             <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-              Za čuvanje su obavezni naziv, period, dani, distanca, rate, pickup i delivery.
+              Za čuvanje su obavezni naziv, period, dani, pickup i delivery.
             </p>
           )}
         </div>

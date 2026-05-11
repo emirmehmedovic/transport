@@ -1,4 +1,10 @@
-import { PrismaClient, RoutePlanDayOfWeek, WeeklyRoutePlan, Load } from "@prisma/client";
+import {
+  PrismaClient,
+  RoutePlanDayOfWeek,
+  WeeklyRoutePlan,
+  Load,
+  Prisma,
+} from "@prisma/client";
 
 // Day of week mapping
 const DAY_OF_WEEK_MAP: Record<RoutePlanDayOfWeek, number> = {
@@ -16,7 +22,7 @@ const DAY_OF_WEEK_MAP: Record<RoutePlanDayOfWeek, number> = {
  * @param prisma - Prisma client
  * @returns Load number in format LOAD-YYYY-NNNN
  */
-async function generateLoadNumber(prisma: PrismaClient): Promise<string> {
+async function getNextLoadNumberSeed(prisma: PrismaClient): Promise<number> {
   const year = new Date().getFullYear();
 
   const lastLoad = await prisma.load.findFirst({
@@ -36,7 +42,11 @@ async function generateLoadNumber(prisma: PrismaClient): Promise<string> {
     nextNumber = lastNumber + 1;
   }
 
-  return `LOAD-${year}-${nextNumber.toString().padStart(4, "0")}`;
+  return nextNumber;
+}
+
+function formatLoadNumber(sequence: number, year = new Date().getFullYear()): string {
+  return `LOAD-${year}-${sequence.toString().padStart(4, "0")}`;
 }
 
 /**
@@ -78,16 +88,22 @@ export function getDatesForDaysOfWeek(
  * @param prisma - Prisma client
  * @returns True if load exists, false otherwise
  */
-export async function loadExistsForDate(
-  routePlanId: string,
-  date: Date,
-  prisma: PrismaClient
-): Promise<boolean> {
+function getDateRangeBounds(date: Date) {
   const startOfDay = new Date(date);
   startOfDay.setHours(0, 0, 0, 0);
 
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
+
+  return { startOfDay, endOfDay };
+}
+
+export async function loadExistsForDate(
+  routePlanId: string,
+  date: Date,
+  prisma: PrismaClient
+): Promise<boolean> {
+  const { startOfDay, endOfDay } = getDateRangeBounds(date);
 
   const existingLoad = await prisma.load.findFirst({
     where: {
@@ -102,6 +118,27 @@ export async function loadExistsForDate(
   return existingLoad !== null;
 }
 
+type RoutePlanWithStops = WeeklyRoutePlan & {
+  stops: Array<
+    Prisma.RoutePlanStopGetPayload<{
+      include: {
+        landmark: true;
+      };
+    }>
+  >;
+};
+
+function getStopLocation(stop: RoutePlanWithStops["stops"][number]) {
+  return {
+    address: stop.landmark?.address || stop.customAddress || "",
+    city: stop.landmark?.city || stop.customCity || "",
+    state: stop.landmark?.state || stop.customState || "",
+    zip: stop.landmark?.zip || stop.customZip || "",
+    latitude: stop.landmark?.latitude || stop.customLatitude,
+    longitude: stop.landmark?.longitude || stop.customLongitude,
+  };
+}
+
 /**
  * Create a Load from a RoutePlan for a specific date
  * @param routePlan - WeeklyRoutePlan with stops relation
@@ -110,9 +147,10 @@ export async function loadExistsForDate(
  * @returns Created Load
  */
 export async function createLoadFromRoutePlan(
-  routePlan: WeeklyRoutePlan & { stops: any[] },
+  routePlan: RoutePlanWithStops,
   date: Date,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  loadNumber?: string
 ): Promise<Load> {
   // Sort stops by sequence
   const sortedStops = [...routePlan.stops].sort((a, b) => a.sequence - b.sequence);
@@ -125,17 +163,8 @@ export async function createLoadFromRoutePlan(
     throw new Error("Route plan must have both pickup and delivery stops");
   }
 
-  // Get landmark data if available
-  const pickupLandmark = pickupStop.landmarkId
-    ? await prisma.landmark.findUnique({ where: { id: pickupStop.landmarkId } })
-    : null;
-
-  const deliveryLandmark = deliveryStop.landmarkId
-    ? await prisma.landmark.findUnique({ where: { id: deliveryStop.landmarkId } })
-    : null;
-
   // Generate load number
-  const loadNumber = await generateLoadNumber(prisma);
+  const resolvedLoadNumber = loadNumber || formatLoadNumber(await getNextLoadNumberSeed(prisma));
 
   // Calculate dates
   const pickupDate = new Date(date);
@@ -150,10 +179,13 @@ export async function createLoadFromRoutePlan(
     deliveryDate.setHours(deliveryDate.getHours() + routePlan.estimatedDurationHours);
   }
 
+  const pickupLocation = getStopLocation(pickupStop);
+  const deliveryLocation = getStopLocation(deliveryStop);
+
   // Create the load
   const load = await prisma.load.create({
     data: {
-      loadNumber,
+      loadNumber: resolvedLoadNumber,
       routeName: routePlan.planName,
       cargoType: routePlan.cargoType,
       status: "AVAILABLE",
@@ -163,23 +195,23 @@ export async function createLoadFromRoutePlan(
       truckId: routePlan.truckId,
 
       // Pickup details
-      pickupAddress: pickupLandmark?.address || pickupStop.customAddress || "",
-      pickupCity: pickupLandmark?.city || pickupStop.customCity || "",
-      pickupState: pickupLandmark?.state || pickupStop.customState || "",
-      pickupZip: pickupLandmark?.zip || pickupStop.customZip || "",
-      pickupLatitude: pickupLandmark?.latitude || pickupStop.customLatitude,
-      pickupLongitude: pickupLandmark?.longitude || pickupStop.customLongitude,
+      pickupAddress: pickupLocation.address,
+      pickupCity: pickupLocation.city,
+      pickupState: pickupLocation.state,
+      pickupZip: pickupLocation.zip,
+      pickupLatitude: pickupLocation.latitude,
+      pickupLongitude: pickupLocation.longitude,
       pickupContactName: pickupStop.contactName || "",
       pickupContactPhone: pickupStop.contactPhone || "",
       scheduledPickupDate: pickupDate,
 
       // Delivery details
-      deliveryAddress: deliveryLandmark?.address || deliveryStop.customAddress || "",
-      deliveryCity: deliveryLandmark?.city || deliveryStop.customCity || "",
-      deliveryState: deliveryLandmark?.state || deliveryStop.customState || "",
-      deliveryZip: deliveryLandmark?.zip || deliveryStop.customZip || "",
-      deliveryLatitude: deliveryLandmark?.latitude || deliveryStop.customLatitude,
-      deliveryLongitude: deliveryLandmark?.longitude || deliveryStop.customLongitude,
+      deliveryAddress: deliveryLocation.address,
+      deliveryCity: deliveryLocation.city,
+      deliveryState: deliveryLocation.state,
+      deliveryZip: deliveryLocation.zip,
+      deliveryLatitude: deliveryLocation.latitude,
+      deliveryLongitude: deliveryLocation.longitude,
       deliveryContactName: deliveryStop.contactName || "",
       deliveryContactPhone: deliveryStop.contactPhone || "",
       scheduledDeliveryDate: deliveryDate,
@@ -199,40 +231,36 @@ export async function createLoadFromRoutePlan(
 
       // Link to route plan
       generatedFromRoutePlanId: routePlan.id,
+
+      stops: {
+        create: sortedStops
+          .filter((stop) => stop.type === "INTERMEDIATE")
+          .map((stop) => {
+            const stopDate = new Date(date);
+            if (stop.scheduledTimeOffset) {
+              stopDate.setMinutes(stopDate.getMinutes() + stop.scheduledTimeOffset);
+            }
+
+            const stopLocation = getStopLocation(stop);
+
+            return {
+              type: stop.type,
+              sequence: stop.sequence,
+              address: stopLocation.address,
+              city: stopLocation.city,
+              state: stopLocation.state,
+              zip: stopLocation.zip,
+              latitude: stopLocation.latitude,
+              longitude: stopLocation.longitude,
+              contactName: stop.contactName,
+              contactPhone: stop.contactPhone,
+              items: stop.items,
+              scheduledDate: stopDate,
+            };
+          }),
+      },
     },
   });
-
-  // Create intermediate stops if any
-  const intermediateStops = sortedStops.filter(s => s.type === "INTERMEDIATE");
-
-  for (const stop of intermediateStops) {
-    const stopLandmark = stop.landmarkId
-      ? await prisma.landmark.findUnique({ where: { id: stop.landmarkId } })
-      : null;
-
-    const stopDate = new Date(date);
-    if (stop.scheduledTimeOffset) {
-      stopDate.setMinutes(stopDate.getMinutes() + stop.scheduledTimeOffset);
-    }
-
-    await prisma.loadStop.create({
-      data: {
-        loadId: load.id,
-        type: stop.type,
-        sequence: stop.sequence,
-        address: stopLandmark?.address || stop.customAddress || "",
-        city: stopLandmark?.city || stop.customCity || "",
-        state: stopLandmark?.state || stop.customState || "",
-        zip: stopLandmark?.zip || stop.customZip || "",
-        latitude: stopLandmark?.latitude || stop.customLatitude,
-        longitude: stopLandmark?.longitude || stop.customLongitude,
-        contactName: stop.contactName,
-        contactPhone: stop.contactPhone,
-        items: stop.items,
-        scheduledDate: stopDate,
-      },
-    });
-  }
 
   return load;
 }
@@ -249,13 +277,22 @@ export async function generateLoadsForRoutePlan(
   routePlanId: string,
   startDate: Date | undefined,
   endDate: Date | undefined,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  preloadedRoutePlan?: RoutePlanWithStops
 ): Promise<Load[]> {
   // Fetch the route plan with stops
-  const routePlan = await prisma.weeklyRoutePlan.findUnique({
-    where: { id: routePlanId },
-    include: { stops: true },
-  });
+  const routePlan =
+    preloadedRoutePlan ||
+    (await prisma.weeklyRoutePlan.findUnique({
+      where: { id: routePlanId },
+      include: {
+        stops: {
+          include: {
+            landmark: true,
+          },
+        },
+      },
+    }));
 
   if (!routePlan) {
     throw new Error("Route plan not found");
@@ -267,16 +304,62 @@ export async function generateLoadsForRoutePlan(
 
   // Get all dates for the specified days of week
   const dates = getDatesForDaysOfWeek(start, end, routePlan.daysOfWeek);
+  if (dates.length === 0) {
+    return [];
+  }
+
+  const existingLoads = await prisma.load.findMany({
+    where: {
+      generatedFromRoutePlanId: routePlanId,
+      scheduledPickupDate: {
+        gte: getDateRangeBounds(dates[0]).startOfDay,
+        lte: getDateRangeBounds(dates[dates.length - 1]).endOfDay,
+      },
+    },
+    select: {
+      scheduledPickupDate: true,
+    },
+  });
+
+  const existingDayKeys = new Set(
+    existingLoads.map((load) => {
+      const date = new Date(load.scheduledPickupDate);
+      date.setHours(0, 0, 0, 0);
+      return date.toISOString();
+    })
+  );
+
+  const missingDates = dates.filter((date) => {
+    const dayKey = new Date(date);
+    dayKey.setHours(0, 0, 0, 0);
+    return !existingDayKeys.has(dayKey.toISOString());
+  });
+
+  if (missingDates.length === 0) {
+    return [];
+  }
+
+  const nextLoadNumberSeed = await getNextLoadNumberSeed(prisma);
+  const loadNumbers = missingDates.map((_, index) =>
+    formatLoadNumber(nextLoadNumberSeed + index)
+  );
 
   const createdLoads: Load[] = [];
 
-  for (const date of dates) {
-    // Check if load already exists for this date
-    const exists = await loadExistsForDate(routePlanId, date, prisma);
-
-    if (!exists) {
-      const load = await createLoadFromRoutePlan(routePlan, date, prisma);
+  for (const [index, date] of missingDates.entries()) {
+    try {
+      const load = await createLoadFromRoutePlan(
+        routePlan,
+        date,
+        prisma,
+        loadNumbers[index]
+      );
       createdLoads.push(load);
+    } catch (error: any) {
+      if (error?.code === "P2002") {
+        continue;
+      }
+      throw error;
     }
   }
 

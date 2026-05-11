@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
@@ -10,7 +10,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import DocumentUpload from "@/components/documents/DocumentUpload";
 import {
   Truck,
   Users,
@@ -41,6 +40,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/lib/authContext";
 import AlertsPanel from "@/components/dashboard/AlertsPanel";
+import DocumentUpload from "@/components/documents/DocumentUpload";
 import { formatDateDMY, formatDateTimeDMY } from "@/lib/date";
 import { getDriverStatusLabel, getTrailerTypeLabel } from "@/lib/ui-labels";
 
@@ -204,6 +204,10 @@ type DriverRoutePlanSummary = {
   }[];
 };
 
+type DriverUploadTarget =
+  | { type: "load"; id: string; label: string; subtitle: string }
+  | { type: "driver"; id: string; label: string; subtitle: string; planName: string };
+
 const STATUS_LABELS: Record<string, string> = {
   AVAILABLE: "Dostupan",
   ASSIGNED: "Dodijeljen",
@@ -221,6 +225,16 @@ const DRIVER_STATUS_FLOW: Record<string, string[]> = {
   IN_TRANSIT: ["DELIVERED"],
   DELIVERED: ["COMPLETED"],
 };
+
+const ROUTE_PLAN_DAY_NAMES = [
+  "SUNDAY",
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+] as const;
 
 const formatDate = (value: string | null | undefined) => {
   return formatDateDMY(value);
@@ -784,7 +798,6 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
   const [routePlans, setRoutePlans] = useState<DriverRoutePlanSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
   const [statusSelection, setStatusSelection] = useState<string | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -794,6 +807,7 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [autoTracking, setAutoTracking] = useState(false);
   const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
+  const uploadSectionRef = useRef<HTMLDivElement | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -1102,10 +1116,50 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
     ? DRIVER_STATUS_FLOW[data.currentLoad.status] || []
     : [];
   const primaryRoute = data.currentLoad ?? data.nextLoad;
+  const uploadTargetLoad = data.currentLoad ?? data.nextLoad ?? null;
+  const today = new Date();
+  const todayStart = new Date(today);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+  const todayRoutePlanDay = ROUTE_PLAN_DAY_NAMES[today.getDay()];
+  const uploadTargetRoutePlan =
+    routePlans.find((plan) => {
+      const startDate = new Date(plan.startDate);
+      const endDate = new Date(plan.endDate);
+      const overlapsToday = startDate <= todayEnd && endDate >= todayStart;
+      const matchesDay =
+        !plan.daysOfWeek?.length || plan.daysOfWeek.includes(todayRoutePlanDay as any);
+
+      return overlapsToday && matchesDay && (plan.status === "ACTIVE" || plan.status === "SCHEDULED");
+    }) ??
+    routePlans.find((plan) => {
+      const endDate = new Date(plan.endDate);
+      return endDate >= todayStart && (plan.status === "ACTIVE" || plan.status === "SCHEDULED");
+    }) ??
+    null;
+  const uploadTarget: DriverUploadTarget | null = uploadTargetLoad
+    ? {
+        type: "load",
+        id: uploadTargetLoad.id,
+        label: `Load #${uploadTargetLoad.loadNumber}`,
+        subtitle: `${uploadTargetLoad.pickupCity} → ${uploadTargetLoad.deliveryCity}`,
+      }
+    : uploadTargetRoutePlan
+    ? {
+        type: "driver",
+        id: driverId,
+        label: uploadTargetRoutePlan.planName,
+        subtitle: `${formatRoutePlanStop(uploadTargetRoutePlan, "PICKUP")} → ${formatRoutePlanStop(uploadTargetRoutePlan, "DELIVERY")}`,
+        planName: uploadTargetRoutePlan.planName,
+      }
+    : null;
   const primaryRouteLabel = data.currentLoad
     ? "Trenutna ruta"
     : data.nextLoad
     ? "Zadnja dodijeljena"
+    : uploadTargetRoutePlan
+    ? "Aktivni sedmični plan"
     : null;
 
   return (
@@ -1220,11 +1274,17 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
             <div className="flex justify-between items-start mb-4 md:mb-8 gap-3">
               <div className="flex-1 min-w-0">
                 <p className="text-dark-300 text-xs md:text-sm font-medium mb-1">
-                  {data.currentLoad ? "TRENUTNI LOAD" : "STATUS RUTIRANJA"}
+                  {data.currentLoad
+                    ? "TRENUTNI LOAD"
+                    : uploadTargetRoutePlan
+                    ? "AKTIVNI SEDMIČNI PLAN"
+                    : "STATUS RUTIRANJA"}
                 </p>
                 <h3 className="text-xl md:text-2xl lg:text-3xl font-bold tracking-tight break-words">
                   {data.currentLoad
                     ? `${data.currentLoad.pickupCity} → ${data.currentLoad.deliveryCity}`
+                    : uploadTargetRoutePlan
+                    ? `${formatRoutePlanStop(uploadTargetRoutePlan, "PICKUP")} → ${formatRoutePlanStop(uploadTargetRoutePlan, "DELIVERY")}`
                     : "Nema aktivne rute"}
                 </h3>
                 {data.currentLoad && (
@@ -1235,6 +1295,11 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                         • {data.currentLoad.routeName}
                       </span>
                     )}
+                  </p>
+                )}
+                {!data.currentLoad && uploadTargetRoutePlan && (
+                  <p className="text-dark-300 mt-1 text-sm md:text-base">
+                    {uploadTargetRoutePlan.planName}
                   </p>
                 )}
               </div>
@@ -1311,6 +1376,26 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
                   )}
                 </div>
               </div>
+            ) : uploadTargetRoutePlan ? (
+              <div className="space-y-4">
+                <p className="text-dark-300">
+                  Vozaču je dodijeljen sedmični plan za ovaj period.
+                </p>
+                <div className="bg-white/10 rounded-2xl p-4 backdrop-blur-sm">
+                  <p className="text-dark-300 text-xs uppercase tracking-wider mb-1">
+                    Sedmični plan
+                  </p>
+                  <p className="font-bold text-xl">
+                    {uploadTargetRoutePlan.planName}
+                  </p>
+                  <p className="text-dark-200 text-sm mt-1">
+                    {formatRoutePlanStop(uploadTargetRoutePlan, "PICKUP")} → {formatRoutePlanStop(uploadTargetRoutePlan, "DELIVERY")}
+                  </p>
+                  <p className="text-dark-300 text-xs mt-2">
+                    Period: {formatDate(uploadTargetRoutePlan.startDate)} - {formatDate(uploadTargetRoutePlan.endDate)}
+                  </p>
+                </div>
+              </div>
             ) : (
               <p className="text-dark-300">
                 Javite se dispečeru za novu rutu.
@@ -1361,9 +1446,33 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
               </button>
             </div>
           )}
-          {data.currentLoad && (
+          {!primaryRoute && uploadTargetRoutePlan && primaryRouteLabel && (
+            <div className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-5 shadow-soft border border-dark-100">
+              <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-dark-500">
+                {primaryRouteLabel}
+              </p>
+              <p className="mt-1 text-sm md:text-base font-bold text-dark-900 truncate">
+                {uploadTargetRoutePlan.planName}
+              </p>
+              <p className="text-xs text-dark-500 mt-1">
+                {formatRoutePlanStop(uploadTargetRoutePlan, "PICKUP")} → {formatRoutePlanStop(uploadTargetRoutePlan, "DELIVERY")}
+              </p>
+              <button
+                onClick={() => router.push(`/route-plans/${uploadTargetRoutePlan.id}`)}
+                className="mt-3 w-full rounded-xl border border-dark-200 bg-dark-900 text-white text-xs md:text-sm font-bold py-2 hover:bg-primary-600 transition-colors"
+              >
+                Otvori detalje plana
+              </button>
+            </div>
+          )}
+          {uploadTarget && (
             <button
-              onClick={() => router.push(`/loads/${data.currentLoad!.id}?tab=documents`)}
+              onClick={() =>
+                uploadSectionRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+              }
               className="w-full rounded-2xl md:rounded-3xl border-2 border-primary-600 bg-primary-600/10 text-primary-700 px-4 md:px-5 py-3 md:py-4 font-bold text-sm md:text-base hover:bg-primary-600 hover:text-white transition-colors flex items-center justify-center gap-2"
             >
               <FileUp className="w-4 h-4 md:w-5 md:h-5" />
@@ -1425,12 +1534,16 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
           {/* Quick Buttons Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             <button
-              onClick={() => setShowUpload(!showUpload)}
-              disabled={!data.currentLoad}
+              onClick={() => {
+                if (!uploadTarget) return;
+                uploadSectionRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              }}
+              disabled={!uploadTarget}
               className={`p-3 md:p-4 rounded-2xl md:rounded-3xl border transition-all text-center flex flex-col items-center justify-center gap-2 md:gap-3 ${
-                showUpload
-                  ? "border-primary-500 bg-primary-50 text-primary-700"
-                  : "border-dark-100 bg-white hover:border-primary-200 hover:bg-dark-50 text-dark-600"
+                "border-dark-100 bg-white hover:border-primary-200 hover:bg-dark-50 text-dark-600"
               }`}
             >
               <FileUp className="w-5 h-5 md:w-6 md:h-6" />
@@ -1457,27 +1570,6 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
           </div>
         </div>
       </section>
-
-      {/* Upload Area (Conditional) */}
-      {showUpload && data.currentLoad && (
-        <section className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-soft border-2 border-dashed border-primary-100 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-dark-900 text-sm md:text-base">Upload Dokumenata</h3>
-            <button
-              onClick={() => setShowUpload(false)}
-              className="text-xs md:text-sm text-dark-500 hover:text-dark-900 underline"
-            >
-              Zatvori
-            </button>
-          </div>
-          <DocumentUpload
-            loadId={data.currentLoad.id}
-            defaultDocumentType="POD"
-            onUploadSuccess={() => setShowUpload(false)}
-            maxFiles={3}
-          />
-        </section>
-      )}
 
       {/* KPI Stats */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
@@ -1684,6 +1776,54 @@ function DriverDashboard({ user, driverId }: { user: AuthUser; driverId: string 
              )}
           </div>
         </div>
+      </section>
+
+      <section
+        ref={uploadSectionRef}
+        className="rounded-2xl md:rounded-3xl border border-dark-200 bg-white p-4 md:p-6 shadow-soft"
+      >
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary-600">
+            Dokumenti
+          </p>
+          <h2 className="mt-1 text-lg md:text-xl font-bold text-dark-900">
+            Upload za vozača
+          </h2>
+          <p className="mt-1 text-xs md:text-sm text-dark-500">
+            Upload je dostupan za trenutni/sljedeći load, a ako load još nije generisan onda za aktivni sedmični plan vozača.
+          </p>
+        </div>
+
+        {uploadTarget ? (
+          <>
+            <div className="mb-5 rounded-2xl border border-primary-100 bg-primary-50/60 p-4">
+              <p className="text-sm font-bold text-dark-900">
+                {uploadTarget.label}
+              </p>
+              <p className="mt-1 text-sm text-dark-600">
+                {uploadTarget.subtitle}
+              </p>
+              <p className="mt-1 text-xs text-dark-500">
+                {uploadTarget.type === "load"
+                  ? "Dokument koji vozač pošalje biće vezan za ovaj load."
+                  : `Load još nije generisan. Dokument će biti vezan za vozača, na osnovu plana "${uploadTarget.planName}".`}
+              </p>
+            </div>
+
+            <DocumentUpload
+              loadId={uploadTarget.type === "load" ? uploadTarget.id : undefined}
+              driverId={uploadTarget.type === "driver" ? uploadTarget.id : undefined}
+              defaultDocumentType="POD"
+              onUploadSuccess={() => {
+                setStatusMessage("Dokument je uspješno uploadovan");
+              }}
+            />
+          </>
+        ) : (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Nema dodijeljene rute. Upload sa driver dashboarda je moguć tek kada vozač ima trenutni ili sljedeći load.
+          </div>
+        )}
       </section>
     </div>
   );

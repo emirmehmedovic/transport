@@ -184,8 +184,37 @@ export async function GET(request: NextRequest) {
       take: limit,
     });
 
+    const uploadedByIds = Array.from(
+      new Set(
+        documents
+          .map((document) => document.uploadedById)
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    const uploaders = uploadedByIds.length
+      ? await prisma.user.findMany({
+          where: {
+            id: { in: uploadedByIds },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        })
+      : [];
+
+    const uploaderMap = new Map(uploaders.map((user) => [user.id, user]));
+    const documentsWithUploaders = documents.map((document) => ({
+      ...document,
+      uploadedBy: document.uploadedById
+        ? uploaderMap.get(document.uploadedById) || null
+        : null,
+    }));
+
     return NextResponse.json({
-      documents,
+      documents: documentsWithUploaders,
       pagination: {
         total,
         page,

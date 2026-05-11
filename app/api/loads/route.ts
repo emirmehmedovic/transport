@@ -6,6 +6,26 @@ import { isInSchengen } from "@/lib/schengen";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function parseLocalDay(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day] = match;
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    0,
+    0,
+    0,
+    0
+  );
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 // GET /api/loads - Lista svih loadova
 export async function GET(req: NextRequest) {
   try {
@@ -24,6 +44,7 @@ export async function GET(req: NextRequest) {
     const truckId = searchParams.get("truckId")?.trim() || "";
     const from = searchParams.get("from")?.trim() || "";
     const to = searchParams.get("to")?.trim() || "";
+    const activeOn = searchParams.get("activeOn")?.trim() || "";
     const loadNumber = searchParams.get("loadNumber")?.trim() || "";
     const recurringGroupId = searchParams.get("recurringGroupId")?.trim() || "";
     const approvalStatus = searchParams.get("approvalStatus")?.trim().toUpperCase() || "";
@@ -91,6 +112,34 @@ export async function GET(req: NextRequest) {
       } else if (approvalStatuses.length > 1) {
         where.approvalStatus = { in: approvalStatuses };
       }
+    }
+
+    if (activeOn) {
+      const dayStart = parseLocalDay(activeOn);
+
+      if (!dayStart) {
+        return NextResponse.json(
+          { error: "Neispravan activeOn datum" },
+          { status: 400 }
+        );
+      }
+
+      const dayEnd = new Date(dayStart);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      where.AND = [
+        ...(where.AND ?? []),
+        {
+          scheduledPickupDate: {
+            lte: dayEnd,
+          },
+        },
+        {
+          scheduledDeliveryDate: {
+            gte: dayStart,
+          },
+        },
+      ];
     }
 
     const skip = (page - 1) * pageSize;

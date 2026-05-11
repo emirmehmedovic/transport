@@ -20,12 +20,24 @@ type FetchOsrmRoutesOptions = {
   alternatives?: boolean;
 };
 
-const DEFAULT_TRUCK_DURATION_FACTOR = 1.3;
 const FALLBACK_OSRM_BASE_URL = "https://router.project-osrm.org";
+const DEFAULT_TRUCK_DURATION_FACTOR = 1.18;
+const MAX_TRUCK_MOTORWAY_SPEED_KMH = 90;
+const DEFAULT_TRUCK_AVERAGE_SPEED_KMH = 72;
 
-function toTruckHours(carDurationSeconds: number): number {
-  const truckDurationSeconds = carDurationSeconds * DEFAULT_TRUCK_DURATION_FACTOR;
-  return Math.round((truckDurationSeconds / 3600) * 10) / 10;
+function toTruckHours(carDurationSeconds: number, distanceKm: number): number {
+  const adjustedFromCarProfileHours =
+    (carDurationSeconds * DEFAULT_TRUCK_DURATION_FACTOR) / 3600;
+
+  // OSRM returns a car profile. For trucks, keep the estimate conservative:
+  // motorway top speed should not effectively exceed 90 km/h, while mixed roads
+  // should stay below that, so we enforce a slower overall average as a floor.
+  const motorwaySpeedFloorHours = distanceKm / MAX_TRUCK_MOTORWAY_SPEED_KMH;
+  const mixedRoadFloorHours = distanceKm / DEFAULT_TRUCK_AVERAGE_SPEED_KMH;
+
+  return Math.round(
+    Math.max(adjustedFromCarProfileHours, motorwaySpeedFloorHours, mixedRoadFloorHours) * 10
+  ) / 10;
 }
 
 export function buildOsrmRouteUrl(
@@ -60,7 +72,7 @@ export async function fetchOsrmRoutes(
 
   return data.routes.map((route, index) => {
     const distanceKm = Math.round((route.distance / 1000) * 100) / 100;
-    const durationHours = toTruckHours(route.duration);
+    const durationHours = toTruckHours(route.duration, distanceKm);
     const geometry = route.geometry.coordinates.map(
       ([lng, lat]) => [lat, lng] as [number, number]
     );

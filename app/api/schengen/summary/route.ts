@@ -2,7 +2,7 @@ import { AppNotificationType, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
-import { countSchengenDaysWithFallback } from "@/lib/schengen-aggregate";
+import { countSchengenDaysWithFallbackBatch } from "@/lib/schengen-aggregate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,14 +34,24 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const rows = await Promise.all(drivers.map(async (driver) => {
+    const usageByDriver = await countSchengenDaysWithFallbackBatch(
+      drivers.map((driver) => ({
+        driverId: driver.id,
+        from:
+          driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf
+            ? driver.schengenManualAsOf
+            : windowFrom,
+      }))
+    );
+
+    const rows = drivers.map((driver) => {
       let remainingDays: number;
       let usedDays: number;
       let manual = null as null | { remainingDays: number; asOf: string; daysSinceManual: number };
 
       if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
         const manualFrom = driver.schengenManualAsOf;
-        const daysSinceManual = await countSchengenDaysWithFallback(driver.id, manualFrom);
+        const daysSinceManual = usageByDriver.get(driver.id) ?? 0;
         remainingDays = Math.max(0, driver.schengenManualRemainingDays - daysSinceManual);
         usedDays = Math.min(90, 90 - remainingDays);
         manual = {
@@ -50,7 +60,7 @@ export async function GET(req: NextRequest) {
           daysSinceManual,
         };
       } else {
-        usedDays = await countSchengenDaysWithFallback(driver.id, windowFrom);
+        usedDays = usageByDriver.get(driver.id) ?? 0;
         remainingDays = Math.max(0, 90 - usedDays);
       }
 
@@ -65,7 +75,7 @@ export async function GET(req: NextRequest) {
         warning: remainingDays < 7,
         manual,
       };
-    }));
+    });
 
     rows.sort((a, b) => a.remainingDays - b.remainingDays);
 

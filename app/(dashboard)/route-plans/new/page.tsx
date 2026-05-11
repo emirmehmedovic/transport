@@ -45,7 +45,6 @@ interface FormData {
   detentionTime?: number;
   detentionPay?: number;
   estimatedDurationHours?: number;
-  notes?: string;
   specialInstructions?: string;
   stops: RoutePlanStopData[];
 }
@@ -58,6 +57,8 @@ export default function NewRoutePlanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [addingWaypoint, setAddingWaypoint] = useState(false);
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
+  const [routeCalculationMessage, setRouteCalculationMessage] = useState("");
 
   const [formData, setFormData] = useState<FormData>({
     planName: "",
@@ -117,7 +118,7 @@ export default function NewRoutePlanPage() {
       case 3:
         return formData.stops.some((s) => s.type === "DELIVERY");
       case 4:
-        return formData.distance > 0 && formData.loadRate > 0;
+        return true;
       case 5:
         return true;
       default:
@@ -166,6 +167,83 @@ export default function NewRoutePlanPage() {
       setSubmitting(false);
     }
   };
+
+  const getOrderedStops = () =>
+    formData.stops.slice().sort((a, b) => a.sequence - b.sequence);
+
+  const getStopCoordinates = () => {
+    return getOrderedStops()
+      .map((stop) => {
+        const latitude = stop.landmark?.latitude ?? stop.customLatitude;
+        const longitude = stop.landmark?.longitude ?? stop.customLongitude;
+
+        if (typeof latitude !== "number" || typeof longitude !== "number") {
+          return null;
+        }
+
+        return { lat: latitude, lng: longitude };
+      })
+      .filter((point): point is { lat: number; lng: number } => Boolean(point));
+  };
+
+  const canCalculateRoute =
+    formData.stops.length >= 2 && getStopCoordinates().length === formData.stops.length;
+
+  const calculateRouteDetails = async () => {
+    if (!canCalculateRoute) {
+      setRouteCalculationMessage(
+        "Za automatski obračun distance svi stopovi moraju imati koordinate."
+      );
+      return;
+    }
+
+    try {
+      setCalculatingRoute(true);
+      setRouteCalculationMessage("Računam distancu i trajanje rute...");
+
+      const response = await fetch("/api/routing/osrm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          coordinates: getStopCoordinates(),
+          alternatives: false,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Greška pri računanju rute");
+      }
+
+      const primaryRoute = data.routes?.[0];
+      if (!primaryRoute) {
+        throw new Error("Ruta nije dostupna");
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        distance: Math.round(primaryRoute.distance),
+        estimatedDurationHours: primaryRoute.duration,
+      }));
+      setRouteCalculationMessage(
+        `Distanca ažurirana na ${Math.round(primaryRoute.distance)} km, trajanje ${primaryRoute.duration} h.`
+      );
+    } catch (err: any) {
+      setRouteCalculationMessage(err.message || "Greška pri računanju distance.");
+    } finally {
+      setCalculatingRoute(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentStep !== 4 || formData.stops.length < 2) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void calculateRouteDetails();
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [currentStep, formData.stops]);
 
   return (
     <div className="space-y-6 px-4 md:px-0 pb-8">
@@ -457,23 +535,46 @@ export default function NewRoutePlanPage() {
             {/* Step 4: Load Details */}
             {currentStep === 4 && (
               <div className="space-y-6">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        Distanca se računa automatski
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Koriste se pickup, međustanice i delivery koordinate sa OSRM rutiranjem.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={calculateRouteDetails}
+                      disabled={calculatingRoute || !canCalculateRoute}
+                    >
+                      {calculatingRoute ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Preračunaj rutu
+                    </Button>
+                  </div>
+                  {routeCalculationMessage && (
+                    <p className="text-xs text-gray-600 mt-3">{routeCalculationMessage}</p>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Distanca (km) *
+                      Distanca (km)
                     </label>
                     <input
                       type="number"
                       value={formData.distance || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          distance: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      placeholder="npr. 450"
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                      placeholder="Automatski obračun"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Sistem računa distancu na osnovu stopova</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -498,7 +599,7 @@ export default function NewRoutePlanPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Load Rate (EUR) *
+                      Load Rate (EUR) <span className="text-gray-400 font-normal">(opcionalno)</span>
                     </label>
                     <input
                       type="number"
@@ -513,11 +614,11 @@ export default function NewRoutePlanPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       placeholder="npr. 800.00"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Ukupna cijena transporta</p>
+                    <p className="text-xs text-gray-500 mt-1">Ukupna cijena transporta, ako želite unijeti unaprijed</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Custom Rate po km (EUR) <span className="text-gray-400 font-normal">(opcionalno)</span>
+                      Cijena po km (EUR) <span className="text-gray-400 font-normal">(opcionalno)</span>
                     </label>
                     <input
                       type="number"
@@ -534,7 +635,7 @@ export default function NewRoutePlanPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       placeholder="npr. 1.50"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Za override driver rate-a (ostavi prazno za default)</p>
+                    <p className="text-xs text-gray-500 mt-1">Interna cijena po kilometru za vozača, ako želite override</p>
                   </div>
                 </div>
 
@@ -590,32 +691,11 @@ export default function NewRoutePlanPage() {
                     type="number"
                     step="0.5"
                     value={formData.estimatedDurationHours || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        estimatedDurationHours: e.target.value
-                          ? parseFloat(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="npr. 8"
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                    placeholder="Automatski obračun"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Ukupno vrijeme potrebno za cijeli transport</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Napomene
-                  </label>
-                  <textarea
-                    value={formData.notes || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, notes: e.target.value })
-                    }
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
+                  <p className="text-xs text-gray-500 mt-1">Procjena trajanja se računa zajedno sa rutom</p>
                 </div>
 
                 <div>
@@ -681,6 +761,9 @@ export default function NewRoutePlanPage() {
                     </div>
                     <div>
                       <span className="text-gray-600">Load Rate:</span> €{formData.loadRate}
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Cijena po km:</span> €{formData.customRatePerMile}
                     </div>
                     <div>
                       <span className="text-gray-600">Tip tereta:</span> {formData.cargoType}

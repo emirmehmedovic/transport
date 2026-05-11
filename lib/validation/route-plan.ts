@@ -37,8 +37,8 @@ export const routePlanSchema = z.object({
   cargoType: z.enum(["LABUDICA", "CISTERNA", "TERET"]),
   distance: z.number().int().min(0, "Distanca mora biti pozitivna"),
   deadheadMiles: z.number().int().min(0, "Deadhead milje moraju biti pozitivne").default(0),
-  loadRate: z.number().min(0, "Load rate mora biti pozitivan"),
-  customRatePerMile: z.number().optional(),
+  loadRate: z.number().min(0, "Load rate mora biti pozitivan").optional(),
+  customRatePerMile: z.number().positive("Cijena po km mora biti veća od 0").optional(),
   detentionTime: z.number().int().optional(),
   detentionPay: z.number().optional(),
   estimatedDurationHours: z.number().optional(),
@@ -99,8 +99,34 @@ export const routePlanGenerateLoadsSchema = z.object({
   endDate: z.string().datetime().optional(),
 });
 
+export const routePlanBulkSchema = z.object({
+  action: z.enum(["ASSIGN", "GENERATE_LOADS", "CANCEL"]),
+  routePlanIds: z.array(z.string().min(1)).min(1, "Odaberite najmanje jedan plan"),
+  driverId: z.string().optional(),
+  truckId: z.string().optional(),
+  sendNotification: z.boolean().optional().default(true),
+}).superRefine((data, ctx) => {
+  if (data.action === "ASSIGN") {
+    if (!data.driverId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Driver ID je obavezan za bulk dodjelu",
+        path: ["driverId"],
+      });
+    }
+    if (!data.truckId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Truck ID je obavezan za bulk dodjelu",
+        path: ["truckId"],
+      });
+    }
+  }
+});
+
 export type RoutePlanInput = z.infer<typeof routePlanSchema>;
 export type RoutePlanUpdateInput = z.infer<typeof routePlanUpdateSchema>;
 export type RoutePlanAssignInput = z.infer<typeof routePlanAssignSchema>;
 export type RoutePlanGenerateLoadsInput = z.infer<typeof routePlanGenerateLoadsSchema>;
 export type RoutePlanStopInput = z.infer<typeof routePlanStopSchema>;
+export type RoutePlanBulkInput = z.infer<typeof routePlanBulkSchema>;

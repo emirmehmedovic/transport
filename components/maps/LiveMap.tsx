@@ -108,6 +108,15 @@ function getGPSStatus(lastLocationUpdate: Date | null): 'active' | 'warning' | '
   return 'offline'; // 60+ minutes
 }
 
+function getLocalDateParam() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 // Helper functions for landmarks
 import { getLandmarkIcon, getLandmarkColor, getLandmarkLabel } from "@/lib/landmark-icons";
 
@@ -472,7 +481,10 @@ export default function LiveMap({
       setRefreshing(true);
 
       // Fetch active loads
-      const loadsRes = await fetch("/api/loads?status=ASSIGNED,PICKED_UP,IN_TRANSIT");
+      const activeOn = getLocalDateParam();
+      const loadsRes = await fetch(
+        `/api/loads?status=ASSIGNED,PICKED_UP,IN_TRANSIT&activeOn=${activeOn}`
+      );
       const loadsData = await loadsRes.json();
       
       if (loadsRes.ok && loadsData.loads) {

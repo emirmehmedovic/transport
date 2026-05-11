@@ -24,6 +24,11 @@ interface Document {
   reviewedAt: string | null;
   reviewNote: string | null;
   createdAt: string;
+  uploadedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  } | null;
   load?: {
     id: string;
     loadNumber: string;
@@ -311,7 +316,14 @@ export default function DocumentList({
                       {formatFileSize(doc.fileSize)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {formatDate(doc.createdAt)}
+                      <div>
+                        <p className="text-sm text-gray-700">{formatDate(doc.createdAt)}</p>
+                        <p className="text-xs text-gray-500">
+                          {doc.uploadedBy
+                            ? `${doc.uploadedBy.firstName} ${doc.uploadedBy.lastName}`
+                            : "Nepoznato"}
+                        </p>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm">
                       {doc.expiryDate ? (

@@ -39,7 +39,11 @@ export async function GET(request: NextRequest) {
         },
       },
       include: {
-        stops: true,
+        stops: {
+          include: {
+            landmark: true,
+          },
+        },
       },
     });
 
@@ -87,7 +91,8 @@ export async function GET(request: NextRequest) {
           routePlan.id,
           today,
           loadsEndDate,
-          prisma
+          prisma,
+          routePlan
         );
 
         if (loads.length > 0) {

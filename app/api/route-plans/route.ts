@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
         cargoType: validatedData.cargoType,
         distance: validatedData.distance,
         deadheadMiles: validatedData.deadheadMiles,
-        loadRate: validatedData.loadRate,
+        loadRate: validatedData.loadRate ?? 0,
         customRatePerMile: validatedData.customRatePerMile,
         detentionTime: validatedData.detentionTime,
         detentionPay: validatedData.detentionPay,

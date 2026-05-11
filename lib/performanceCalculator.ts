@@ -46,45 +46,44 @@ export interface TruckPerformance {
   }[];
 }
 
-/**
- * Kalkuliše driver performance za određeni period
- */
-export async function calculateDriverPerformance(
-  driverId: string,
+type DriverPerformanceLoadRecord = {
+  id: string;
+  driverId?: string | null;
+  distance: number;
+  deadheadMiles: number;
+  loadRate: number;
+  customRatePerMile: number | null;
+  detentionPay: number | null;
+  scheduledDeliveryDate: Date;
+  actualDeliveryDate: Date | null;
+};
+
+type TruckPerformanceLoadRecord = {
+  id: string;
+  truckId?: string | null;
+  distance: number;
+  deadheadMiles: number;
+  customRatePerMile: number | null;
+  detentionPay: number | null;
+  actualDeliveryDate: Date | null;
+  driver: {
+    ratePerMile: number | null;
+  } | null;
+};
+
+type TruckExpenseRecord = {
+  truckId?: string | null;
+  type: string;
+  amount: number;
+  date: Date;
+};
+
+function buildDriverPerformance(
+  loads: DriverPerformanceLoadRecord[],
+  defaultRate: number,
   startDate: Date,
   endDate: Date
-): Promise<DriverPerformance> {
-  // Dohvati sve completed loads u periodu
-  const loads = await prisma.load.findMany({
-    where: {
-      driverId,
-      status: LoadStatus.COMPLETED,
-      actualDeliveryDate: {
-        gte: startDate,
-        lte: endDate,
-      },
-    },
-    select: {
-      id: true,
-      distance: true,
-      deadheadMiles: true,
-      loadRate: true,
-      customRatePerMile: true,
-      detentionPay: true,
-      scheduledDeliveryDate: true,
-      actualDeliveryDate: true,
-    },
-  });
-
-  // Dohvati driver's default rate
-  const driver = await prisma.driver.findUnique({
-    where: { id: driverId },
-    select: { ratePerMile: true },
-  });
-
-  const defaultRate = driver?.ratePerMile || 0;
-
-  // Calculate metrics
+): DriverPerformance {
   let totalMiles = 0;
   let totalLoadedMiles = 0;
   let totalDeadheadMiles = 0;
@@ -105,7 +104,6 @@ export async function calculateDriverPerformance(
     totalDeadheadMiles += deadheadMiles;
     totalRevenue += revenue;
 
-    // Check on-time delivery
     if (
       load.actualDeliveryDate &&
       load.scheduledDeliveryDate &&
@@ -114,10 +112,8 @@ export async function calculateDriverPerformance(
       onTimeDeliveries++;
     }
 
-    // Track active days
     if (load.actualDeliveryDate) {
-      const dateStr = load.actualDeliveryDate.toISOString().split('T')[0];
-      uniqueDays.add(dateStr);
+      uniqueDays.add(load.actualDeliveryDate.toISOString().split('T')[0]);
     }
   });
 
@@ -130,13 +126,11 @@ export async function calculateDriverPerformance(
   const avgRevenuePerLoad =
     completedLoads > 0 ? totalRevenue / completedLoads : 0;
 
-  // Calculate utilization rate (active days vs total days in period)
   const totalDays = Math.ceil(
     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
   );
   const utilizationRate = totalDays > 0 ? (activeDays / totalDays) * 100 : 0;
 
-  // Generate time series data (grouped by week)
   const timeSeriesMap = new Map<
     string,
     { miles: number; revenue: number; loads: number }
@@ -145,11 +139,8 @@ export async function calculateDriverPerformance(
   loads.forEach((load) => {
     if (!load.actualDeliveryDate) return;
 
-    // Group by week (ISO week start - Monday)
-    const date = new Date(load.actualDeliveryDate);
-    const weekStart = getWeekStart(date);
+    const weekStart = getWeekStart(new Date(load.actualDeliveryDate));
     const weekKey = weekStart.toISOString().split('T')[0];
-
     const existing = timeSeriesMap.get(weekKey) || {
       miles: 0,
       revenue: 0,
@@ -187,57 +178,12 @@ export async function calculateDriverPerformance(
   };
 }
 
-/**
- * Kalkuliše truck performance za određeni period
- */
-export async function calculateTruckPerformance(
-  truckId: string,
+function buildTruckPerformance(
+  loads: TruckPerformanceLoadRecord[],
+  expenses: TruckExpenseRecord[],
   startDate: Date,
   endDate: Date
-): Promise<TruckPerformance> {
-  // Dohvati completed loads
-  const loads = await prisma.load.findMany({
-    where: {
-      truckId,
-      status: LoadStatus.COMPLETED,
-      actualDeliveryDate: {
-        gte: startDate,
-        lte: endDate,
-      },
-    },
-    select: {
-      id: true,
-      distance: true,
-      deadheadMiles: true,
-      loadRate: true,
-      customRatePerMile: true,
-      detentionPay: true,
-      actualDeliveryDate: true,
-      driver: {
-        select: {
-          ratePerMile: true,
-        },
-      },
-    },
-  });
-
-  // Dohvati expenses za ovaj period
-  const expenses = await prisma.truckExpense.findMany({
-    where: {
-      truckId,
-      date: {
-        gte: startDate,
-        lte: endDate,
-      },
-    },
-    select: {
-      type: true,
-      amount: true,
-      date: true,
-    },
-  });
-
-  // Calculate metrics
+): TruckPerformance {
   let totalMiles = 0;
   let revenueGenerated = 0;
   const uniqueDays = new Set<string>();
@@ -251,12 +197,10 @@ export async function calculateTruckPerformance(
     revenueGenerated += revenue;
 
     if (load.actualDeliveryDate) {
-      const dateStr = load.actualDeliveryDate.toISOString().split('T')[0];
-      uniqueDays.add(dateStr);
+      uniqueDays.add(load.actualDeliveryDate.toISOString().split('T')[0]);
     }
   });
 
-  // Calculate costs
   let totalFuelCost = 0;
   let totalMaintenanceCost = 0;
 
@@ -274,14 +218,11 @@ export async function calculateTruckPerformance(
   const maintenanceCostPerMile =
     totalMiles > 0 ? totalMaintenanceCost / totalMiles : 0;
   const totalCostPerMile = fuelCostPerMile + maintenanceCostPerMile;
-
-  // Calculate uptime (active days vs total days)
   const totalDays = Math.ceil(
     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
   );
   const uptimePercentage = totalDays > 0 ? (activeDays / totalDays) * 100 : 0;
 
-  // Generate time series data
   const timeSeriesMap = new Map<
     string,
     { miles: number; revenue: number; costs: number }
@@ -290,10 +231,8 @@ export async function calculateTruckPerformance(
   loads.forEach((load) => {
     if (!load.actualDeliveryDate) return;
 
-    const date = new Date(load.actualDeliveryDate);
-    const weekStart = getWeekStart(date);
+    const weekStart = getWeekStart(new Date(load.actualDeliveryDate));
     const weekKey = weekStart.toISOString().split('T')[0];
-
     const existing = timeSeriesMap.get(weekKey) || {
       miles: 0,
       revenue: 0,
@@ -311,12 +250,9 @@ export async function calculateTruckPerformance(
     });
   });
 
-  // Add expenses to time series
   expenses.forEach((expense) => {
-    const date = new Date(expense.date);
-    const weekStart = getWeekStart(date);
+    const weekStart = getWeekStart(new Date(expense.date));
     const weekKey = weekStart.toISOString().split('T')[0];
-
     const existing = timeSeriesMap.get(weekKey) || {
       miles: 0,
       revenue: 0,
@@ -346,6 +282,247 @@ export async function calculateTruckPerformance(
     uptimePercentage,
     timeSeriesData,
   };
+}
+
+/**
+ * Kalkuliše driver performance za određeni period
+ */
+export async function calculateDriverPerformance(
+  driverId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<DriverPerformance> {
+  const loads = await prisma.load.findMany({
+    where: {
+      driverId,
+      status: LoadStatus.COMPLETED,
+      actualDeliveryDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    select: {
+      id: true,
+      distance: true,
+      deadheadMiles: true,
+      loadRate: true,
+      customRatePerMile: true,
+      detentionPay: true,
+      scheduledDeliveryDate: true,
+      actualDeliveryDate: true,
+    },
+  });
+
+  // Dohvati driver's default rate
+  const driver = await prisma.driver.findUnique({
+    where: { id: driverId },
+    select: { ratePerMile: true },
+  });
+
+  const defaultRate = driver?.ratePerMile || 0;
+  return buildDriverPerformance(loads, defaultRate, startDate, endDate);
+}
+
+/**
+ * Kalkuliše truck performance za određeni period
+ */
+export async function calculateTruckPerformance(
+  truckId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<TruckPerformance> {
+  const loads = await prisma.load.findMany({
+    where: {
+      truckId,
+      status: LoadStatus.COMPLETED,
+      actualDeliveryDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    select: {
+      id: true,
+      distance: true,
+      deadheadMiles: true,
+      loadRate: true,
+      customRatePerMile: true,
+      detentionPay: true,
+      actualDeliveryDate: true,
+      driver: {
+        select: {
+          ratePerMile: true,
+        },
+      },
+    },
+  });
+
+  const expenses = await prisma.truckExpense.findMany({
+    where: {
+      truckId,
+      date: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    select: {
+      type: true,
+      amount: true,
+      date: true,
+    },
+  });
+
+  return buildTruckPerformance(loads, expenses, startDate, endDate);
+}
+
+export async function calculateDriverPerformanceBatch(
+  driverIds: string[],
+  startDate: Date,
+  endDate: Date
+): Promise<Map<string, DriverPerformance>> {
+  if (driverIds.length === 0) {
+    return new Map();
+  }
+
+  const [loads, drivers] = await Promise.all([
+    prisma.load.findMany({
+      where: {
+        driverId: { in: driverIds },
+        status: LoadStatus.COMPLETED,
+        actualDeliveryDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        id: true,
+        driverId: true,
+        distance: true,
+        deadheadMiles: true,
+        loadRate: true,
+        customRatePerMile: true,
+        detentionPay: true,
+        scheduledDeliveryDate: true,
+        actualDeliveryDate: true,
+      },
+    }),
+    prisma.driver.findMany({
+      where: {
+        id: { in: driverIds },
+      },
+      select: {
+        id: true,
+        ratePerMile: true,
+      },
+    }),
+  ]);
+
+  const loadsByDriver = new Map<string, DriverPerformanceLoadRecord[]>();
+  loads.forEach((load) => {
+    if (!load.driverId) return;
+    const items = loadsByDriver.get(load.driverId) || [];
+    items.push(load);
+    loadsByDriver.set(load.driverId, items);
+  });
+
+  const driverRateMap = new Map(drivers.map((driver) => [driver.id, driver.ratePerMile || 0]));
+  const result = new Map<string, DriverPerformance>();
+
+  driverIds.forEach((driverId) => {
+    result.set(
+      driverId,
+      buildDriverPerformance(
+        loadsByDriver.get(driverId) || [],
+        driverRateMap.get(driverId) || 0,
+        startDate,
+        endDate
+      )
+    );
+  });
+
+  return result;
+}
+
+export async function calculateTruckPerformanceBatch(
+  truckIds: string[],
+  startDate: Date,
+  endDate: Date
+): Promise<Map<string, TruckPerformance>> {
+  if (truckIds.length === 0) {
+    return new Map();
+  }
+
+  const [loads, expenses] = await Promise.all([
+    prisma.load.findMany({
+      where: {
+        truckId: { in: truckIds },
+        status: LoadStatus.COMPLETED,
+        actualDeliveryDate: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        id: true,
+        truckId: true,
+        distance: true,
+        deadheadMiles: true,
+        customRatePerMile: true,
+        detentionPay: true,
+        actualDeliveryDate: true,
+        driver: {
+          select: {
+            ratePerMile: true,
+          },
+        },
+      },
+    }),
+    prisma.truckExpense.findMany({
+      where: {
+        truckId: { in: truckIds },
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        truckId: true,
+        type: true,
+        amount: true,
+        date: true,
+      },
+    }),
+  ]);
+
+  const loadsByTruck = new Map<string, TruckPerformanceLoadRecord[]>();
+  loads.forEach((load) => {
+    if (!load.truckId) return;
+    const items = loadsByTruck.get(load.truckId) || [];
+    items.push(load);
+    loadsByTruck.set(load.truckId, items);
+  });
+
+  const expensesByTruck = new Map<string, TruckExpenseRecord[]>();
+  expenses.forEach((expense) => {
+    if (!expense.truckId) return;
+    const items = expensesByTruck.get(expense.truckId) || [];
+    items.push(expense);
+    expensesByTruck.set(expense.truckId, items);
+  });
+
+  const result = new Map<string, TruckPerformance>();
+  truckIds.forEach((truckId) => {
+    result.set(
+      truckId,
+      buildTruckPerformance(
+        loadsByTruck.get(truckId) || [],
+        expensesByTruck.get(truckId) || [],
+        startDate,
+        endDate
+      )
+    );
+  });
+
+  return result;
 }
 
 /**

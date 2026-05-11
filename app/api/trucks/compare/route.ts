@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
-import { calculateTruckPerformance } from '@/lib/performanceCalculator';
+import { calculateTruckPerformanceBatch } from '@/lib/performanceCalculator';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = "nodejs";
@@ -97,23 +97,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate performance for each truck
-    const comparisons = await Promise.all(
-      trucks.map(async (truck) => {
-        const performance = await calculateTruckPerformance(
-          truck.id,
-          startDate,
-          endDate
-        );
-
-        return {
-          truckId: truck.id,
-          truckNumber: truck.truckNumber,
-          truckName: `${truck.make} ${truck.model} (${truck.year})`,
-          isActive: truck.isActive,
-          performance,
-        };
-      })
+    const performanceByTruck = await calculateTruckPerformanceBatch(
+      trucks.map((truck) => truck.id),
+      startDate,
+      endDate
     );
+
+    const comparisons = trucks.map((truck) => ({
+      truckId: truck.id,
+      truckNumber: truck.truckNumber,
+      truckName: `${truck.make} ${truck.model} (${truck.year})`,
+      isActive: truck.isActive,
+      performance: performanceByTruck.get(truck.id)!,
+    }));
 
     // Calculate rankings
     const rankings = {
