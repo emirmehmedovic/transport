@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
-import { LoadStatus } from "@prisma/client";
+import { LoadStatus, Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,8 +51,8 @@ function addDays(date: Date, days: number) {
   return d;
 }
 
-async function calculateRevenueSum(startDate: Date, endDate: Date) {
-  const result = await prisma.load.aggregate({
+async function fetchRevenueLoads(startDate: Date, endDate: Date) {
+  return prisma.load.findMany({
     where: {
       status: { in: COMPLETED_LOAD_STATUSES },
       actualDeliveryDate: {
@@ -60,16 +60,31 @@ async function calculateRevenueSum(startDate: Date, endDate: Date) {
         lte: endDate,
       },
     },
-    _sum: {
+    select: {
+      actualDeliveryDate: true,
       loadRate: true,
       detentionPay: true,
     },
   });
+}
 
-  const loadRate = result._sum?.loadRate || 0;
-  const detention = result._sum?.detentionPay || 0;
+function sumRevenueForPeriod(
+  loads: Array<{
+    actualDeliveryDate: Date | null;
+    loadRate: number;
+    detentionPay: number | null;
+  }>,
+  startDate: Date,
+  endDate: Date
+) {
+  return loads.reduce((sum, load) => {
+    if (!load.actualDeliveryDate) return sum;
+    if (load.actualDeliveryDate < startDate || load.actualDeliveryDate > endDate) {
+      return sum;
+    }
 
-  return loadRate + detention;
+    return sum + load.loadRate + (load.detentionPay || 0);
+  }, 0);
 }
 
 export async function GET(req: NextRequest) {
@@ -87,23 +102,18 @@ export async function GET(req: NextRequest) {
 
     const [
       activeLoadsCount,
-      revenueToday,
-      revenueThisWeek,
-      revenueThisMonth,
       driversOnRoad,
       activeTrucks,
       alerts,
       revenueTrend,
       activeLoads,
+      revenueLoads,
     ] = await Promise.all([
       prisma.load.count({
         where: {
           status: { in: ACTIVE_LOAD_STATUSES },
         },
       }),
-      calculateRevenueSum(dayStart, now),
-      calculateRevenueSum(weekStart, now),
-      calculateRevenueSum(monthStart, now),
       prisma.load
         .groupBy({
           by: ["driverId"],
@@ -148,7 +158,12 @@ export async function GET(req: NextRequest) {
           },
         },
       }),
+      fetchRevenueLoads(monthStart, now),
     ]);
+
+    const revenueToday = sumRevenueForPeriod(revenueLoads, dayStart, now);
+    const revenueThisWeek = sumRevenueForPeriod(revenueLoads, weekStart, now);
+    const revenueThisMonth = sumRevenueForPeriod(revenueLoads, monthStart, now);
 
     return NextResponse.json({
       KPIs: {
@@ -224,22 +239,19 @@ async function buildAlertsSummary(now: Date) {
 
 async function buildRevenueTrend(now: Date) {
   const startPoint = startOfMonth(addMonths(now, -5));
-
-  const loads = await prisma.load.findMany({
-    where: {
-      status: { in: COMPLETED_LOAD_STATUSES },
-      actualDeliveryDate: {
-        gte: startPoint,
-        lte: now,
-      },
-    },
-    select: {
-      actualDeliveryDate: true,
-      loadRate: true,
-      detentionPay: true,
-    },
-    orderBy: { actualDeliveryDate: "asc" },
-  });
+  const rows = await prisma.$queryRaw<Array<{ month: Date; revenue: number }>>(
+    Prisma.sql`
+      SELECT
+        date_trunc('month', "actualDeliveryDate") AS month,
+        COALESCE(SUM("loadRate" + COALESCE("detentionPay", 0)), 0)::float8 AS revenue
+      FROM "Load"
+      WHERE "status" IN (${Prisma.join(COMPLETED_LOAD_STATUSES)})
+        AND "actualDeliveryDate" >= ${startPoint}
+        AND "actualDeliveryDate" <= ${now}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `
+  );
 
   const trendMap = new Map<string, number>();
 
@@ -249,12 +261,10 @@ async function buildRevenueTrend(now: Date) {
     trendMap.set(key, 0);
   }
 
-  loads.forEach((load) => {
-    if (!load.actualDeliveryDate) return;
-    const date = load.actualDeliveryDate;
+  rows.forEach((row) => {
+    const date = new Date(row.month);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    const current = trendMap.get(key) || 0;
-    trendMap.set(key, current + load.loadRate + (load.detentionPay || 0));
+    trendMap.set(key, row.revenue || 0);
   });
 
   return Array.from(trendMap.entries()).map(([month, value]) => ({

@@ -23,6 +23,26 @@ export interface Alert {
   acknowledgedById?: string | null;
 }
 
+function getAlertUrgencyByDays(daysUntil: number): AlertUrgency {
+  if (daysUntil <= 7) return "urgent";
+  if (daysUntil <= 15) return "warning";
+  return "info";
+}
+
+function buildAlertBreakdown(alerts: Alert[]) {
+  return alerts.reduce(
+    (acc, alert) => {
+      acc[alert.urgency] += 1;
+      return acc;
+    },
+    {
+      urgent: 0,
+      warning: 0,
+      info: 0,
+    } as Record<AlertUrgency, number>
+  );
+}
+
 /**
  * GET /api/dashboard/alerts
  * Vraća sve aktivne alerte kategorizirane po urgentnosti
@@ -41,15 +61,27 @@ export async function GET(request: NextRequest) {
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-    // CDL Licenses expiring
-    const driversWithExpiringCDL = await prisma.driver.findMany({
+    const driversWithExpiringDocs = await prisma.driver.findMany({
       where: {
-        cdlExpiry: {
-          lte: thirtyDaysFromNow,
-          gte: now,
-        },
+        OR: [
+          {
+            cdlExpiry: {
+              lte: thirtyDaysFromNow,
+              gte: now,
+            },
+          },
+          {
+            medicalCardExpiry: {
+              lte: thirtyDaysFromNow,
+              gte: now,
+            },
+          },
+        ],
       },
-      include: {
+      select: {
+        id: true,
+        cdlExpiry: true,
+        medicalCardExpiry: true,
         user: {
           select: {
             firstName: true,
@@ -59,59 +91,43 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    for (const driver of driversWithExpiringCDL) {
-      const daysUntil = Math.ceil(
-        (new Date(driver.cdlExpiry).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      );
+    for (const driver of driversWithExpiringDocs) {
+      if (driver.cdlExpiry) {
+        const daysUntil = Math.ceil(
+          (new Date(driver.cdlExpiry).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
 
-      alerts.push({
-        id: `cdl-${driver.id}`,
-        type: "compliance",
-        urgency: daysUntil <= 7 ? "urgent" : daysUntil <= 15 ? "warning" : "info",
-        title: "CDL License Expiring",
-        description: `${driver.user.firstName} ${driver.user.lastName} - CDL ističe za ${daysUntil} dana`,
-        entityId: driver.id,
-        entityType: "driver",
-        createdAt: now,
-        daysUntil,
-      });
-    }
+        alerts.push({
+          id: `cdl-${driver.id}`,
+          type: "compliance",
+          urgency: getAlertUrgencyByDays(daysUntil),
+          title: "CDL License Expiring",
+          description: `${driver.user.firstName} ${driver.user.lastName} - CDL ističe za ${daysUntil} dana`,
+          entityId: driver.id,
+          entityType: "driver",
+          createdAt: now,
+          daysUntil,
+        });
+      }
 
-    // Medical Cards expiring
-    const driversWithExpiringMedical = await prisma.driver.findMany({
-      where: {
-        medicalCardExpiry: {
-          lte: thirtyDaysFromNow,
-          gte: now,
-        },
-      },
-      include: {
-        user: {
-          select: {
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-    });
+      if (driver.medicalCardExpiry) {
+        const daysUntil = Math.ceil(
+          (new Date(driver.medicalCardExpiry).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
 
-    for (const driver of driversWithExpiringMedical) {
-      const daysUntil = Math.ceil(
-        (new Date(driver.medicalCardExpiry).getTime() - now.getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
-
-      alerts.push({
-        id: `medical-${driver.id}`,
-        type: "compliance",
-        urgency: daysUntil <= 7 ? "urgent" : daysUntil <= 15 ? "warning" : "info",
-        title: "Medical Card Expiring",
-        description: `${driver.user.firstName} ${driver.user.lastName} - Medical card ističe za ${daysUntil} dana`,
-        entityId: driver.id,
-        entityType: "driver",
-        createdAt: now,
-        daysUntil,
-      });
+        alerts.push({
+          id: `medical-${driver.id}`,
+          type: "compliance",
+          urgency: getAlertUrgencyByDays(daysUntil),
+          title: "Medical Card Expiring",
+          description: `${driver.user.firstName} ${driver.user.lastName} - Medical card ističe za ${daysUntil} dana`,
+          entityId: driver.id,
+          entityType: "driver",
+          createdAt: now,
+          daysUntil,
+        });
+      }
     }
 
     // Truck Registration & Insurance expiring
@@ -284,7 +300,11 @@ export async function GET(request: NextRequest) {
           gte: now,
         },
       },
-      include: {
+      select: {
+        id: true,
+        countryCode: true,
+        type: true,
+        validTo: true,
         truck: {
           select: {
             id: true,
@@ -326,15 +346,18 @@ export async function GET(request: NextRequest) {
         actualDeliveryDate: {
           lte: twentyFourHoursAgo,
         },
-      },
-      include: {
         documents: {
-          where: {
+          none: {
             type: "POD",
           },
         },
+      },
+      select: {
+        id: true,
+        loadNumber: true,
+        actualDeliveryDate: true,
         driver: {
-          include: {
+          select: {
             user: {
               select: {
                 firstName: true,
@@ -347,29 +370,27 @@ export async function GET(request: NextRequest) {
     });
 
     for (const load of loadsWithoutPOD) {
-      if (load.documents.length === 0) {
-        const hoursSinceDelivery = load.actualDeliveryDate
-          ? Math.ceil(
-              (now.getTime() - new Date(load.actualDeliveryDate).getTime()) /
-                (1000 * 60 * 60)
-            )
-          : 0;
+      const hoursSinceDelivery = load.actualDeliveryDate
+        ? Math.ceil(
+            (now.getTime() - new Date(load.actualDeliveryDate).getTime()) /
+              (1000 * 60 * 60)
+          )
+        : 0;
 
-        const driverName = load.driver
-          ? `${load.driver.user.firstName} ${load.driver.user.lastName}`
-          : "Unknown";
+      const driverName = load.driver
+        ? `${load.driver.user.firstName} ${load.driver.user.lastName}`
+        : "Unknown";
 
-        alerts.push({
-          id: `pod-${load.id}`,
-          type: "documents",
-          urgency: hoursSinceDelivery > 48 ? "urgent" : "warning",
-          title: "Missing POD",
-          description: `Load ${load.loadNumber} (${driverName}) - POD nedostaje ${hoursSinceDelivery}h`,
-          entityId: load.id,
-          entityType: "load",
-          createdAt: now,
-        });
-      }
+      alerts.push({
+        id: `pod-${load.id}`,
+        type: "documents",
+        urgency: hoursSinceDelivery > 48 ? "urgent" : "warning",
+        title: "Missing POD",
+        description: `Load ${load.loadNumber} (${driverName}) - POD nedostaje ${hoursSinceDelivery}h`,
+        entityId: load.id,
+        entityType: "load",
+        createdAt: now,
+      });
     }
 
     // 5. BORDER CONFIRMATION ALERTS - Driver confirmation pending
@@ -494,13 +515,6 @@ export async function GET(request: NextRequest) {
       return 0;
     });
 
-    // Breakdown by urgency
-    const breakdown = {
-      urgent: alerts.filter((a) => a.urgency === "urgent").length,
-      warning: alerts.filter((a) => a.urgency === "warning").length,
-      info: alerts.filter((a) => a.urgency === "info").length,
-    };
-
     const includeAcknowledged =
       request.nextUrl.searchParams.get("includeAcknowledged") === "1";
 
@@ -537,13 +551,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const breakdown = buildAlertBreakdown(alerts);
+
     return NextResponse.json({
       total: alerts.length,
-      breakdown: {
-        urgent: alerts.filter((a) => a.urgency === "urgent").length,
-        warning: alerts.filter((a) => a.urgency === "warning").length,
-        info: alerts.filter((a) => a.urgency === "info").length,
-      },
+      breakdown,
       alerts,
     });
   } catch (error) {

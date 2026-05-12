@@ -221,6 +221,15 @@ export function DriverReplayExplorer({
     });
   }, [driverOptions, driverSearch]);
 
+  const formattedAverageSpeed = useMemo(() => {
+    const value = statistics?.avgSpeed;
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return "0.0";
+    }
+
+    return value.toFixed(1);
+  }, [statistics?.avgSpeed]);
+
   const fetchPositions = async (driverId: string) => {
     try {
       setLoading(true);
@@ -513,7 +522,7 @@ ${positions
             </div>
             <div className="bg-white rounded-xl p-4 border border-dark-200">
               <p className="text-sm text-dark-400">Prosječna Brzina</p>
-              <p className="text-2xl font-bold">{statistics.avgSpeed} km/h</p>
+              <p className="text-2xl font-bold">{formattedAverageSpeed} km/h</p>
             </div>
             <div className="bg-white rounded-xl p-4 border border-dark-200">
               <p className="text-sm text-dark-400">Ukupna Distanca</p>

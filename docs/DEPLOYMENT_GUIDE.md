@@ -2,9 +2,17 @@
 
 ## 📋 PREGLED PROJEKTA
 
+**Production topologija za ovaj projekat:**
+- jedan VM/server
+- Next.js aplikacija na istom VM-u
+- PostgreSQL baza na istom VM-u
+- OSRM servis na istom VM-u
+
+To znači da planiranje resursa treba raditi za objedinjeno opterećenje aplikacije, baze i routing servisa.
+
 **Tehnologije:**
 - Next.js 14 (Frontend + Backend API)
-- PostgreSQL (Neon Database)
+- PostgreSQL
 - Prisma ORM (32 modela)
 - React Native (Expo) - Mobile app
 - OSRM - Routing engine
@@ -41,13 +49,19 @@ RAM: +4GB (ukupno 8GB minimum)
 Disk: +10GB za West Balkan mapu
 ```
 
+**Preporuka za jedan zajednički VM gdje su aplikacija + PostgreSQL + OSRM:**
+```
+CPU: 4 cores minimum
+RAM: 8GB minimum, 12-16GB preporučeno
+Disk: 60GB SSD minimum
+```
+
 ### 1.2 Potrebni Nalozi i Ključevi
 
-**1. Neon Database (PostgreSQL)**
-```
-Registracija: https://neon.tech
-Kreiraj novi projekat: transport-production
-Kopiraj connection string
+**1. PostgreSQL Database**
+```bash
+# Baza će biti hostana na istom VM-u kao aplikacija i OSRM
+# Kreiraj production bazu i korisnika
 ```
 
 **2. Telegram Bot**
@@ -66,10 +80,10 @@ Registracija: https://expo.dev
 Kreiraj projekat ili koristi postojeći
 ```
 
-**4. Vercel Account (opciono, za cloud deployment)**
+**4. Vercel Account (opciono, samo za test/staging)**
 ```
-Registracija: https://vercel.com
-Poveži GitHub repository
+Vercel može poslužiti za privremeni staging/test deploy.
+Za ovaj projekat production treba tretirati kao self-hosted setup.
 ```
 
 ---
@@ -78,12 +92,13 @@ Poveži GitHub repository
 
 ### 2.1 Kreiranje Production Database
 
-**Na Neon.tech:**
+**Na istom VM-u (lokalni PostgreSQL):**
 ```sql
--- Neon automatski kreira database
--- Samo kopiraj connection string
+CREATE DATABASE transport_production;
+CREATE USER transport_user WITH ENCRYPTED PASSWORD 'PROMIJENI_OVO';
+GRANT ALL PRIVILEGES ON DATABASE transport_production TO transport_user;
 
-postgresql://neondb_owner:PASSWORD@HOST.neon.tech/neondb?sslmode=require&channel_binding=require
+postgresql://transport_user:PASSWORD@127.0.0.1:5432/transport_production
 ```
 
 ### 2.2 Primjena Migracija
@@ -152,6 +167,15 @@ npm run seed
 ---
 
 ## 🗺️ FAZA 3: OSRM SETUP (Routing Engine)
+
+**Važna napomena za ovaj projekat:**
+- trenutna skripta `scripts/setup-osrm-west-balkan.sh` koristi Docker za OSRM preprocessing
+- i najjednostavniji documented način za `osrm-routed` u ovom projektu je Docker
+- ako želiš potpuno bez Dockera, trebaš zasebno instalirati native `osrm-backend` binarije i napraviti `systemd` servis za `osrm-routed`
+- taj native no-Docker OSRM setup trenutno nije detaljno razrađen u ovom guide-u
+
+Ako želiš native OSRM proces pod PM2, u repou sada postoji primjer:
+- [ecosystem.osrm.example.config.js](/Users/emir_mw/transport/ecosystem.osrm.example.config.js)
 
 ### 3.1 Preuzimanje OSM Podataka
 
@@ -225,12 +249,107 @@ curl "http://localhost:5000/route/v1/driving/18.4131,43.8564;16.4333,43.5119?ove
 
 **PM2 način (ako Docker nije opcija):**
 
-Možeš koristiti javni OSRM endpoint:
+Možeš privremeno koristiti javni OSRM endpoint:
 ```env
 OSRM_BASE_URL=https://router.project-osrm.org
 ```
 
-**Napomena:** Javni OSRM ima rate limite. Za production obavezno koristi vlastiti server.
+**Napomena:** Javni OSRM ima rate limite i nije dobar production izbor. Za production obavezno koristi vlastiti OSRM servis na serveru ili kao zaseban servis na istoj infrastrukturi.
+
+Ako danas ideš potpuno bez Dockera, ova sekcija još nije dovoljna za OSRM. U tom slučaju prije deploya trebaš imati:
+- instalirane native `osrm-backend` binarije
+- odrađen preprocessing nad `.osm.pbf` fajlom
+- `systemd` servis za `osrm-routed`
+
+Za web aplikaciju, PM2 i PostgreSQL guide je spreman. Za native no-Docker OSRM treba dodatno razraditi poseban deployment korak.
+
+### 3.2.A Native OSRM + PM2
+
+Ovo je preporučeni smjer ako želiš OSRM bez Dockera, ali i dalje želiš jednostavan proces management preko PM2.
+
+Prema službenom OSRM `osrm-backend` README-u, Linux build from source ide ovim putem:
+
+```bash
+sudo apt install build-essential git cmake ninja-build pkg-config \
+  autoconf automake libtool curl zip unzip tar
+
+git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
+~/vcpkg/bootstrap-vcpkg.sh
+export VCPKG_ROOT=~/vcpkg
+```
+
+Zatim kloniraj OSRM source:
+
+```bash
+cd /opt
+sudo git clone https://github.com/Project-OSRM/osrm-backend.git
+sudo chown -R $USER:$USER /opt/osrm-backend
+cd /opt/osrm-backend
+```
+
+Build i install binarija:
+
+```bash
+cmake --preset ci-linux
+cmake --build --preset ci-linux
+sudo cmake --install build
+```
+
+To po službenom README-u instalira OSRM binarije, uključujući `osrm-extract`, `osrm-partition`, `osrm-customize` i `osrm-routed`.
+
+Predloženi layout na VM-u:
+
+```text
+/opt/osrm-backend        # source checkout i profiles/car.lua
+/opt/osrm/data           # country .osm.pbf fajlovi
+/opt/osrm/build          # merged .osm.pbf i .osrm* output
+```
+
+Primjer native preprocessing bez Dockera:
+
+```bash
+mkdir -p /opt/osrm/data /opt/osrm/build
+cd /opt/osrm/build
+
+osmium merge \
+  /opt/osrm/data/bosnia-herzegovina-latest.osm.pbf \
+  /opt/osrm/data/croatia-latest.osm.pbf \
+  /opt/osrm/data/serbia-latest.osm.pbf \
+  /opt/osrm/data/slovenia-latest.osm.pbf \
+  -o /opt/osrm/build/west-balkan-core.osm.pbf \
+  --overwrite
+
+osrm-extract -p /opt/osrm-backend/profiles/car.lua /opt/osrm/build/west-balkan-core.osm.pbf
+osrm-partition /opt/osrm/build/west-balkan-core.osrm
+osrm-customize /opt/osrm/build/west-balkan-core.osrm
+```
+
+PM2 primjer:
+
+```bash
+cp /var/www/transport/ecosystem.osrm.example.config.js /opt/osrm/ecosystem.osrm.config.js
+pm2 start /opt/osrm/ecosystem.osrm.config.js
+pm2 save
+```
+
+Sadržaj primjera je već pripremljen u:
+- [ecosystem.osrm.example.config.js](/Users/emir_mw/transport/ecosystem.osrm.example.config.js)
+
+Taj primjer pretpostavlja:
+- `osrm-routed` instaliran u `/usr/local/bin/osrm-routed`
+- dataset baza u `/opt/osrm/build/west-balkan-core.osrm`
+
+Test nakon starta:
+
+```bash
+curl "http://127.0.0.1:5000/route/v1/driving/18.4131,43.8564;16.4333,43.5119?steps=true"
+```
+
+Ako to radi, u aplikaciji koristi:
+
+```env
+OSRM_BASE_URL=http://127.0.0.1:5000
+```
 
 ### 3.3 Verifikacija OSRM-a
 
@@ -265,7 +384,26 @@ python3 build-schengen-geojson.py
 SCHENGEN_GEOJSON_PATH=./data/schengen.geojson
 ```
 
-### 4.2 Border Crossings (Granični Prelazi)
+### 4.2 Bosnia Polygon GeoJSON
+
+**Fajl:** `/data/bih.geojson`
+
+Ovaj fajl nije dio repozitorija i mora postojati ako želiš da Bosnia polygon logika radi ispravno.
+
+```bash
+ls -lh /path/to/transport/data/bih.geojson
+```
+
+Ako fajl ne postoji:
+- dodaj validan Bosnia-Herzegovina GeoJSON polygon u `data/bih.geojson`
+- ili privremeno isključi ovu logiku dok fajl ne pripremiš
+
+**Environment variable:**
+```env
+BIH_GEOJSON_PATH=./data/bih.geojson
+```
+
+### 4.3 Border Crossings (Granični Prelazi)
 
 **Fajl:** `/data/border-crossings.ts`
 
@@ -285,7 +423,7 @@ SCHENGEN_GEOJSON_PATH=./data/schengen.geojson
 
 Nema dodatnih akcija - seed skripta automatski importuje.
 
-### 4.3 Landmarks Import (Opciono)
+### 4.4 Landmarks Import (Opciono)
 
 Ako imaš dodatne landmarks (benzinske, terminale, luke):
 
@@ -317,7 +455,7 @@ node scripts/import-landmarks.js
 # ============================================
 # DATABASE
 # ============================================
-DATABASE_URL=postgresql://neondb_owner:YOUR_PASSWORD@YOUR_HOST.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=postgresql://transport_user:YOUR_PASSWORD@127.0.0.1:5432/transport_production
 
 # ============================================
 # JWT SECRETS (OBAVEZNO PROMIJENITI!)
@@ -337,7 +475,8 @@ TELEGRAM_ADMIN_CHAT_ID=YOUR_NUMERIC_CHAT_ID
 # ============================================
 # FILE UPLOAD
 # ============================================
-UPLOAD_DIR=./uploads
+# Aplikacija trenutno koristi lokalni folder ./uploads
+# UPLOAD_DIR nije aktivna runtime varijabla u trenutnoj implementaciji
 MAX_FILE_SIZE=10485760
 
 # ============================================
@@ -398,57 +537,20 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## 🚀 FAZA 6: APPLICATION DEPLOYMENT
 
-### Opcija A: Vercel Deployment (Cloud - Preporučeno)
+### Primarni model: Self-Hosted (firmin server / private VPS / dedicated)
 
-**Prednosti:**
-- Automatski deploy on git push
-- Serverless (beskonačna skalabilnost)
-- Besplatni tier (Hobby plan)
-- Automatski SSL
-- Cron jobs uključeni
+Ovaj projekat u production okruženju treba tretirati kao self-hosted aplikaciju zbog:
+- lokalnog `uploads` storage-a
+- vlastitog OSRM servisa
+- GeoJSON fajlova sa diska
+- cron procesa koji su sastavni dio sistema
 
-**Setup:**
+Vercel može ostati samo kao staging/test opcija ako želiš brzo validirati web dio, ali nije preporučen kao glavni production deployment za ovu arhitekturu.
 
-```bash
-# 1. Install Vercel CLI
-npm install -g vercel
-
-# 2. Login
-vercel login
-
-# 3. Link project
-cd /path/to/transport
-vercel link
-
-# 4. Add environment variables
-vercel env add DATABASE_URL
-# ... dodaj sve environment variables jedan po jedan
-
-# Ili koristi Vercel dashboard:
-# https://vercel.com/your-team/your-project/settings/environment-variables
-
-# 5. Deploy
-vercel --prod
-```
-
-**Vercel Dashboard Setup:**
-1. Importuj GitHub repo
-2. Dodaj environment variables
-3. Vercel automatski detektuje Next.js
-4. Deploy!
-
-**Cron Jobs:**
-Već konfigurisan u `vercel.json`:
-```json
-{
-  "crons": [{
-    "path": "/api/cron/generate-route-plan-loads",
-    "schedule": "0 6 * * *"
-  }]
-}
-```
-
-### Opcija B: Self-Hosted (VPS/Dedicated Server)
+U ovom konkretnom deploymentu pretpostavka je:
+- aplikacija, PostgreSQL i OSRM rade na istom VM-u
+- koristi se lokalni `localhost` network između servisa gdje god je moguće
+- treba paziti na RAM i disk jer OSRM i PostgreSQL dijele iste resurse
 
 **1. Prepare Server**
 
@@ -468,6 +570,25 @@ sudo apt-get install -y git
 
 # Install Nginx (reverse proxy)
 sudo apt-get install -y nginx
+
+# Install Docker (only ako OSRM ostaje na Docker modelu)
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+
+# Optional but recommended for OSM merge
+sudo apt-get install -y osmium-tool
+
+# Security hardening basics
+sudo apt-get install -y fail2ban ufw unattended-upgrades
 ```
 
 **2. Clone Repository**
@@ -488,6 +609,13 @@ npm install
 npm run build
 ```
 
+**2.1 PostgreSQL on the same VM**
+
+Ako baza radi na istom VM-u, preporuka je:
+- PostgreSQL da sluša samo na `127.0.0.1`
+- aplikacija da pristupa bazi preko lokalnog `DATABASE_URL`
+- ne otvarati port `5432` prema internetu
+
 **3. Create Uploads Directory**
 
 ```bash
@@ -497,38 +625,42 @@ chmod 755 /var/www/transport/uploads
 
 **4. PM2 Configuration**
 
-**Kreirati:** `/var/www/transport/ecosystem.config.js`
+Repo već sadrži PM2 config:
+
+- [ecosystem.config.js](/Users/emir_mw/transport/ecosystem.config.js)
+
+Na VM-u ga ne trebaš ručno pisati, samo ga koristiš nakon kloniranja repoa.
 
 ```javascript
 module.exports = {
   apps: [
     {
-      name: 'transport-app',
-      script: 'npm',
-      args: 'start',
-      cwd: '/var/www/transport',
+      name: "transport-app",
+      script: "npm",
+      args: "start",
+      cwd: __dirname,
       instances: 2,
-      exec_mode: 'cluster',
+      exec_mode: "cluster",
       env: {
-        NODE_ENV: 'production',
+        NODE_ENV: "production",
         PORT: 3000
       },
-      error_file: '/var/log/pm2/transport-error.log',
-      out_file: '/var/log/pm2/transport-out.log',
       time: true
     },
     {
-      name: 'transport-cron',
-      script: 'node',
-      args: 'scripts/cron-runner.ts',
-      cwd: '/var/www/transport',
+      name: "transport-cron",
+      script: "npm",
+      args: "run cron:start",
+      cwd: __dirname,
       instances: 1,
-      cron_restart: '0 */6 * * *',
-      autorestart: true
+      autorestart: true,
+      time: true
     }
   ]
 };
 ```
+
+`transport-cron` pokreće interni scheduler iz `scripts/cron-runner.ts`, pa iste recurring/notification poslove ne treba dodatno stavljati u system `crontab`.
 
 **5. Start Application**
 
@@ -619,16 +751,15 @@ sudo systemctl reload nginx
 # Edit crontab
 crontab -e
 
-# Add these lines:
-# Generate recurring loads daily at midnight
-0 0 * * * cd /var/www/transport && node scripts/recurring-runner.ts >> /var/log/transport-recurring.log 2>&1
-
-# Run notifications daily at 6:30 AM
-30 6 * * * cd /var/www/transport && node scripts/notification-runner.ts >> /var/log/transport-notifications.log 2>&1
-
+# Add only this line:
 # Generate route plan loads daily at 6 AM
-0 6 * * * cd /var/www/transport && curl -X GET "http://localhost:3000/api/cron/generate-route-plan-loads?secret=$CRON_SECRET" >> /var/log/transport-cron.log 2>&1
+0 6 * * * curl -s -X GET "http://localhost:3000/api/cron/generate-route-plan-loads" -H "Authorization: Bearer YOUR_CRON_SECRET" >> /var/log/transport-route-plan-cron.log 2>&1
 ```
+
+**Važno:**
+- `recurring loads` i `notifications` već pokriva `transport-cron` PM2 proces
+- nemoj iste poslove dodatno stavljati u `crontab`, jer ćeš dobiti duplo izvršavanje
+- jedini API cron koji se trenutno poziva spolja je `generate-route-plan-loads`
 
 ---
 
@@ -642,6 +773,8 @@ crontab -e
 EXPO_PUBLIC_API_BASE_URL=https://tvoja-domena.com
 EXPO_PUBLIC_EAS_PROJECT_ID=your-eas-project-id
 ```
+
+`EXPO_PUBLIC_EAS_PROJECT_ID` je bitan za stabilnu Expo push registraciju u production buildovima. Nemoj ga preskočiti.
 
 ### 7.2 Build APK
 
@@ -789,11 +922,13 @@ curl -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
 **5. Test Cron Jobs:**
 
 ```bash
-# Manual test recurring loads
-curl "https://tvoja-domena.com/api/cron/recurring-loads?secret=$CRON_SECRET"
-
 # Manual test route plan loads
-curl "https://tvoja-domena.com/api/cron/generate-route-plan-loads?secret=$CRON_SECRET"
+curl -X GET "https://tvoja-domena.com/api/cron/generate-route-plan-loads" \
+  -H "Authorization: Bearer $CRON_SECRET"
+
+# Manual test internal cron runner
+cd /var/www/transport
+npm run cron:start
 ```
 
 ### 8.2 Functional Tests
@@ -834,13 +969,144 @@ time_total:  %{time_total}\n
 ### 8.4 Security Checklist
 
 - [ ] JWT secrets promijenjeni
-- [ ] Database connection preko SSL
+- [ ] PostgreSQL dostupan samo lokalno na `127.0.0.1`
 - [ ] HTTPS certifikat aktivan
 - [ ] Rate limiting radi
 - [ ] CORS properly configured
 - [ ] No sensitive data in logs
 - [ ] File upload restrictions active
 - [ ] Backup strategy defined
+
+### 8.5 VM Hardening i Security
+
+**OS hardening minimum:**
+
+```bash
+# Enable firewall
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+
+# Enable automatic security updates
+sudo dpkg-reconfigure -plow unattended-upgrades
+
+# Start and enable fail2ban
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+```
+
+**SSH hardening preporuka:**
+- koristi SSH key login
+- isključi password login ako je moguće
+- promijeni ili strogo ograniči root SSH pristup
+- po mogućnosti koristi poseban admin user sa `sudo`
+
+Primjer bitnih `sshd_config` postavki:
+
+```conf
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+X11Forwarding no
+MaxAuthTries 5
+```
+
+Nakon izmjene:
+
+```bash
+sudo systemctl restart ssh
+```
+
+**Fail2ban minimum jail:**
+
+**Kreirati:** `/etc/fail2ban/jail.local`
+
+```ini
+[sshd]
+enabled = true
+port = 22
+logpath = %(sshd_log)s
+maxretry = 5
+bantime = 1h
+findtime = 10m
+```
+
+Zatim:
+
+```bash
+sudo systemctl restart fail2ban
+sudo fail2ban-client status
+sudo fail2ban-client status sshd
+```
+
+**PostgreSQL hardening:**
+- `listen_addresses = '127.0.0.1'`
+- u `pg_hba.conf` dozvoli samo lokalne konekcije za aplikacijskog usera
+- ne otvarati `5432` javno ako baza ostaje na istom VM-u
+
+Primjer:
+
+```conf
+# postgresql.conf
+listen_addresses = '127.0.0.1'
+```
+
+```conf
+# pg_hba.conf
+local   all             all                                     scram-sha-256
+host    transport_production   transport_user   127.0.0.1/32   scram-sha-256
+```
+
+**Nginx hardening preporuka:**
+- sakrij Nginx verziju
+- ograniči request burst na login/API rutama
+- ostavi samo `80/443` javno otvorene
+- ako imaš vanjski firewall, host firewall i dalje zadrži kao drugi sloj zaštite
+
+Primjer dodatka u `nginx.conf`:
+
+```nginx
+server_tokens off;
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=login_limit:10m rate=5r/m;
+```
+
+Primjer na osjetljivim rutama:
+
+```nginx
+location /api/auth/login {
+    limit_req zone=login_limit burst=10 nodelay;
+    proxy_pass http://localhost:3000;
+}
+
+location /api/ {
+    limit_req zone=api_limit burst=30 nodelay;
+    proxy_pass http://localhost:3000;
+}
+```
+
+**File system i procesi:**
+- aplikaciju pokrenuti pod ne-root korisnikom
+- `.env` držati sa dozvolama `600`
+- `uploads` folder ne smije biti writable svima
+- PM2 procese pokretati pod aplikacijskim userom, ne pod root-om
+
+Primjer:
+
+```bash
+chmod 600 /var/www/transport/.env
+chmod 755 /var/www/transport/uploads
+chown -R appuser:appuser /var/www/transport
+```
+
+**Dodatno preporučeno prije go-live:**
+- `npm audit` pregledati i procijeniti kritične nalaze
+- osigurati `logrotate` za PM2/Nginx logove
+- testirati restore iz backup-a, ne samo backup kreiranje
+- Telegram alerting ostaviti aktivan za health-check i disk usage
 
 ---
 
@@ -881,9 +1147,8 @@ sudo tail -f /var/log/nginx/access.log | grep "1.2.3.4"
 
 ```bash
 # Cron logs
-tail -f /var/log/transport-recurring.log
-tail -f /var/log/transport-notifications.log
-tail -f /var/log/transport-cron.log
+pm2 logs transport-cron
+tail -f /var/log/transport-route-plan-cron.log
 ```
 
 ### 9.2 Database Monitoring
@@ -909,7 +1174,7 @@ LIMIT 10;"
 
 ### 9.3 Backup Strategy
 
-**Database Backup (Neon ima automatski backup):**
+**Database Backup (lokalni PostgreSQL na istom VM-u):**
 
 ```bash
 # Manual backup
@@ -971,14 +1236,24 @@ else
     echo "✅ App is running"
 fi
 
-# Check database connectivity
-if ! curl -s "http://localhost:3000/api/health" | grep -q "ok"; then
-    echo "❌ Database connection failed!"
+# Check HTTP liveness
+if ! curl -fsS "http://localhost:3000/" > /dev/null; then
+    echo "❌ Application HTTP check failed!"
     curl -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
       -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
-      -d "text=🚨 Transport app database connection failed!"
+      -d "text=🚨 Transport app HTTP check failed!"
 else
-    echo "✅ Database is accessible"
+    echo "✅ Application HTTP endpoint is accessible"
+fi
+
+# Check database connectivity through Prisma
+if ! cd /var/www/transport && npx prisma migrate status >/dev/null 2>&1; then
+    echo "⚠️  Prisma/database check failed!"
+    curl -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
+      -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
+      -d "text=⚠️ Prisma/database check failed on transport server!"
+else
+    echo "✅ Prisma/database check passed"
 fi
 
 # Check disk space
@@ -1015,7 +1290,7 @@ chmod +x /var/www/transport/scripts/health-check.sh
 - [ ] Server provisioned (CPU/RAM adequate)
 - [ ] Domain DNS configured
 - [ ] SSL certificate obtained
-- [ ] Firewall rules configured (80, 443, 5000)
+- [ ] Firewall rules configured (22, 80, 443)
 - [ ] Monitoring tools installed
 
 ### Database
@@ -1039,7 +1314,7 @@ chmod +x /var/www/transport/scripts/health-check.sh
 - [ ] Environment variables set (all 20+)
 - [ ] JWT secrets generated and secure
 - [ ] Uploads directory created
-- [ ] PM2/Vercel configured
+- [ ] PM2 configured
 - [ ] Reverse proxy configured (Nginx)
 - [ ] SSL/HTTPS active
 
@@ -1052,13 +1327,14 @@ chmod +x /var/www/transport/scripts/health-check.sh
 ### Data
 - [ ] Border crossings seeded (16 total)
 - [ ] Schengen polygon loaded
+- [ ] Bosnia polygon file prepared (`data/bih.geojson`) if Bosnia detection is used
 - [ ] Test users created
 - [ ] Landmarks imported (if applicable)
 
 ### Cron Jobs
-- [ ] Recurring loads generator scheduled
+- [ ] Recurring loads generator active through `transport-cron`
 - [ ] Route plan loads generator scheduled
-- [ ] Notification runner scheduled
+- [ ] Notification runner active through `transport-cron`
 - [ ] Health checks scheduled
 
 ### Mobile App
@@ -1137,11 +1413,15 @@ curl -X POST https://exp.host/--/api/v2/push/send \
 # Check if jobs are scheduled
 crontab -l
 
+# Check PM2 scheduler logs
+pm2 logs transport-cron --lines 100
+
 # Check cron logs
 grep CRON /var/log/syslog
 
-# Run job manually
-curl "http://localhost:3000/api/cron/recurring-loads?secret=$CRON_SECRET"
+# Run route-plan cron manually
+curl -X GET "http://localhost:3000/api/cron/generate-route-plan-loads" \
+  -H "Authorization: Bearer $CRON_SECRET"
 ```
 
 **Problem 5: PM2 app crashed**
@@ -1165,7 +1445,7 @@ Nakon uspješnog deployment-a, imaćete potpuno funkcionalan transport managemen
 ✅ Web dashboard za admin/dispatcher/vozače
 ✅ Mobile app za vozače
 ✅ Real-time GPS tracking
-✅ Route planning sa OSRM
+✅ Route planning sa vlastitim OSRM servisom
 ✅ Schengen 90/180 tracking
 ✅ Automated notifications (Telegram + Push)
 ✅ Document management
@@ -1184,4 +1464,4 @@ Nakon uspješnog deployment-a, imaćete potpuno funkcionalan transport managemen
 
 **Ukupno: 8-12 sati** (sa testiranjem)
 
-Za bilo kakva pitanja ili probleme, kontaktiraj development tim! 🚀
+Za bilo kakva pitanja ili probleme, kontaktiraj development tim.

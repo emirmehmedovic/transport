@@ -97,10 +97,10 @@ export async function GET(
     }
 
     // Fetch positions
-    const positions = await prisma.position.findMany({
+    const rows = await prisma.position.findMany({
       where,
       orderBy: { recordedAt: "asc" },
-      take: limit,
+      take: limit + 1,
       select: {
         id: true,
         latitude: true,
@@ -113,6 +113,8 @@ export async function GET(
         recordedAt: true,
       },
     });
+    const limited = rows.length > limit;
+    const positions = limited ? rows.slice(0, limit) : rows;
 
     // Calculate statistics
     const statistics = {
@@ -139,8 +141,8 @@ export async function GET(
       positions,
       statistics,
       stops,
-      limited: positions.length >= limit,
-      totalAvailable: positions.length,
+      limited,
+      totalAvailable: limited ? rows.length : positions.length,
     });
   } catch (error: any) {
     console.error("Error fetching entity positions:", error);

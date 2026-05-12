@@ -312,6 +312,8 @@ model Driver {
   @@index([userId])
   @@index([status])
   @@index([traccarDeviceId])
+  @@index([cdlExpiry])
+  @@index([medicalCardExpiry])
 }
 
 model Manager {
@@ -399,6 +401,8 @@ model Truck {
 
   @@index([truckNumber])
   @@index([isActive])
+  @@index([isActive, registrationExpiry])
+  @@index([isActive, insuranceExpiry])
 }
 
 model Trailer {
@@ -432,6 +436,8 @@ model Trailer {
 
   @@index([trailerNumber])
   @@index([currentTruckId])
+  @@index([isActive, registrationExpiry])
+  @@index([isActive, insuranceExpiry])
 }
 
 model Inspection {
@@ -607,6 +613,7 @@ model TollPermit {
   @@index([type])
   @@index([status])
   @@index([validTo])
+  @@index([status, validTo])
 }
 
 model Load {
@@ -709,6 +716,11 @@ model Load {
   @@index([actualDeliveryDate])
   @@index([scheduledDeliveryDate])
   @@index([generatedFromRoutePlanId])
+  @@index([status, actualDeliveryDate])
+  @@index([driverId, actualDeliveryDate])
+  @@index([truckId, actualDeliveryDate])
+  @@index([driverId, status, scheduledPickupDate])
+  @@index([generatedFromRoutePlanId, scheduledPickupDate])
 }
 
 model ClientProfile {
@@ -799,6 +811,7 @@ model AppNotification {
   @@index([userId, createdAt])
   @@index([driverId, createdAt])
   @@index([type, createdAt])
+  @@index([requiresConfirmation, confirmedAt, type, createdAt])
 }
 
 model LoadStop {
@@ -937,6 +950,11 @@ model Document {
   @@index([driverId])
   @@index([inspectionId])
   @@index([incidentId])
+  @@index([expiryDate])
+  @@index([loadId, type])
+  @@index([driverId, createdAt])
+  @@index([inspectionId, createdAt])
+  @@index([incidentId, createdAt])
 }
 
 model PayStub {
@@ -967,6 +985,8 @@ model PayStub {
 
   @@index([driverId])
   @@index([isPaid])
+  @@index([isPaid, createdAt])
+  @@index([isPaid, periodEnd])
 }
 
 model MaintenanceRecord {
@@ -988,6 +1008,8 @@ model MaintenanceRecord {
   updatedAt DateTime @updatedAt
 
   @@index([truckId])
+  @@index([nextServiceDue])
+  @@index([truckId, nextServiceDue])
 }
 
 model TruckExpense {
