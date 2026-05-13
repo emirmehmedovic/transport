@@ -239,13 +239,16 @@ async function buildAlertsSummary(now: Date) {
 
 async function buildRevenueTrend(now: Date) {
   const startPoint = startOfMonth(addMonths(now, -5));
+  const completedStatusesSql = Prisma.join(
+    COMPLETED_LOAD_STATUSES.map((status) => Prisma.sql`${status}::"LoadStatus"`)
+  );
   const rows = await prisma.$queryRaw<Array<{ month: Date; revenue: number }>>(
     Prisma.sql`
       SELECT
         date_trunc('month', "actualDeliveryDate") AS month,
         COALESCE(SUM("loadRate" + COALESCE("detentionPay", 0)), 0)::float8 AS revenue
       FROM "Load"
-      WHERE "status" IN (${Prisma.join(COMPLETED_LOAD_STATUSES)})
+      WHERE "status" IN (${completedStatusesSql})
         AND "actualDeliveryDate" >= ${startPoint}
         AND "actualDeliveryDate" <= ${now}
       GROUP BY 1

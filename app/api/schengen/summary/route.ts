@@ -2,7 +2,7 @@ import { AppNotificationType, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
-import { countSchengenDaysWithFallbackBatch } from "@/lib/schengen-aggregate";
+import { getSchengenSummaryRows } from "@/lib/schengen-summary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,67 +17,7 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-    const windowFrom = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
-
-    const drivers = await prisma.driver.findMany({
-      select: {
-        id: true,
-        status: true,
-        schengenManualRemainingDays: true,
-        schengenManualAsOf: true,
-        user: {
-          select: { firstName: true, lastName: true, email: true },
-        },
-        primaryTruck: {
-          select: { truckNumber: true },
-        },
-      },
-    });
-
-    const usageByDriver = await countSchengenDaysWithFallbackBatch(
-      drivers.map((driver) => ({
-        driverId: driver.id,
-        from:
-          driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf
-            ? driver.schengenManualAsOf
-            : windowFrom,
-      }))
-    );
-
-    const rows = drivers.map((driver) => {
-      let remainingDays: number;
-      let usedDays: number;
-      let manual = null as null | { remainingDays: number; asOf: string; daysSinceManual: number };
-
-      if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
-        const manualFrom = driver.schengenManualAsOf;
-        const daysSinceManual = usageByDriver.get(driver.id) ?? 0;
-        remainingDays = Math.max(0, driver.schengenManualRemainingDays - daysSinceManual);
-        usedDays = Math.min(90, 90 - remainingDays);
-        manual = {
-          remainingDays: driver.schengenManualRemainingDays,
-          asOf: manualFrom.toISOString(),
-          daysSinceManual,
-        };
-      } else {
-        usedDays = usageByDriver.get(driver.id) ?? 0;
-        remainingDays = Math.max(0, 90 - usedDays);
-      }
-
-      return {
-        driverId: driver.id,
-        name: `${driver.user.firstName} ${driver.user.lastName}`,
-        email: driver.user.email,
-        status: driver.status,
-        truckNumber: driver.primaryTruck?.truckNumber || null,
-        usedDays,
-        remainingDays,
-        warning: remainingDays < 7,
-        manual,
-      };
-    });
-
-    rows.sort((a, b) => a.remainingDays - b.remainingDays);
+    const summary = await getSchengenSummaryRows();
 
     const pendingBorderNotifications = await prisma.appNotification.findMany({
       where: {
@@ -148,9 +88,9 @@ export async function GET(req: NextRequest) {
       });
 
     return NextResponse.json({
-      windowDays: 180,
-      generatedAt: now.toISOString(),
-      drivers: rows,
+      windowDays: summary.windowDays,
+      generatedAt: summary.generatedAt,
+      drivers: summary.drivers,
       pendingConfirmations,
       pendingConfirmationCounts: {
         total: pendingConfirmations.length,

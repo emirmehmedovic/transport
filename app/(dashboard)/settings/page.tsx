@@ -8,6 +8,7 @@ export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const isAdmin = user?.role === "ADMIN";
 
   // Profile form
   const [profileForm, setProfileForm] = useState({
@@ -29,6 +30,12 @@ export default function SettingsPage() {
     confirm: false,
   });
 
+  const [schengenReportLoading, setSchengenReportLoading] = useState(false);
+  const [schengenReportForm, setSchengenReportForm] = useState({
+    enabled: false,
+    recipients: "",
+  });
+
   useEffect(() => {
     if (user) {
       setProfileForm({
@@ -38,6 +45,30 @@ export default function SettingsPage() {
       });
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const fetchSchengenReportConfig = async () => {
+      try {
+        const res = await fetch("/api/settings/schengen-weekly-report", {
+          credentials: "include",
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+        setSchengenReportForm({
+          enabled: data.enabled === true,
+          recipients: Array.isArray(data.recipients) ? data.recipients.join("\n") : "",
+        });
+      } catch (error) {
+        console.error("Error loading Schengen weekly report config:", error);
+      }
+    };
+
+    fetchSchengenReportConfig();
+  }, [isAdmin]);
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +133,48 @@ export default function SettingsPage() {
       setMessage({ type: "error", text: error.message });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSchengenReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSchengenReportLoading(true);
+    setMessage(null);
+
+    try {
+      const recipients = schengenReportForm.recipients
+        .split(/[\n,;]+/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+      const res = await fetch("/api/settings/schengen-weekly-report", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          enabled: schengenReportForm.enabled,
+          recipients,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri čuvanju Schengen mail postavki");
+      }
+
+      setSchengenReportForm({
+        enabled: data.enabled === true,
+        recipients: Array.isArray(data.recipients) ? data.recipients.join("\n") : "",
+      });
+      setMessage({
+        type: "success",
+        text: "Postavke sedmičnog Schengen mail izvještaja su sačuvane.",
+      });
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message });
+    } finally {
+      setSchengenReportLoading(false);
     }
   };
 
@@ -323,6 +396,74 @@ export default function SettingsPage() {
             </button>
           </form>
         </div>
+
+        {isAdmin && (
+          <div className="bg-white rounded-2xl shadow-soft p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-emerald-100 rounded-xl">
+                <Save className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-dark-900">Schengen sedmični mail izvještaj</h2>
+                <p className="text-sm text-dark-600">
+                  Svakog petka šalje se izvještaj sa vozačima poredanim od najmanjeg broja preostalih Schengen dana.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSchengenReportSubmit} className="space-y-4">
+              <label className="flex items-center gap-3 p-4 bg-dark-50 border border-dark-200 rounded-xl">
+                <input
+                  type="checkbox"
+                  checked={schengenReportForm.enabled}
+                  onChange={(e) =>
+                    setSchengenReportForm((prev) => ({
+                      ...prev,
+                      enabled: e.target.checked,
+                    }))
+                  }
+                  className="h-4 w-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500"
+                />
+                <div>
+                  <div className="font-semibold text-dark-900">Aktiviraj sedmični Schengen mail</div>
+                  <div className="text-sm text-dark-600">
+                    Cron ga šalje petkom u 08:00 po vremenskoj zoni Europe/Sarajevo.
+                  </div>
+                </div>
+              </label>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark-700 mb-2">
+                  Primaoci izvještaja
+                </label>
+                <textarea
+                  value={schengenReportForm.recipients}
+                  onChange={(e) =>
+                    setSchengenReportForm((prev) => ({
+                      ...prev,
+                      recipients: e.target.value,
+                    }))
+                  }
+                  rows={6}
+                  placeholder={"dispecer@firma.ba\nmenadzment@firma.ba"}
+                  className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-dark-900"
+                />
+                <p className="text-xs text-dark-500 mt-1">
+                  Unesi jednu ili više email adresa. Može po liniji ili odvojeno zarezom.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={schengenReportLoading}
+                className="w-full md:w-auto px-6 py-3 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {schengenReportLoading ? "Čuvanje..." : "Sačuvaj Schengen mail postavke"}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

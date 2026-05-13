@@ -40,6 +40,12 @@ Topologija za ovaj rollout:
 - [ ] `JWT_REFRESH_SECRET`
 - [ ] `TELEGRAM_BOT_TOKEN`
 - [ ] `TELEGRAM_ADMIN_CHAT_ID`
+- [ ] `MAIL_FROM`
+- [ ] `SMTP_HOST`
+- [ ] `SMTP_PORT`
+- [ ] `SMTP_SECURE`
+- [ ] `SMTP_USER`
+- [ ] `SMTP_PASS`
 - [ ] `TELEMETRY_SHARED_KEY`
 - [ ] `CRON_SECRET`
 - [ ] `OSRM_BASE_URL`
@@ -128,6 +134,7 @@ curl "http://localhost:5000/route/v1/driving/18.4131,43.8564;16.4333,43.5119?ove
 - [ ] Telegram alerting radi
 - [ ] Backup baze definisan
 - [ ] Backup `uploads` foldera definisan
+- [ ] SMTP konekcija testirana za sedmične mail izvještaje
 
 ## 11. Security Hardening
 

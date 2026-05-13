@@ -473,6 +473,19 @@ TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN_FROM_BOTFATHER
 TELEGRAM_ADMIN_CHAT_ID=YOUR_NUMERIC_CHAT_ID
 
 # ============================================
+# EMAIL REPORTS
+# ============================================
+MAIL_FROM=transport@tvoja-domena.com
+SMTP_HOST=smtp.tvoj-provider.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=tvoj-smtp-user
+SMTP_PASS=tvoja-smtp-lozinka
+# Optional:
+# SMTP_REQUIRE_TLS=true
+# SMTP_ALLOW_SELF_SIGNED=false
+
+# ============================================
 # FILE UPLOAD
 # ============================================
 # Aplikacija trenutno koristi lokalni folder ./uploads
@@ -589,6 +602,7 @@ sudo apt-get install -y osmium-tool
 
 # Security hardening basics
 sudo apt-get install -y fail2ban ufw unattended-upgrades
+
 ```
 
 **2. Clone Repository**
@@ -615,6 +629,33 @@ Ako baza radi na istom VM-u, preporuka je:
 - PostgreSQL da sluša samo na `127.0.0.1`
 - aplikacija da pristupa bazi preko lokalnog `DATABASE_URL`
 - ne otvarati port `5432` prema internetu
+
+**2.2 SMTP delivery for weekly reports**
+
+Sedmični Schengen izvještaj sada se šalje preko vanjskog SMTP providera direktno iz aplikacije.
+
+Obavezni env:
+- `MAIL_FROM`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+
+Ako provider traži STARTTLS na `587`, tipično koristiš:
+
+```env
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_REQUIRE_TLS=true
+```
+
+Ako provider traži implicit TLS na `465`, tipično koristiš:
+
+```env
+SMTP_PORT=465
+SMTP_SECURE=true
+```
 
 **3. Create Uploads Directory**
 
