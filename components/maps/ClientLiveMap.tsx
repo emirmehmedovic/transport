@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, Popup } from "react-leaflet";
+import { useMemo, useState } from "react";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMapEvents, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getLoadStatusLabel } from "@/lib/ui-labels";
@@ -68,7 +68,22 @@ const driverIcon = new L.DivIcon({
   iconAnchor: [7, 7],
 });
 
+// Minimum zoom nivoi
+const MIN_ZOOM_FOR_MARKERS = 9; // Za pickup/delivery tačke
+const MIN_ZOOM_FOR_DRIVER_LABELS = 11; // Za imena vozača
+
+function ZoomHandler({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  useMapEvents({
+    zoomend: (e) => {
+      onZoomChange(e.target.getZoom());
+    },
+  });
+  return null;
+}
+
 export default function ClientLiveMap({ loads }: { loads: ClientMapLoad[] }) {
+  const [currentZoom, setCurrentZoom] = useState(6);
+
   const center = useMemo<[number, number]>(() => {
     const first = loads.find((load) => load.pickupLatitude && load.pickupLongitude);
     if (first?.pickupLatitude && first?.pickupLongitude) {
@@ -77,14 +92,59 @@ export default function ClientLiveMap({ loads }: { loads: ClientMapLoad[] }) {
     return [44.3667, 17.9833];
   }, [loads]);
 
-  return (
-    <MapContainer center={center} zoom={6} style={{ width: "100%", height: "600px" }}>
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+  const showMarkers = currentZoom >= MIN_ZOOM_FOR_MARKERS;
+  const showDriverLabels = currentZoom >= MIN_ZOOM_FOR_DRIVER_LABELS;
 
-      {loads.map((load) => {
+  return (
+    <div style={{ position: "relative" }}>
+      {!showMarkers && (
+        <div
+          style={{
+            position: "absolute",
+            top: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            background: "rgba(255, 255, 255, 0.95)",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            fontSize: "14px",
+            fontWeight: "500",
+            color: "#374151",
+          }}
+        >
+          📍 Priblizi mapu da vidiš tačke (trenutni zoom: {currentZoom}, potrebno: {MIN_ZOOM_FOR_MARKERS}+)
+        </div>
+      )}
+      {showMarkers && !showDriverLabels && (
+        <div
+          style={{
+            position: "absolute",
+            top: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            background: "rgba(59, 130, 246, 0.95)",
+            padding: "10px 16px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            fontSize: "13px",
+            fontWeight: "500",
+            color: "#ffffff",
+          }}
+        >
+          🔍 Priblizi još više za detalje vozača (zoom {MIN_ZOOM_FOR_DRIVER_LABELS}+)
+        </div>
+      )}
+      <MapContainer center={center} zoom={6} style={{ width: "100%", height: "600px" }}>
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <ZoomHandler onZoomChange={setCurrentZoom} />
+
+        {showMarkers && loads.map((load) => {
         const hasPickup = !!load.pickupLatitude && !!load.pickupLongitude;
         const hasDelivery = !!load.deliveryLatitude && !!load.deliveryLongitude;
         const hasDriver = !!load.driver?.lastKnownLatitude && !!load.driver?.lastKnownLongitude;
@@ -92,9 +152,15 @@ export default function ClientLiveMap({ loads }: { loads: ClientMapLoad[] }) {
         return (
           <div key={load.id}>
             {hasPickup && (
-              <Marker
-                position={[load.pickupLatitude as number, load.pickupLongitude as number]}
-                icon={pickupIcon}
+              <CircleMarker
+                center={[load.pickupLatitude as number, load.pickupLongitude as number]}
+                radius={6}
+                pathOptions={{
+                  fillColor: "#22c55e",
+                  fillOpacity: 0.8,
+                  color: "#ffffff",
+                  weight: 2,
+                }}
               >
                 <Popup>
                   <strong>Pickup</strong>
@@ -103,13 +169,19 @@ export default function ClientLiveMap({ loads }: { loads: ClientMapLoad[] }) {
                   <br />
                   {load.pickupCity}, {load.pickupState}
                 </Popup>
-              </Marker>
+              </CircleMarker>
             )}
 
             {hasDelivery && (
-              <Marker
-                position={[load.deliveryLatitude as number, load.deliveryLongitude as number]}
-                icon={deliveryIcon}
+              <CircleMarker
+                center={[load.deliveryLatitude as number, load.deliveryLongitude as number]}
+                radius={6}
+                pathOptions={{
+                  fillColor: "#ef4444",
+                  fillOpacity: 0.8,
+                  color: "#ffffff",
+                  weight: 2,
+                }}
               >
                 <Popup>
                   <strong>Delivery</strong>
@@ -118,7 +190,7 @@ export default function ClientLiveMap({ loads }: { loads: ClientMapLoad[] }) {
                   <br />
                   {load.deliveryCity}, {load.deliveryState}
                 </Popup>
-              </Marker>
+              </CircleMarker>
             )}
 
             {hasPickup && hasDelivery && (
@@ -132,25 +204,34 @@ export default function ClientLiveMap({ loads }: { loads: ClientMapLoad[] }) {
             )}
 
             {hasDriver && (
-              <Marker
-                position={[
+              <CircleMarker
+                center={[
                   load.driver?.lastKnownLatitude as number,
                   load.driver?.lastKnownLongitude as number,
                 ]}
-                icon={driverIcon}
+                radius={5}
+                pathOptions={{
+                  fillColor: "#1d4ed8",
+                  fillOpacity: 0.9,
+                  color: "#ffffff",
+                  weight: 2,
+                }}
               >
-                <Popup>
-                  <strong>Trenutna pozicija vozača</strong>
-                  <br />
-                  {load.driver?.user.firstName} {load.driver?.user.lastName}
-                  <br />
-                  Status: {getLoadStatusLabel(load.status)}
-                </Popup>
-              </Marker>
+                {showDriverLabels && (
+                  <Popup>
+                    <strong>Trenutna pozicija vozača</strong>
+                    <br />
+                    {load.driver?.user.firstName} {load.driver?.user.lastName}
+                    <br />
+                    Status: {getLoadStatusLabel(load.status)}
+                  </Popup>
+                )}
+              </CircleMarker>
             )}
           </div>
         );
       })}
-    </MapContainer>
+      </MapContainer>
+    </div>
   );
 }

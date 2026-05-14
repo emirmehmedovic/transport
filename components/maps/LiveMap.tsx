@@ -2,11 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, CircleMarker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Truck, Package, Navigation, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 import { getLoadStatusLabel as getMappedLoadStatusLabel } from "@/lib/ui-labels";
+
+// Minimum zoom nivoi
+const MIN_ZOOM_FOR_MARKERS = 9; // Za pickup/delivery/landmark tačke
+const MIN_ZOOM_FOR_DRIVER_LABELS = 11; // Za imena vozača
+const MIN_ZOOM_FOR_LANDMARK_LABELS = 13; // Za imena landmark tačaka
 
 // Component to control map view
 function MapController({ focusedDriverId, driverLocations }: { focusedDriverId: string | null, driverLocations: DriverLocation[] }) {
@@ -24,6 +29,27 @@ function MapController({ focusedDriverId, driverLocations }: { focusedDriverId: 
     }
   }, [focusedDriverId, driverLocations, map]);
 
+  return null;
+}
+
+// Component to track zoom level and map clicks
+function ZoomHandler({
+  onZoomChange,
+  onMapClick
+}: {
+  onZoomChange: (zoom: number) => void;
+  onMapClick?: () => void;
+}) {
+  useMapEvents({
+    zoomend: (e) => {
+      onZoomChange(e.target.getZoom());
+    },
+    click: () => {
+      if (onMapClick) {
+        onMapClick();
+      }
+    },
+  });
   return null;
 }
 
@@ -120,14 +146,14 @@ function getLocalDateParam() {
 // Helper functions for landmarks
 import { getLandmarkIcon, getLandmarkColor, getLandmarkLabel } from "@/lib/landmark-icons";
 
-const createLandmarkIcon = (landmark: any) => {
+const createLandmarkIcon = (landmark: any, showLabel: boolean = false) => {
   const iconColor = landmark.iconColor || getLandmarkColor(landmark.type);
   const svgIcon = getLandmarkIcon(landmark.type);
 
   return L.divIcon({
     html: `
       <div style="position: relative; text-align: center;">
-        ${landmark.showLabel ? `
+        ${showLabel ? `
           <div style="
             position: absolute;
             bottom: 28px;
@@ -174,7 +200,8 @@ const createDriverIcon = (
   driverName: string,
   hasLoad: boolean,
   isSelected: boolean = false,
-  lastLocationUpdate: Date | null = null
+  lastLocationUpdate: Date | null = null,
+  showLabel: boolean = true
 ) => {
   const iconColor = isSelected ? '#EF4444' : (hasLoad ? '#10B981' : '#3B82F6'); // Red if selected, Green if has load, blue if available
 
@@ -192,60 +219,80 @@ const createDriverIcon = (
         }
       </style>
       <div style="position: relative; text-align: center;">
-        <div style="
-          position: absolute;
-          bottom: 48px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: ${iconColor};
-          color: white;
-          padding: 4px 8px;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 600;
-          white-space: nowrap;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          border: 2px solid white;
-        ">
-          ${driverName}
-        </div>
-        <div style="
-          width: 40px;
-          height: 40px;
-          background: ${iconColor};
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          border: 3px solid white;
-        ">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path>
-            <path d="M15 18H9"></path>
-            <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path>
-            <circle cx="17" cy="18" r="2"></circle>
-            <circle cx="7" cy="18" r="2"></circle>
-          </svg>
-        </div>
+        ${showLabel ? `
+          <div style="
+            position: absolute;
+            bottom: 46px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${iconColor};
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+            border: 2px solid white;
+          ">
+            ${driverName}
+          </div>
+        ` : ''}
+        <!-- Modern pin with truck icon -->
+        <svg width="40" height="48" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow-${iconColor}" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+              <feOffset dx="0" dy="2" result="offsetblur"/>
+              <feComponentTransfer>
+                <feFuncA type="linear" slope="0.3"/>
+              </feComponentTransfer>
+              <feMerge>
+                <feMergeNode/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+            <linearGradient id="grad-${iconColor}" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:${iconColor};stop-opacity:1" />
+              <stop offset="100%" style="stop-color:${iconColor};stop-opacity:0.85" />
+            </linearGradient>
+          </defs>
+          <!-- Modern rounded pin shape -->
+          <path d="M20 0 C11 0 4 7 4 16 C4 20 5 23 7 26 L20 46 L33 26 C35 23 36 20 36 16 C36 7 29 0 20 0 Z"
+                fill="url(#grad-${iconColor})"
+                stroke="white"
+                stroke-width="2.5"
+                filter="url(#shadow-${iconColor})"/>
+          <!-- Inner circle for icon background -->
+          <circle cx="20" cy="16" r="10" fill="white" opacity="0.2"/>
+          <!-- Truck icon -->
+          <g transform="translate(8, 6)">
+            <path d="M1 8 L1 14 M15 8 L15 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <rect x="0" y="6" width="12" height="8" rx="1.5" fill="white" stroke="white" stroke-width="0.5"/>
+            <path d="M12 8 L16 8 L18 11 L18 14 L16 14" fill="white" stroke="white" stroke-width="0.5"/>
+            <circle cx="4" cy="15.5" r="1.8" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+            <circle cx="14" cy="15.5" r="1.8" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+            <line x1="2" y1="8" x2="10" y2="8" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+          </g>
+        </svg>
         <!-- GPS Status Indicator -->
         <div style="
           position: absolute;
-          top: -4px;
-          right: -4px;
-          width: 14px;
-          height: 14px;
+          top: -1px;
+          right: 2px;
+          width: 13px;
+          height: 13px;
           background: ${gpsStatusColor};
           border-radius: 50%;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          border: 2.5px solid white;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.3);
           ${gpsStatusPulse}
         "></div>
       </div>
     `,
     className: 'custom-driver-icon',
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
+    iconSize: [40, 48],
+    iconAnchor: [20, 48],
   });
 };
 
@@ -253,7 +300,8 @@ const createDriverIcon = (
 const createManagerIcon = (
   managerName: string,
   isSelected: boolean = false,
-  lastLocationUpdate: Date | null = null
+  lastLocationUpdate: Date | null = null,
+  showLabel: boolean = true
 ) => {
   const iconColor = isSelected ? '#EF4444' : '#F59E0B'; // Red if selected, orange otherwise
 
@@ -271,57 +319,77 @@ const createManagerIcon = (
         }
       </style>
       <div style="position: relative; text-align: center;">
-        <div style="
-          position: absolute;
-          bottom: 48px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: ${iconColor};
-          color: white;
-          padding: 4px 8px;
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 600;
-          white-space: nowrap;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          border: 2px solid white;
-        ">
-          ${managerName}
-        </div>
-        <div style="
-          width: 40px;
-          height: 40px;
-          background: ${iconColor};
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          border: 3px solid white;
-        ">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-          </svg>
-        </div>
+        ${showLabel ? `
+          <div style="
+            position: absolute;
+            bottom: 46px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${iconColor};
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+            border: 2px solid white;
+          ">
+            ${managerName}
+          </div>
+        ` : ''}
+        <!-- Modern pin with briefcase icon -->
+        <svg width="40" height="48" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="shadow-mgr-${iconColor}" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+              <feOffset dx="0" dy="2" result="offsetblur"/>
+              <feComponentTransfer>
+                <feFuncA type="linear" slope="0.3"/>
+              </feComponentTransfer>
+              <feMerge>
+                <feMergeNode/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+            <linearGradient id="grad-mgr-${iconColor}" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:${iconColor};stop-opacity:1" />
+              <stop offset="100%" style="stop-color:${iconColor};stop-opacity:0.85" />
+            </linearGradient>
+          </defs>
+          <!-- Modern rounded pin shape -->
+          <path d="M20 0 C11 0 4 7 4 16 C4 20 5 23 7 26 L20 46 L33 26 C35 23 36 20 36 16 C36 7 29 0 20 0 Z"
+                fill="url(#grad-mgr-${iconColor})"
+                stroke="white"
+                stroke-width="2.5"
+                filter="url(#shadow-mgr-${iconColor})"/>
+          <!-- Inner circle for icon background -->
+          <circle cx="20" cy="16" r="10" fill="white" opacity="0.2"/>
+          <!-- Briefcase icon -->
+          <g transform="translate(10, 8)">
+            <rect x="2" y="7" width="16" height="11" rx="1.5" fill="white" stroke="white" stroke-width="0.5"/>
+            <path d="M6 7 L6 5 C6 4 7 3 8 3 L12 3 C13 3 14 4 14 5 L14 7" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            <line x1="2" y1="12" x2="18" y2="12" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+          </g>
+        </svg>
         <!-- GPS Status Indicator -->
         <div style="
           position: absolute;
-          top: -4px;
-          right: -4px;
-          width: 14px;
-          height: 14px;
+          top: -1px;
+          right: 2px;
+          width: 13px;
+          height: 13px;
           background: ${gpsStatusColor};
           border-radius: 50%;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          border: 2.5px solid white;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.3);
           ${gpsStatusPulse}
         "></div>
       </div>
     `,
     className: 'custom-manager-icon',
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
+    iconSize: [40, 48],
+    iconAnchor: [20, 48],
   });
 };
 
@@ -446,6 +514,7 @@ export default function LiveMap({
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [selectedLoadForPanel, setSelectedLoadForPanel] = useState<string | null>(null);
+  const [currentZoom, setCurrentZoom] = useState(7);
   const [driverRoutes, setDriverRoutes] = useState<Record<string, {
     toPickup: [number, number][];
     toDelivery: [number, number][];
@@ -799,6 +868,21 @@ export default function LiveMap({
 
   const center = calculateCenter();
 
+  const showMarkers = currentZoom >= MIN_ZOOM_FOR_MARKERS;
+  const showDriverLabels = currentZoom >= MIN_ZOOM_FOR_DRIVER_LABELS;
+  const showLandmarkLabels = currentZoom >= MIN_ZOOM_FOR_LANDMARK_LABELS;
+
+  const handleMapClick = () => {
+    if (selectedDriverId) {
+      setSelectedDriverId(null);
+      setSelectedLoadId(null);
+      setSelectedTrailDriverId(null);
+      if (onDriverSelected) {
+        onDriverSelected("");
+      }
+    }
+  };
+
   const openReplayWindow = (driverId: string, hours: number) => {
     const end = new Date();
     const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
@@ -901,6 +985,28 @@ export default function LiveMap({
 
   return (
     <div className="h-full w-full relative">
+      {/* Zoom notifications */}
+      {!showMarkers && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 px-5 py-3 rounded-xl shadow-lg border border-dark-200">
+          <p className="text-sm font-semibold text-dark-700">
+            📍 Priblizi mapu da vidiš tačke (trenutni zoom: {currentZoom}, potrebno: {MIN_ZOOM_FOR_MARKERS}+)
+          </p>
+        </div>
+      )}
+      {showMarkers && !showDriverLabels && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] bg-primary-500/95 px-5 py-3 rounded-xl shadow-lg">
+          <p className="text-sm font-semibold text-white">
+            🔍 Priblizi za imena vozača (zoom {MIN_ZOOM_FOR_DRIVER_LABELS}+)
+          </p>
+        </div>
+      )}
+      {showDriverLabels && !showLandmarkLabels && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] bg-purple-500/95 px-5 py-3 rounded-xl shadow-lg">
+          <p className="text-sm font-semibold text-white">
+            📍 Priblizi još više za imena tačaka (zoom {MIN_ZOOM_FOR_LANDMARK_LABELS}+)
+          </p>
+        </div>
+      )}
       {/* Map - Full Height */}
       <MapContainer
         center={center}
@@ -908,39 +1014,70 @@ export default function LiveMap({
         style={{ height: "100%", width: "100%" }}
       >
           <MapController focusedDriverId={focusedDriverId || null} driverLocations={driverLocations} />
+          <ZoomHandler onZoomChange={setCurrentZoom} onMapClick={handleMapClick} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
           {/* Render all loads */}
-          {loads.map((load) => (
+          {showMarkers && loads.map((load) => (
             <div key={load.id}>
               {/* Pickup Marker */}
               {load.pickupLatitude && load.pickupLongitude && (
-                <Marker
+                <CircleMarker
                   key={load.id}
-                  position={[load.pickupLatitude, load.pickupLongitude]}
-                  icon={pickupIcon}
+                  center={[load.pickupLatitude, load.pickupLongitude]}
+                  radius={6}
+                  pathOptions={{
+                    fillColor: "#22c55e",
+                    fillOpacity: 0.8,
+                    color: "#ffffff",
+                    weight: 2,
+                  }}
                   eventHandlers={{
-                    click: () => {
+                    click: (e: any) => {
+                      e.originalEvent?.stopPropagation();
                       setSelectedLoadForPanel(load.id);
                     },
                   }}
-                />
+                >
+                  <Popup>
+                    <div className="text-sm">
+                      <p className="font-semibold text-green-700">📍 Pickup</p>
+                      <p className="font-medium">{load.loadNumber}</p>
+                      <p className="text-dark-600">{load.pickupCity}, {load.pickupState}</p>
+                    </div>
+                  </Popup>
+                </CircleMarker>
               )}
 
               {/* Delivery Marker */}
               {load.deliveryLatitude && load.deliveryLongitude && (
-                <Marker
-                  position={[load.deliveryLatitude, load.deliveryLongitude]}
-                  icon={deliveryIcon}
+                <CircleMarker
+                  center={[load.deliveryLatitude, load.deliveryLongitude]}
+                  radius={6}
+                  pathOptions={{
+                    fillColor: "#ef4444",
+                    fillOpacity: 0.8,
+                    color: "#ffffff",
+                    weight: 2,
+                  }}
                   eventHandlers={{
-                    click: () => {
+                    click: (e: any) => {
+                      e.originalEvent?.stopPropagation();
                       setSelectedLoadForPanel(load.id);
                     },
                   }}
-                />
+                >
+                  <Popup>
+                    <div className="text-sm">
+                      <p className="font-semibold text-red-700">🎯 Delivery</p>
+                      <p className="font-medium">{load.loadNumber}</p>
+                      <p className="text-dark-600">{load.deliveryCity}, {load.deliveryState}</p>
+                    </div>
+                  </Popup>
+                </CircleMarker>
               )}
 
               {/* Stop Markers */}
@@ -952,7 +1089,8 @@ export default function LiveMap({
                     position={[stop.latitude as number, stop.longitude as number]}
                     icon={stopIcon}
                     eventHandlers={{
-                      click: () => {
+                      click: (e: any) => {
+                        e.originalEvent?.stopPropagation();
                         setSelectedLoadForPanel(load.id);
                       },
                     }}
@@ -1157,8 +1295,8 @@ export default function LiveMap({
             }
 
             const icon = entity.type === 'MANAGER'
-              ? createManagerIcon(entity.driverName, isSelected, lastLocationUpdate)
-              : createDriverIcon(entity.driverName, entity.loads.length > 0, isSelected, lastLocationUpdate);
+              ? createManagerIcon(entity.driverName, isSelected, lastLocationUpdate, showDriverLabels)
+              : createDriverIcon(entity.driverName, entity.loads.length > 0, isSelected, lastLocationUpdate, showDriverLabels);
 
             return (
               <Marker
@@ -1166,7 +1304,10 @@ export default function LiveMap({
                 position={[entity.latitude, entity.longitude]}
                 icon={icon}
                 eventHandlers={{
-                  click: async () => {
+                  click: async (e: any) => {
+                    // Prevent map click event from firing
+                    e.originalEvent?.stopPropagation();
+
                     if (entity.id === selectedDriverId) {
                       // Deselect
                       setSelectedDriverId(null);
@@ -1192,11 +1333,11 @@ export default function LiveMap({
           })}
 
           {/* Render landmarks */}
-          {!hideLandmarks && landmarks.map((landmark) => (
+          {!hideLandmarks && showMarkers && landmarks.map((landmark) => (
             <Marker
               key={`landmark-${landmark.id}`}
               position={[landmark.latitude, landmark.longitude]}
-              icon={createLandmarkIcon(landmark)}
+              icon={createLandmarkIcon(landmark, showLandmarkLabels)}
             >
               <Popup>
                 <div className="p-2 min-w-[200px]">
