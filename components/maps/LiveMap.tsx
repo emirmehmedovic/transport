@@ -490,6 +490,7 @@ interface LiveMapProps {
   hideOtherDrivers?: boolean;
   hiddenDriverIds?: Set<string>;
   onDriverSelected?: (driverId: string) => void;
+  onZoomStatusChange?: (status: { currentZoom: number; showMarkers: boolean; showDriverLabels: boolean; showLandmarkLabels: boolean }) => void;
 }
 
 interface DriverTrail {
@@ -506,6 +507,7 @@ export default function LiveMap({
   hideOtherDrivers = false,
   hiddenDriverIds = new Set(),
   onDriverSelected,
+  onZoomStatusChange,
 }: LiveMapProps = {}) {
   const router = useRouter();
   const [loads, setLoads] = useState<LoadData[]>([]);
@@ -525,7 +527,7 @@ export default function LiveMap({
   const [loadRoutes, setLoadRoutes] = useState<Record<string, [number, number][]>>({});
   const [availableLoads, setAvailableLoads] = useState<LoadData[]>([]);
   const [assigning, setAssigning] = useState(false);
-  const [legendMinimized, setLegendMinimized] = useState(false);
+  const [legendMinimized, setLegendMinimized] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const fetchInFlightRef = useRef(false);
@@ -872,6 +874,18 @@ export default function LiveMap({
   const showDriverLabels = currentZoom >= MIN_ZOOM_FOR_DRIVER_LABELS;
   const showLandmarkLabels = currentZoom >= MIN_ZOOM_FOR_LANDMARK_LABELS;
 
+  // Notify parent about zoom status changes
+  useEffect(() => {
+    if (onZoomStatusChange) {
+      onZoomStatusChange({
+        currentZoom,
+        showMarkers,
+        showDriverLabels,
+        showLandmarkLabels,
+      });
+    }
+  }, [currentZoom, showMarkers, showDriverLabels, showLandmarkLabels, onZoomStatusChange]);
+
   const handleMapClick = () => {
     if (selectedDriverId) {
       setSelectedDriverId(null);
@@ -985,28 +999,6 @@ export default function LiveMap({
 
   return (
     <div className="h-full w-full relative">
-      {/* Zoom notifications */}
-      {!showMarkers && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 px-5 py-3 rounded-xl shadow-lg border border-dark-200">
-          <p className="text-sm font-semibold text-dark-700">
-            📍 Priblizi mapu da vidiš tačke (trenutni zoom: {currentZoom}, potrebno: {MIN_ZOOM_FOR_MARKERS}+)
-          </p>
-        </div>
-      )}
-      {showMarkers && !showDriverLabels && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] bg-primary-500/95 px-5 py-3 rounded-xl shadow-lg">
-          <p className="text-sm font-semibold text-white">
-            🔍 Priblizi za imena vozača (zoom {MIN_ZOOM_FOR_DRIVER_LABELS}+)
-          </p>
-        </div>
-      )}
-      {showDriverLabels && !showLandmarkLabels && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] bg-purple-500/95 px-5 py-3 rounded-xl shadow-lg">
-          <p className="text-sm font-semibold text-white">
-            📍 Priblizi još više za imena tačaka (zoom {MIN_ZOOM_FOR_LANDMARK_LABELS}+)
-          </p>
-        </div>
-      )}
       {/* Map - Full Height */}
       <MapContainer
         center={center}

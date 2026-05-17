@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, RefreshCw, Package, Truck, Navigation, Map, Users, X, ChevronRight, MapPin, Clock, TrendingUp, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, RefreshCw, Package, Truck, Navigation, Map, Users, X, ChevronRight, MapPin, Clock, TrendingUp, Eye, EyeOff, Search } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { formatDateDMY } from "@/lib/date";
@@ -118,6 +118,14 @@ export default function LiveMapFullScreenPage() {
   const [hideLandmarks, setHideLandmarks] = useState(false);
   const [hideOtherDrivers, setHideOtherDrivers] = useState(false);
   const [hiddenDriverIds, setHiddenDriverIds] = useState<Set<string>>(new Set());
+  const [driverSearchQuery, setDriverSearchQuery] = useState("");
+  const [truckSearchQuery, setTruckSearchQuery] = useState("");
+  const [zoomStatus, setZoomStatus] = useState<{
+    currentZoom: number;
+    showMarkers: boolean;
+    showDriverLabels: boolean;
+    showLandmarkLabels: boolean;
+  } | null>(null);
   const mapRef = useRef<any>(null);
   const loadsFetchInFlightRef = useRef(false);
 
@@ -179,7 +187,7 @@ export default function LiveMapFullScreenPage() {
 
   const fetchDrivers = async () => {
     try {
-      const res = await fetch("/api/drivers");
+      const res = await fetch("/api/drivers?pageSize=500");
       const data = await res.json();
 
       if (res.ok) {
@@ -192,7 +200,7 @@ export default function LiveMapFullScreenPage() {
 
   const fetchTrucks = async () => {
     try {
-      const res = await fetch("/api/trucks");
+      const res = await fetch("/api/trucks?pageSize=500");
       const data = await res.json();
 
       if (res.ok) {
@@ -202,6 +210,34 @@ export default function LiveMapFullScreenPage() {
       console.error("Error fetching trucks:", error);
     }
   };
+
+  // Filter drivers based on search query
+  const filteredDrivers = useMemo(() => {
+    if (!driverSearchQuery.trim()) {
+      return drivers;
+    }
+    const query = driverSearchQuery.toLowerCase();
+    return drivers.filter((driver) => {
+      const fullName = `${driver.user.firstName} ${driver.user.lastName}`.toLowerCase();
+      const phone = driver.user.phone?.toLowerCase() || "";
+      const truckNumber = driver.primaryTruck?.truckNumber?.toLowerCase() || "";
+      return fullName.includes(query) || phone.includes(query) || truckNumber.includes(query);
+    });
+  }, [drivers, driverSearchQuery]);
+
+  // Filter trucks based on search query
+  const filteredTrucks = useMemo(() => {
+    if (!truckSearchQuery.trim()) {
+      return trucks;
+    }
+    const query = truckSearchQuery.toLowerCase();
+    return trucks.filter((truck) => {
+      const truckNumber = truck.truckNumber?.toLowerCase() || "";
+      const make = truck.make?.toLowerCase() || "";
+      const model = truck.model?.toLowerCase() || "";
+      return truckNumber.includes(query) || make.includes(query) || model.includes(query);
+    });
+  }, [trucks, truckSearchQuery]);
 
   useEffect(() => {
     if (showSidebar) {
@@ -297,76 +333,104 @@ export default function LiveMapFullScreenPage() {
   return (
     <div className="h-screen w-screen flex flex-col bg-dark-900">
       {/* Top Bar – compact inline strip */}
-      <div className="px-3 py-1.5 border-b border-white/10 bg-dark-900">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+      <div className="px-2 py-1.5 border-b border-white/10 bg-dark-900">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Live mapa - First on the left */}
+            <div className="flex items-center gap-1.5 mr-2">
+              <Map className="w-4 h-4 text-white" />
+              <div className="leading-tight">
+                <p className="text-xs font-bold text-white">Live mapa</p>
+                <p className="text-[9px] text-dark-200">
+                  {mounted && lastUpdate
+                    ? lastUpdate.toLocaleTimeString("bs-BA")
+                    : "..."}
+                </p>
+              </div>
+            </div>
             <button
               onClick={() => router.push("/dashboard")}
-              className="h-9 flex items-center gap-2 rounded-full px-3 border border-white/15 bg-white/5 text-dark-50 font-semibold text-xs hover:bg-white/10 hover:border-white/25 transition-colors"
+              className="h-8 flex items-center gap-1.5 rounded-lg px-2.5 border border-white/15 bg-white/5 text-dark-50 font-semibold text-xs hover:bg-white/10 hover:border-white/25 transition-colors"
+              title="Nazad"
             >
-              <ArrowLeft className="w-4 h-4" />
-              Nazad
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Nazad</span>
             </button>
             <button
               onClick={() => setShowSidebar(!showSidebar)}
-              className={`h-9 flex items-center gap-2 rounded-full px-3 border font-semibold text-xs transition-colors ${
+              className={`h-8 flex items-center gap-1.5 rounded-lg px-2.5 border font-semibold text-xs transition-colors ${
                 showSidebar
                   ? "border-primary-400/50 bg-primary-500 text-white hover:bg-primary-600"
                   : "border-white/15 bg-white/5 text-dark-50 hover:bg-white/10"
               }`}
+              title="Vozači i Kamioni"
             >
-              <Users className="w-4 h-4" />
-              Vozači i Kamioni
+              <Users className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Vozači</span>
             </button>
             <button
               onClick={() => setHideAllDrivers(!hideAllDrivers)}
-              className={`h-9 flex items-center gap-2 rounded-full px-3 border font-semibold text-xs transition-colors ${
+              className={`h-8 flex items-center gap-1.5 rounded-lg px-2.5 border font-semibold text-xs transition-colors ${
                 hideAllDrivers
                   ? "border-orange-400/50 bg-orange-500 text-white hover:bg-orange-600"
                   : "border-white/15 bg-white/5 text-dark-50 hover:bg-white/10"
               }`}
+              title={hideAllDrivers ? "Prikaži vozače" : "Sakrij vozače"}
             >
-              <Truck className="w-4 h-4" />
-              {hideAllDrivers ? "Prikaži vozače" : "Sakrij vozače"}
+              <Truck className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{hideAllDrivers ? "Prikaži" : "Sakrij"}</span>
             </button>
             <button
               onClick={() => setHideRoutes(!hideRoutes)}
-              className={`h-9 flex items-center gap-2 rounded-full px-3 border font-semibold text-xs transition-colors ${
+              className={`h-8 flex items-center gap-1.5 rounded-lg px-2.5 border font-semibold text-xs transition-colors ${
                 hideRoutes
                   ? "border-red-400/50 bg-red-500 text-white hover:bg-red-600"
                   : "border-white/15 bg-white/5 text-dark-50 hover:bg-white/10"
               }`}
+              title={hideRoutes ? "Prikaži rute" : "Sakrij rute"}
             >
-              <Navigation className="w-4 h-4" />
-              {hideRoutes ? "Prikaži rute" : "Sakrij rute"}
+              <Navigation className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{hideRoutes ? "Rute" : "Rute"}</span>
             </button>
             <button
               onClick={() => setHideLandmarks(!hideLandmarks)}
-              className={`h-9 flex items-center gap-2 rounded-full px-3 border font-semibold text-xs transition-colors ${
+              className={`h-8 flex items-center gap-1.5 rounded-lg px-2.5 border font-semibold text-xs transition-colors ${
                 hideLandmarks
                   ? "border-purple-400/50 bg-purple-500 text-white hover:bg-purple-600"
                   : "border-white/15 bg-white/5 text-dark-50 hover:bg-white/10"
               }`}
+              title={hideLandmarks ? "Prikaži tačke" : "Sakrij tačke"}
             >
-              <MapPin className="w-4 h-4" />
-              {hideLandmarks ? "Prikaži tačke" : "Sakrij tačke"}
+              <MapPin className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{hideLandmarks ? "Tačke" : "Tačke"}</span>
             </button>
-            <div className="flex items-center gap-2">
-              <Map className="w-5 h-5 text-white" />
-              <div className="leading-tight">
-                <p className="text-sm font-bold text-white">Live mapa</p>
-                <p className="text-[10px] text-dark-200">
-                  {mounted && lastUpdate
-                    ? `Zadnje ažuriranje: ${lastUpdate.toLocaleTimeString("bs-BA")}`
-                    : "Učitavanje..."}
+            {/* Zoom Status Notification */}
+            {zoomStatus && !zoomStatus.showMarkers && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-100">
+                <p className="text-[10px] font-semibold whitespace-nowrap">
+                  📍 Zoom {zoomStatus.currentZoom}/9+ za tačke
                 </p>
               </div>
-            </div>
+            )}
+            {zoomStatus && zoomStatus.showMarkers && !zoomStatus.showDriverLabels && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-100">
+                <p className="text-[10px] font-semibold whitespace-nowrap">
+                  🔍 Zoom {zoomStatus.currentZoom}/11+ za vozače
+                </p>
+              </div>
+            )}
+            {zoomStatus && zoomStatus.showDriverLabels && !zoomStatus.showLandmarkLabels && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/20 border border-purple-400/30 text-purple-100">
+                <p className="text-[10px] font-semibold whitespace-nowrap">
+                  📍 Zoom {zoomStatus.currentZoom}/13+ za landmark
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {[{
-              label: "Aktivni loadovi",
+              label: "Loadovi",
               value: activeLoadsCount,
               icon: Package,
               bg: "bg-blue-500/20",
@@ -378,39 +442,41 @@ export default function LiveMapFullScreenPage() {
               bg: "bg-green-500/20",
               text: "text-green-200",
             }, {
-              label: "U transportu",
+              label: "Transport",
               value: inTransitCount,
               icon: Navigation,
               bg: "bg-purple-500/20",
               text: "text-purple-200",
             }].map((item) => (
-              <div key={item.label} className="h-10 min-w-[180px] flex items-center gap-3 px-4 rounded-lg bg-white/5 border border-white/10">
-                <div className={`w-7 h-7 rounded-md ${item.bg} ${item.text} flex items-center justify-center`}>
-                  <item.icon className="w-4 h-4" />
+              <div key={item.label} className="h-8 flex items-center gap-2 px-2.5 rounded-lg bg-white/5 border border-white/10">
+                <div className={`w-6 h-6 rounded ${item.bg} ${item.text} flex items-center justify-center`}>
+                  <item.icon className="w-3.5 h-3.5" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-[11px] text-dark-200 uppercase tracking-wide">{item.label}</p>
-                  <p className="text-sm font-bold text-white">{item.value}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="hidden sm:block text-[10px] text-dark-200 uppercase tracking-wide">{item.label}</p>
+                  <p className="text-xs font-bold text-white">{item.value}</p>
                 </div>
               </div>
             ))}
             <button
               onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`h-9 flex items-center gap-2 rounded-full px-3 border font-semibold text-xs transition-colors ${
+              className={`h-8 flex items-center gap-1.5 rounded-lg px-2.5 border font-semibold text-xs transition-colors ${
                 autoRefresh
                   ? "border-green-400/40 bg-green-500/10 text-green-100 hover:bg-green-500/20"
                   : "border-white/15 bg-white/5 text-dark-50 hover:bg-white/10"
               }`}
+              title={autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
             >
-              <RefreshCw className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`} />
-              {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
+              <RefreshCw className={`w-3.5 h-3.5 ${autoRefresh ? "animate-spin" : ""}`} />
+              <span className="hidden md:inline">{autoRefresh ? "ON" : "OFF"}</span>
             </button>
             <button
               onClick={fetchLoads}
-              className="h-9 flex items-center gap-2 rounded-full px-3 border border-primary-400/50 bg-primary-500 text-white font-semibold text-xs hover:bg-primary-600 transition-colors shadow-primary"
+              className="h-8 flex items-center gap-1.5 rounded-lg px-2.5 border border-primary-400/50 bg-primary-500 text-white font-semibold text-xs hover:bg-primary-600 transition-colors"
+              title="Osvježi"
             >
-              <RefreshCw className="w-4 h-4" />
-              Osvježi
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Osvježi</span>
             </button>
           </div>
         </div>
@@ -703,7 +769,7 @@ export default function LiveMapFullScreenPage() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-dark-700 uppercase tracking-wide flex items-center gap-2">
                     <Truck className="w-4 h-4" />
-                    Vozači ({drivers.length})
+                    Vozači ({filteredDrivers.length}/{drivers.length})
                   </h3>
                   <button
                     onClick={toggleAllDriversVisibility}
@@ -722,8 +788,27 @@ export default function LiveMapFullScreenPage() {
                     )}
                   </button>
                 </div>
+                {/* Search Input */}
+                <div className="mb-4 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                  <input
+                    type="text"
+                    value={driverSearchQuery}
+                    onChange={(e) => setDriverSearchQuery(e.target.value)}
+                    placeholder="Pretraži po imenu, telefonu, kamion..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-dark-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"
+                  />
+                  {driverSearchQuery && (
+                    <button
+                      onClick={() => setDriverSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-2">
-                  {drivers.map((driver) => {
+                  {filteredDrivers.map((driver) => {
                     const isHidden = hiddenDriverIds.has(driver.id);
                     return (
                       <div
@@ -814,22 +899,22 @@ export default function LiveMapFullScreenPage() {
                           onClick={() => handleShowMore(driver.id)}
                           className="flex-1 px-3 py-2 bg-dark-900 hover:bg-dark-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1"
                         >
-                          Prikaži više
+                          Detalji
                           <ChevronRight className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => router.push(`/drivers/${driver.id}`)}
                           className="px-4 py-2 bg-dark-50 hover:bg-dark-100 text-dark-700 rounded-xl text-xs font-semibold transition-colors border border-dark-200"
                         >
-                          Detalji
+                          Prikaži više
                         </button>
                       </div>
                     </div>
                     );
                   })}
-                  {drivers.length === 0 && (
+                  {filteredDrivers.length === 0 && (
                     <p className="text-sm text-dark-400 text-center py-4">
-                      Nema vozača
+                      {driverSearchQuery ? "Nema rezultata pretrage" : "Nema vozača"}
                     </p>
                   )}
                 </div>
@@ -839,10 +924,29 @@ export default function LiveMapFullScreenPage() {
               <div className="p-6">
                 <h3 className="text-sm font-bold text-dark-700 mb-3 uppercase tracking-wide flex items-center gap-2">
                   <Package className="w-4 h-4" />
-                  Kamioni ({trucks.length})
+                  Kamioni ({filteredTrucks.length}/{trucks.length})
                 </h3>
+                {/* Search Input */}
+                <div className="mb-4 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                  <input
+                    type="text"
+                    value={truckSearchQuery}
+                    onChange={(e) => setTruckSearchQuery(e.target.value)}
+                    placeholder="Pretraži po broju, marki, modelu..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-dark-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 transition-all text-sm"
+                  />
+                  {truckSearchQuery && (
+                    <button
+                      onClick={() => setTruckSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-2">
-                  {trucks.map((truck) => (
+                  {filteredTrucks.map((truck) => (
                     <div
                       key={truck.id}
                       onClick={() => router.push(`/trucks/${truck.id}`)}
@@ -883,9 +987,9 @@ export default function LiveMapFullScreenPage() {
                       </div>
                     </div>
                   ))}
-                  {trucks.length === 0 && (
+                  {filteredTrucks.length === 0 && (
                     <p className="text-sm text-dark-400 text-center py-4">
-                      Nema kamiona
+                      {truckSearchQuery ? "Nema rezultata pretrage" : "Nema kamiona"}
                     </p>
                   )}
                 </div>
@@ -910,6 +1014,7 @@ export default function LiveMapFullScreenPage() {
               setHideOtherDrivers(false);
             }
           }}
+          onZoomStatusChange={setZoomStatus}
         />
       </div>
     </div>

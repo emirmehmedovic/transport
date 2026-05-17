@@ -164,31 +164,26 @@ type ReplayPathPlan =
       cacheKey: string;
     };
 
-// Custom component to fit map to route bounds
-function FitBounds({
+// Custom component to focus on driver's position
+function FocusOnDriver({
   positions,
-  stops,
-  focusPoint,
 }: {
   positions: Position[];
-  stops: Array<{ latitude: number; longitude: number }>;
-  focusPoint?: { latitude: number; longitude: number } | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
     if (positions.length > 0) {
-      const points = positions.map((p) => [p.latitude, p.longitude] as [number, number]);
-      stops.forEach((stop) => {
-        points.push([stop.latitude, stop.longitude]);
-      });
-      if (focusPoint) {
-        points.push([focusPoint.latitude, focusPoint.longitude]);
-      }
-      const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [50, 50] });
+      // Focus on the first position (driver's starting point) with zoom 13
+      setTimeout(() => {
+        map.setView(
+          [positions[0].latitude, positions[0].longitude],
+          13,
+          { animate: true, duration: 0.5 }
+        );
+      }, 100);
     }
-  }, [positions, stops, focusPoint, map]);
+  }, [positions, map]);
 
   return null;
 }
@@ -815,7 +810,7 @@ export default function RouteReplayMap({
             </Marker>
           ))}
 
-          <FitBounds positions={positions} stops={stops} focusPoint={focusPoint} />
+          <FocusOnDriver positions={positions} />
           <FollowPosition position={currentPosition} isPlaying={isPlaying} />
           <InvalidateSize trigger={resizeTick} />
         </MapContainer>
