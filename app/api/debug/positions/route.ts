@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+async function requireAdmin(request: NextRequest) {
+  const user = await getVerifiedAuthUserFromRequest(request);
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  return null;
+}
 
 /**
  * GET /api/debug/positions
@@ -10,6 +25,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
+    const authError = await requireAdmin(request);
+    if (authError) return authError;
+
     // Get all positions
     const positions = await prisma.position.findMany({
       orderBy: {

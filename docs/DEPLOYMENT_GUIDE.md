@@ -150,19 +150,26 @@ npx prisma migrate status
 
 ```bash
 # Seed database with:
-# - Admin user (admin@transport.com / admin123)
-# - Dispatcher (dispatcher@transport.com / dispatcher123)
-# - Driver (driver@transport.com / driver123)
+# - Initial admin user (emir.m@live.com)
 # - 16 border crossing zones
-npm run seed
+#
+# IMPORTANT:
+# - Password is NOT hardcoded in the seed script
+# - You must provide it through INITIAL_ADMIN_PASSWORD
+INITIAL_ADMIN_PASSWORD='PROMIJENI_OVO_U_JAKU_LOZINKU' npm run seed
 ```
 
 **Rezultat seed-a:**
 ```
-✅ 3 test korisnika
+✅ 1 initial admin korisnik (emir.m@live.com)
 ✅ 16 graničnih prelaza (Zone model)
-✅ Osnovne settings
+✅ Lozinka sačuvana kao bcrypt hash
 ```
+
+**Sigurnosna napomena:**
+- `prisma/seed.ts` više ne kreira demo `dispatcher` i `driver` naloge
+- plain-text lozinka se ne čuva u kodu niti u bazi
+- nakon prvog logina promijeni seed lozinku na onu koju ćeš stvarno koristiti operativno
 
 ---
 
@@ -914,12 +921,12 @@ curl -X POST https://exp.host/--/api/v2/push/send \
 curl -X POST https://tvoja-domena.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@transport.com",
-    "password": "admin123"
+    "email": "emir.m@live.com",
+    "password": "INITIAL_ADMIN_PASSWORD_vrijednost_koju_si_postavio"
   }'
 
 # Očekivani output:
-# {"user":{...},"accessToken":"...","refreshToken":"..."}
+# {"user":{...},"token":"...","refreshToken":"..."}
 ```
 
 **2. Test Load Creation:**

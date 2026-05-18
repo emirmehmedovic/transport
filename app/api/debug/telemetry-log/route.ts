@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFileSync, appendFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
 
 const LOG_FILE = join(process.cwd(), 'gps-telemetry.log');
+
+async function requireAdmin(request: NextRequest) {
+  const user = await getVerifiedAuthUserFromRequest(request);
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  return null;
+}
 
 /**
  * GET /api/debug/telemetry-log
@@ -10,6 +25,9 @@ const LOG_FILE = join(process.cwd(), 'gps-telemetry.log');
  */
 export async function GET(request: NextRequest) {
   try {
+    const authError = await requireAdmin(request);
+    if (authError) return authError;
+
     if (!existsSync(LOG_FILE)) {
       return NextResponse.json({ message: 'No telemetry logged yet', entries: [] });
     }
@@ -43,6 +61,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const authError = await requireAdmin(request);
+    if (authError) return authError;
+
     const method = request.method;
     const url = request.url;
     const searchParams = request.nextUrl.searchParams;
@@ -79,6 +100,9 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const authError = await requireAdmin(request);
+    if (authError) return authError;
+
     if (existsSync(LOG_FILE)) {
       writeFileSync(LOG_FILE, '');
     }
