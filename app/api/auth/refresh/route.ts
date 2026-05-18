@@ -6,6 +6,13 @@ import { getRefreshAuthUserFromRequest, getRefreshTokenFromRequest } from "@/lib
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const AUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict" as const,
+  path: "/",
+};
+
 export async function POST(request: NextRequest) {
   try {
     const refreshToken = getRefreshTokenFromRequest(request);
@@ -51,20 +58,16 @@ export async function POST(request: NextRequest) {
     });
 
     response.cookies.set("token", newToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...AUTH_COOKIE_OPTIONS,
       maxAge: 60 * 60 * 24 * 30,
-      path: "/",
     });
 
     response.cookies.set("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...AUTH_COOKIE_OPTIONS,
       maxAge: 60 * 60 * 24 * 90,
-      path: "/",
     });
+
+    response.headers.set("Cache-Control", "no-store");
 
     return response;
   } catch (error) {

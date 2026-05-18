@@ -30,6 +30,14 @@ type SavedTelemetryPosition = {
   recordedAt: Date;
 };
 
+const TELEMETRY_DEBUG_LOGS = process.env.TELEMETRY_DEBUG_LOGS === "true";
+
+function telemetryDebug(...args: unknown[]) {
+  if (TELEMETRY_DEBUG_LOGS) {
+    console.log(...args);
+  }
+}
+
 function sanitizeTelemetryUrl(url: string) {
   try {
     const parsed = new URL(url);
@@ -53,48 +61,48 @@ function parseTemplateParams(value: unknown) {
 
 function parseTimestamp(timestamp: string | number | null | undefined) {
   let recordedAt = new Date();
-  console.log('[Telemetry] ─────────────────────────────────────────────────────');
-  console.log('[Telemetry] Timestamp parsing:');
-  console.log('[Telemetry]   Raw timestamp:', timestamp);
-  console.log('[Telemetry]   Type:', typeof timestamp);
+  telemetryDebug('[Telemetry] ─────────────────────────────────────────────────────');
+  telemetryDebug('[Telemetry] Timestamp parsing:');
+  telemetryDebug('[Telemetry]   Raw timestamp:', timestamp);
+  telemetryDebug('[Telemetry]   Type:', typeof timestamp);
 
   if (!timestamp) {
-    console.log('[Telemetry]   ⚠️  No timestamp provided - using current time:', recordedAt.toISOString());
+    telemetryDebug('[Telemetry]   ⚠️  No timestamp provided - using current time:', recordedAt.toISOString());
     return recordedAt;
   }
 
   const tsNum = Number(timestamp);
-  console.log('[Telemetry]   As number:', tsNum);
-  console.log('[Telemetry]   Is NaN:', Number.isNaN(tsNum));
+  telemetryDebug('[Telemetry]   As number:', tsNum);
+  telemetryDebug('[Telemetry]   Is NaN:', Number.isNaN(tsNum));
 
   if (!Number.isNaN(tsNum)) {
     const isMilliseconds = tsNum > 1_000_000_000_000;
     const parsedDate = isMilliseconds ? new Date(tsNum) : new Date(tsNum * 1000);
 
-    console.log('[Telemetry]   Format detected:', isMilliseconds ? 'milliseconds' : 'seconds');
-    console.log('[Telemetry]   Parsed date:', parsedDate.toISOString());
+    telemetryDebug('[Telemetry]   Format detected:', isMilliseconds ? 'milliseconds' : 'seconds');
+    telemetryDebug('[Telemetry]   Parsed date:', parsedDate.toISOString());
 
     const minDate = new Date('2020-01-01').getTime();
     const maxDate = Date.now() + 86400000; // now + 1 day
 
-    console.log('[Telemetry]   Min allowed:', new Date(minDate).toISOString());
-    console.log('[Telemetry]   Max allowed:', new Date(maxDate).toISOString());
-    console.log('[Telemetry]   Is valid:', parsedDate.getTime() >= minDate && parsedDate.getTime() <= maxDate);
+    telemetryDebug('[Telemetry]   Min allowed:', new Date(minDate).toISOString());
+    telemetryDebug('[Telemetry]   Max allowed:', new Date(maxDate).toISOString());
+    telemetryDebug('[Telemetry]   Is valid:', parsedDate.getTime() >= minDate && parsedDate.getTime() <= maxDate);
 
     if (parsedDate.getTime() >= minDate && parsedDate.getTime() <= maxDate) {
       recordedAt = parsedDate;
-      console.log('[Telemetry]   ✅ Using parsed timestamp:', recordedAt.toISOString());
+      telemetryDebug('[Telemetry]   ✅ Using parsed timestamp:', recordedAt.toISOString());
       return recordedAt;
     }
 
     console.warn(`[Telemetry]   ❌ Invalid timestamp ${timestamp} (${parsedDate.toISOString()}) - using current time`);
     recordedAt = new Date();
-    console.log('[Telemetry]   Using current time:', recordedAt.toISOString());
+    telemetryDebug('[Telemetry]   Using current time:', recordedAt.toISOString());
     return recordedAt;
   }
 
   const isoDate = new Date(timestamp);
-  console.log('[Telemetry]   Trying ISO parse:', isoDate.toISOString());
+  telemetryDebug('[Telemetry]   Trying ISO parse:', isoDate.toISOString());
 
   if (!isNaN(isoDate.getTime())) {
     const minDate = new Date('2020-01-01').getTime();
@@ -102,13 +110,13 @@ function parseTimestamp(timestamp: string | number | null | undefined) {
 
     if (isoDate.getTime() >= minDate && isoDate.getTime() <= maxDate) {
       recordedAt = isoDate;
-      console.log('[Telemetry]   ✅ Using ISO timestamp:', recordedAt.toISOString());
+      telemetryDebug('[Telemetry]   ✅ Using ISO timestamp:', recordedAt.toISOString());
       return recordedAt;
     }
 
     console.warn(`[Telemetry]   ❌ Invalid date ${timestamp} - using current time`);
     recordedAt = new Date();
-    console.log('[Telemetry]   Using current time:', recordedAt.toISOString());
+    telemetryDebug('[Telemetry]   Using current time:', recordedAt.toISOString());
     return recordedAt;
   }
 
@@ -116,12 +124,15 @@ function parseTimestamp(timestamp: string | number | null | undefined) {
 }
 
 function getTelemetryKey(
+  request: NextRequest,
   searchParams: URLSearchParams,
   body: any,
   location: any,
   templateParams: URLSearchParams | null
 ) {
   return (
+    request.headers.get('x-telemetry-key') ||
+    request.headers.get('x-api-key') ||
     searchParams.get('key') ||
     body?.key ||
     location?.key ||
@@ -216,7 +227,11 @@ function extractTelemetryParams(
   };
 }
 
-function normalizeTelemetryItems(searchParams: URLSearchParams, body: any): ParsedTelemetryItem[] {
+function normalizeTelemetryItems(
+  request: NextRequest,
+  searchParams: URLSearchParams,
+  body: any
+): ParsedTelemetryItem[] {
   const candidateItems = Array.isArray(body)
     ? body
     : Array.isArray(body?.positions)
@@ -236,11 +251,11 @@ function normalizeTelemetryItems(searchParams: URLSearchParams, body: any): Pars
       if ('key' in templateEntries) {
         templateEntries.key = '***';
       }
-      console.log('[Telemetry] Template params:', templateEntries);
+      telemetryDebug('[Telemetry] Template params:', templateEntries);
     }
 
     return {
-      telemetryKey: getTelemetryKey(searchParams, body, location, templateParams),
+      telemetryKey: getTelemetryKey(request, searchParams, body, location, templateParams),
       params: extractTelemetryParams(searchParams, body, location, templateParams),
     };
   });
@@ -273,10 +288,10 @@ export async function GET(request: NextRequest) {
 async function handleTelemetry(request: NextRequest) {
   try {
     // LOG: Request received
-    console.log('[Telemetry] ═══════════════════════════════════════════════════════');
-    console.log('[Telemetry] Request received:', new Date().toISOString());
-    console.log('[Telemetry] Method:', request.method);
-    console.log('[Telemetry] URL:', sanitizeTelemetryUrl(request.url));
+    telemetryDebug('[Telemetry] ═══════════════════════════════════════════════════════');
+    telemetryDebug('[Telemetry] Request received:', new Date().toISOString());
+    telemetryDebug('[Telemetry] Method:', request.method);
+    telemetryDebug('[Telemetry] URL:', sanitizeTelemetryUrl(request.url));
 
     // Extract parameters from query string or POST body
     let telemetryItems: ParsedTelemetryItem[] = [];
@@ -298,13 +313,13 @@ async function handleTelemetry(request: NextRequest) {
         accuracy: searchParams.get('accuracy'),
         timestamp: searchParams.get('timestamp'),
       };
-      console.log('[Telemetry] Query params:', JSON.stringify(params, null, 2));
+      telemetryDebug('[Telemetry] Query params:', JSON.stringify(params, null, 2));
       telemetryItems = [{ telemetryKey: searchParams.get('key'), params }];
     } else {
       const body = await request.json().catch(() => ({}));
-      console.log('[Telemetry] POST body:', JSON.stringify(body, null, 2));
-      telemetryItems = normalizeTelemetryItems(searchParams, body);
-      console.log('[Telemetry] Parsed items:', JSON.stringify(telemetryItems.map((item) => item.params), null, 2));
+      telemetryDebug('[Telemetry] POST body:', JSON.stringify(body, null, 2));
+      telemetryItems = normalizeTelemetryItems(request, searchParams, body);
+      telemetryDebug('[Telemetry] Parsed items:', JSON.stringify(telemetryItems.map((item) => item.params), null, 2));
     }
 
     const expectedTelemetryKey = process.env.TELEMETRY_SHARED_KEY;
@@ -398,15 +413,15 @@ async function handleTelemetry(request: NextRequest) {
       const recordedAt = parseTimestamp(params.timestamp);
       const receivedAt = new Date();
 
-      console.log('[Telemetry] ─────────────────────────────────────────────────────');
-      console.log('[Telemetry] Saving position:');
-      console.log('[Telemetry]   Item:', index + 1, '/', telemetryItems.length);
-      console.log('[Telemetry]   Device:', deviceId);
-      console.log('[Telemetry]   Entity Type:', entity.type);
-      console.log('[Telemetry]   Location:', `(${latitude}, ${longitude})`);
-      console.log('[Telemetry]   Speed:', speed, 'km/h');
-      console.log('[Telemetry]   recordedAt:', recordedAt.toISOString());
-      console.log('[Telemetry]   receivedAt:', receivedAt.toISOString());
+      telemetryDebug('[Telemetry] ─────────────────────────────────────────────────────');
+      telemetryDebug('[Telemetry] Saving position:');
+      telemetryDebug('[Telemetry]   Item:', index + 1, '/', telemetryItems.length);
+      telemetryDebug('[Telemetry]   Device:', deviceId);
+      telemetryDebug('[Telemetry]   Entity Type:', entity.type);
+      telemetryDebug('[Telemetry]   Location:', `(${latitude}, ${longitude})`);
+      telemetryDebug('[Telemetry]   Speed:', speed, 'km/h');
+      telemetryDebug('[Telemetry]   recordedAt:', recordedAt.toISOString());
+      telemetryDebug('[Telemetry]   receivedAt:', receivedAt.toISOString());
 
       await prisma.position.create({
         data: {
@@ -436,7 +451,7 @@ async function handleTelemetry(request: NextRequest) {
         });
       }
 
-      console.log(`[Telemetry] ✅ Position saved for device ${deviceId} at (${latitude}, ${longitude})`);
+      telemetryDebug(`[Telemetry] ✅ Position saved for device ${deviceId} at (${latitude}, ${longitude})`);
       processedCount += 1;
     }
 
@@ -473,12 +488,12 @@ async function handleTelemetry(request: NextRequest) {
         });
 
         // Managers don't have geofence/load proximity checks
-        console.log(`[Telemetry] ✅ Manager location updated: ${latest.managerId}`);
+        telemetryDebug(`[Telemetry] ✅ Manager location updated: ${latest.managerId}`);
       }
     }
 
-    console.log(`[Telemetry] Processed ${processedCount} telemetry item(s)`);
-    console.log('[Telemetry] ═══════════════════════════════════════════════════════');
+    telemetryDebug(`[Telemetry] Processed ${processedCount} telemetry item(s)`);
+    telemetryDebug('[Telemetry] ═══════════════════════════════════════════════════════');
 
     // Return 200 OK (Traccar Client expects this)
     return new NextResponse('OK', { status: 200 });

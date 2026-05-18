@@ -35,6 +35,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       user: userWithoutPassword,
+    }, {
+      headers: {
+        "Cache-Control": "no-store",
+      },
     });
   } catch (error) {
     console.error("Get user error:", error);

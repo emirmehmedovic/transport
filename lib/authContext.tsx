@@ -33,15 +33,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Check if user is logged in on mount
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem("token");
       const storedUser = localStorage.getItem("user");
 
-      if (token && storedUser) {
+      if (storedUser) {
         try {
           setUser(JSON.parse(storedUser));
         } catch (error) {
           console.error("Error parsing user:", error);
-          localStorage.removeItem("token");
           localStorage.removeItem("user");
         }
       }
@@ -56,17 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const verifySession = async () => {
       try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        if (!token) return;
-
         const res = await fetch("/api/auth/me", {
           credentials: "include",
-          headers: { Authorization: `Bearer ${token}` },
         });
 
         if (res.ok) {
           const data = await res.json();
           setUser(data.user || null);
+          if (typeof window !== "undefined" && data.user) {
+            localStorage.setItem("user", JSON.stringify(data.user));
+          }
           return;
         }
 
@@ -81,13 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const refreshData = await refreshRes.json();
         if (typeof window !== "undefined") {
-          localStorage.setItem("token", refreshData.token);
           localStorage.setItem("user", JSON.stringify(refreshData.user));
         }
         setUser(refreshData.user || null);
       } catch (error) {
         if (typeof window !== "undefined") {
-          localStorage.removeItem("token");
           localStorage.removeItem("user");
         }
         setUser(null);
@@ -114,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("Login successful:", data.user);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
     }
 
@@ -136,7 +130,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Logout request failed:", error);
     } finally {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem("token");
         localStorage.removeItem("user");
       }
       setUser(null);
@@ -146,12 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = async () => {
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      if (!token) return;
-
       const res = await fetch("/api/auth/me", {
         credentials: "include",
-        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.ok) {
