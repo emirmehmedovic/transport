@@ -42,8 +42,8 @@ export interface DriverBorderCrossingReportData {
 }
 
 const PDFKIT_FONT_PATHS = {
-  regular: '/System/Library/Fonts/Supplemental/Arial.ttf',
-  bold: '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+  regular: path.join(process.cwd(), 'assets', 'fonts', 'NotoSans-Regular.ttf'),
+  bold: path.join(process.cwd(), 'assets', 'fonts', 'NotoSans-Bold.ttf'),
 } as const;
 
 function ensureFontExists(fontPath: string) {

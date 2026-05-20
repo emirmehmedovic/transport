@@ -94,9 +94,11 @@ const createLandmarkIcon = (landmark: any) => {
   });
 };
 
-const SNAP_MAX_GAP_MINUTES = 15;
-const SNAP_MAX_GAP_DISTANCE_KM = 3;
-const SNAP_MAX_IMPLIED_SPEED_KMH = 130;
+const SNAP_MAX_GAP_MINUTES = 30;
+const SNAP_HARD_MAX_GAP_DISTANCE_KM = 30;
+const SNAP_BASE_GAP_DISTANCE_KM = 6;
+const SNAP_DISTANCE_PER_MINUTE_KM = 1.35;
+const SNAP_MAX_IMPLIED_SPEED_KMH = 110;
 const SNAP_MAX_WAYPOINTS_PER_REQUEST = 40;
 const SNAP_MAX_ANCHORS_PER_GROUP = 240;
 const SIMPLIFY_EPSILON_KM = 0.08;
@@ -286,9 +288,15 @@ function shouldSnapAdjacentPoints(previous: Position, current: Position) {
   }
 
   const distanceKm = calculateDistanceKm(previous, current);
-  if (distanceKm > SNAP_MAX_GAP_DISTANCE_KM) {
+  const dynamicDistanceLimitKm = Math.min(
+    SNAP_HARD_MAX_GAP_DISTANCE_KM,
+    Math.max(SNAP_BASE_GAP_DISTANCE_KM, gapMinutes * SNAP_DISTANCE_PER_MINUTE_KM)
+  );
+
+  if (distanceKm > dynamicDistanceLimitKm) {
     return false;
   }
+
   const impliedSpeedKmh = distanceKm / (gapMinutes / 60);
 
   return impliedSpeedKmh <= SNAP_MAX_IMPLIED_SPEED_KMH;
