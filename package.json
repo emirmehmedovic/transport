@@ -12,6 +12,7 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "seed": "npx tsx prisma/seed.ts",
+    "seed:border-crossings": "npx tsx prisma/seed-border-crossings.ts",
     "recurring:run-today": "npx tsx scripts/recurring-runner.ts",
     "cron:start": "npx tsx scripts/cron-runner.ts",
     "monitor:salko": "node scripts/monitor-salko-gps.js",

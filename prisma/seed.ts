@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { BORDER_CROSSINGS } from '../data/border-crossings';
+import { seedBorderCrossings } from './seed-border-crossings';
 
 const prisma = new PrismaClient();
 const INITIAL_ADMIN_EMAIL = 'emir.m@live.com';
@@ -35,47 +35,8 @@ async function main() {
 
   console.log('✅ Admin user seeded:', admin.email);
 
-  // Seed border crossing zones
-  for (const crossing of BORDER_CROSSINGS) {
-    const existingZone = await prisma.zone.findFirst({
-      where: {
-        name: crossing.name,
-        type: 'BORDER_CROSSING',
-      },
-      select: { id: true },
-    });
-
-    if (existingZone) {
-      await prisma.zone.update({
-        where: { id: existingZone.id },
-        data: {
-          description: crossing.description,
-          centerLat: crossing.centerLat,
-          centerLon: crossing.centerLon,
-          radius: crossing.radius,
-          isActive: true,
-          notifyOnEntry: false,
-          notifyOnExit: false,
-        },
-      });
-    } else {
-      await prisma.zone.create({
-        data: {
-          name: crossing.name,
-          description: crossing.description,
-          centerLat: crossing.centerLat,
-          centerLon: crossing.centerLon,
-          radius: crossing.radius,
-          type: 'BORDER_CROSSING',
-          isActive: true,
-          notifyOnEntry: false,
-          notifyOnExit: false,
-        },
-      });
-    }
-  }
-
-  console.log(`✅ Border crossing zones seeded: ${BORDER_CROSSINGS.length}`);
+  const borderCrossingsCount = await seedBorderCrossings(prisma);
+  console.log(`✅ Border crossing zones seeded: ${borderCrossingsCount}`);
 
   console.log('');
   console.log('🎉 Seeding completed!');

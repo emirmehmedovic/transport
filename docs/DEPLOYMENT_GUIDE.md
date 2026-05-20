@@ -171,6 +171,18 @@ INITIAL_ADMIN_PASSWORD='PROMIJENI_OVO_U_JAKU_LOZINKU' npm run seed
 - plain-text lozinka se ne čuva u kodu niti u bazi
 - nakon prvog logina promijeni seed lozinku na onu koju ćeš stvarno koristiti operativno
 
+**Samo border crossing import bez admin seed-a:**
+```bash
+npm run seed:border-crossings
+```
+
+**BiH polygon napomena:**
+- `data/bih.geojson` je verzionisan u repou i deploya se kroz standardni `git pull`
+- u `.env` ostavi:
+```env
+BIH_GEOJSON_PATH=./data/bih.geojson
+```
+
 ---
 
 ## 🗺️ FAZA 3: OSRM SETUP (Routing Engine)

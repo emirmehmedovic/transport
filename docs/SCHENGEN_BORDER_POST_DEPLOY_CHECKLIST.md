@@ -8,16 +8,16 @@ Kratka provjera nakon deploymenta za:
 
 ## 1. Seed i granični prelazi
 
-Ako na production bazi još nisi radio seed:
+Ako želiš ubaciti ili osvježiti samo border crossing zone-ove:
 
 ```bash
 cd /var/www/transport/transport
-npm run seed
+npm run seed:border-crossings
 ```
 
-To je bitno jer seed ubacuje border crossing zone-ove u bazu.
+To ubacuje samo border crossing zone-ove u bazu i ne dira admin korisnika.
 
-Ako si seed već pokrenuo na toj bazi, ovaj korak ne treba ponavljati bez razloga.
+Ako radiš kompletan prvi seed, onda koristi `npm run seed`.
 
 ## 2. Schengen GeoJSON fajl
 
@@ -44,6 +44,8 @@ Provjeri da fajl postoji:
 cd /var/www/transport/transport
 ls -lh data/bih.geojson
 ```
+
+`bih.geojson` je sada verzionisan u repou, tako da bi nakon `git pull` trebao doći zajedno sa aplikacijom.
 
 U `.env` mora biti:
 
