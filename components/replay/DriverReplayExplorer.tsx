@@ -221,14 +221,23 @@ export function DriverReplayExplorer({
     });
   }, [driverOptions, driverSearch]);
 
-  const formattedAverageSpeed = useMemo(() => {
-    const value = statistics?.avgSpeed;
+  const formattedTotalDistance = useMemo(() => {
+    const value = statistics?.totalDistance;
     if (typeof value !== "number" || !Number.isFinite(value)) {
       return "0.0";
     }
 
     return value.toFixed(1);
-  }, [statistics?.avgSpeed]);
+  }, [statistics?.totalDistance]);
+
+  const formattedGapDistance = useMemo(() => {
+    const value = statistics?.gapDistance;
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return "0.0";
+    }
+
+    return value.toFixed(1);
+  }, [statistics?.gapDistance]);
 
   const fetchPositions = async (driverId: string) => {
     try {
@@ -521,12 +530,18 @@ ${positions
               <p className="text-2xl font-bold">{statistics.totalPositions}</p>
             </div>
             <div className="bg-white rounded-xl p-4 border border-dark-200">
-              <p className="text-sm text-dark-400">Prosječna Brzina</p>
-              <p className="text-2xl font-bold">{formattedAverageSpeed} km/h</p>
+              <p className="text-sm text-dark-400">Ukupna Distanca</p>
+              <p className="text-2xl font-bold">{formattedTotalDistance} km</p>
+              <p className="mt-1 text-xs text-dark-400">
+                {statistics.distanceMethod === "osrm_with_fallback"
+                  ? "OSRM uz fallback za dio segmenata"
+                  : "OSRM obračun po replay segmentima"}
+              </p>
             </div>
             <div className="bg-white rounded-xl p-4 border border-dark-200">
-              <p className="text-sm text-dark-400">Ukupna Distanca</p>
-              <p className="text-2xl font-bold">{statistics.totalDistance} km</p>
+              <p className="text-sm text-dark-400">Nepokriveni Gapovi</p>
+              <p className="text-2xl font-bold">{statistics.gapCount}</p>
+              <p className="mt-1 text-xs text-dark-400">{formattedGapDistance} km procijenjeno</p>
             </div>
             <div className="bg-white rounded-xl p-4 border border-dark-200">
               <p className="text-sm text-dark-400">Detektovani Stopovi</p>
