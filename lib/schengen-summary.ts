@@ -1,6 +1,11 @@
 import { DriverStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { countSchengenDaysWithFallbackBatch } from "@/lib/schengen-aggregate";
+import {
+  buildSchengenStatusSnapshot,
+  getSchengenCountFromDate,
+  getSchengenCycleInfo,
+} from "@/lib/schengen-cycle";
 
 export type SchengenSummaryRow = {
   driverId: string;
@@ -15,17 +20,22 @@ export type SchengenSummaryRow = {
     remainingDays: number;
     asOf: string;
     daysSinceManual: number;
+    expiresAtReset: boolean;
   };
+  nextResetAt: string | null;
 };
 
 export async function getSchengenSummaryRows(): Promise<{
   generatedAt: string;
   windowDays: number;
+  cycleStart: string;
+  cycleEnd: string;
+  nextResetAt: string | null;
+  mode: "rolling" | "fixed_cycle";
   drivers: SchengenSummaryRow[];
 }> {
   const now = new Date();
-  const windowDays = 180;
-  const windowFrom = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
+  const cycle = getSchengenCycleInfo(now);
 
   const drivers = await prisma.driver.findMany({
     select: {
@@ -45,32 +55,21 @@ export async function getSchengenSummaryRows(): Promise<{
   const usageByDriver = await countSchengenDaysWithFallbackBatch(
     drivers.map((driver) => ({
       driverId: driver.id,
-      from:
-        driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf
-          ? driver.schengenManualAsOf
-          : windowFrom,
+      from: getSchengenCountFromDate({
+        now,
+        manualRemainingDays: driver.schengenManualRemainingDays,
+        manualAsOf: driver.schengenManualAsOf,
+      }).countFrom,
     }))
   );
 
   const rows: SchengenSummaryRow[] = drivers.map((driver) => {
-    let remainingDays: number;
-    let usedDays: number;
-    let manual = null as SchengenSummaryRow["manual"];
-
-    if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
-      const manualFrom = driver.schengenManualAsOf;
-      const daysSinceManual = usageByDriver.get(driver.id) ?? 0;
-      remainingDays = Math.max(0, driver.schengenManualRemainingDays - daysSinceManual);
-      usedDays = Math.min(90, 90 - remainingDays);
-      manual = {
-        remainingDays: driver.schengenManualRemainingDays,
-        asOf: manualFrom.toISOString(),
-        daysSinceManual,
-      };
-    } else {
-      usedDays = usageByDriver.get(driver.id) ?? 0;
-      remainingDays = Math.max(0, 90 - usedDays);
-    }
+    const snapshot = buildSchengenStatusSnapshot({
+      now,
+      manualRemainingDays: driver.schengenManualRemainingDays,
+      manualAsOf: driver.schengenManualAsOf,
+      usageSinceCountFrom: usageByDriver.get(driver.id) ?? 0,
+    });
 
     return {
       driverId: driver.id,
@@ -78,10 +77,11 @@ export async function getSchengenSummaryRows(): Promise<{
       email: driver.user.email,
       status: driver.status,
       truckNumber: driver.primaryTruck?.truckNumber || null,
-      usedDays,
-      remainingDays,
-      warning: remainingDays < 7,
-      manual,
+      usedDays: snapshot.usedDays,
+      remainingDays: snapshot.remainingDays,
+      warning: snapshot.remainingDays < 7,
+      manual: snapshot.manual,
+      nextResetAt: snapshot.nextResetAt,
     };
   });
 
@@ -89,7 +89,11 @@ export async function getSchengenSummaryRows(): Promise<{
 
   return {
     generatedAt: now.toISOString(),
-    windowDays,
+    windowDays: 180,
+    cycleStart: cycle.cycleStart.toISOString(),
+    cycleEnd: cycle.displayTo.toISOString(),
+    nextResetAt: cycle.nextResetAt?.toISOString() ?? null,
+    mode: cycle.mode,
     drivers: rows,
   };
 }

@@ -90,6 +90,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       windowDays: summary.windowDays,
       generatedAt: summary.generatedAt,
+      cycleStart: summary.cycleStart,
+      cycleEnd: summary.cycleEnd,
+      nextResetAt: summary.nextResetAt,
+      mode: summary.mode,
       drivers: summary.drivers,
       pendingConfirmations,
       pendingConfirmationCounts: {

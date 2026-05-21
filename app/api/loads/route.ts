@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { isInSchengen } from "@/lib/schengen";
+import { countSchengenDaysWithFallback } from "@/lib/schengen-aggregate";
+import {
+  buildSchengenStatusSnapshot,
+  getSchengenCountFromDate,
+} from "@/lib/schengen-cycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -488,7 +493,6 @@ export async function POST(req: NextRequest) {
       const isSchengenLoad = points.some((p) => isInSchengen(p.lat, p.lng));
       if (isSchengenLoad) {
         const now = new Date();
-        const windowFrom = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
         const driver = await prisma.driver.findUnique({
           where: { id: driverId },
           select: {
@@ -498,21 +502,18 @@ export async function POST(req: NextRequest) {
         });
 
         if (driver) {
-          const days = await prisma.schengenDay.findMany({
-            where: {
-              driverId,
-              date: { gte: driver.schengenManualAsOf || windowFrom },
-              inSchengen: true,
-            },
-            select: { date: true },
+          const countFrom = getSchengenCountFromDate({
+            now,
+            manualRemainingDays: driver.schengenManualRemainingDays,
+            manualAsOf: driver.schengenManualAsOf,
+          }).countFrom;
+          const snapshot = buildSchengenStatusSnapshot({
+            now,
+            manualRemainingDays: driver.schengenManualRemainingDays,
+            manualAsOf: driver.schengenManualAsOf,
+            usageSinceCountFrom: await countSchengenDaysWithFallback(driverId, countFrom),
           });
-
-          let remainingDays = 90 - days.length;
-          if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
-            remainingDays = Math.max(0, driver.schengenManualRemainingDays - days.length);
-          } else {
-            remainingDays = Math.max(0, remainingDays);
-          }
+          const remainingDays = snapshot.remainingDays;
 
           if (remainingDays < 7) {
             warning = `Upozorenje: vozaču je preostalo ${remainingDays} dana u Schengen 90/180.`;

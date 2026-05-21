@@ -7,6 +7,10 @@ import {
   detectBorderCrossings,
   getNearestBorderCrossing,
 } from "@/lib/schengen-border";
+import {
+  buildSchengenStatusSnapshot,
+  getSchengenCountFromDate,
+} from "@/lib/schengen-cycle";
 
 function getCrossingConfidence(params: {
   nearestDistanceMeters: number | null;
@@ -60,7 +64,6 @@ export async function GET(
     }
 
     const now = new Date();
-    const windowFrom = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
     const borderWindowFrom = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
     const driver = await prisma.driver.findUnique({
@@ -234,51 +237,28 @@ export async function GET(
       };
     });
 
-    // Manual override: remaining days as of a date, then decrement with new Schengen days
-    if (driver.schengenManualRemainingDays !== null && driver.schengenManualAsOf) {
-      const manualFrom = new Date(driver.schengenManualAsOf);
-      const daysSinceManual = await countSchengenDaysWithFallback(params.id, manualFrom);
-      const remainingDays = Math.max(0, driver.schengenManualRemainingDays - daysSinceManual);
-      const usedDays = Math.min(90, 90 - remainingDays);
-
-      return NextResponse.json({
-        windowDays: 180,
-        usedDays,
-        remainingDays,
-        from: manualFrom.toISOString(),
-        to: now.toISOString(),
-        manual: {
-          remainingDays: driver.schengenManualRemainingDays,
-          asOf: manualFrom.toISOString(),
-          daysSinceManual,
-        },
-        borderCrossings: enrichedBorderCrossings,
-        borderWindowFrom: borderWindowFrom.toISOString(),
-      });
-    }
-
-    const aggregated = await prisma.schengenDay.findMany({
-      where: {
-        driverId: params.id,
-        date: { gte: windowFrom },
-      },
-      select: { date: true, inSchengen: true },
-      orderBy: { date: "asc" },
+    const countFrom = getSchengenCountFromDate({
+      now,
+      manualRemainingDays: driver.schengenManualRemainingDays,
+      manualAsOf: driver.schengenManualAsOf,
+    }).countFrom;
+    const usageSinceCountFrom = await countSchengenDaysWithFallback(params.id, countFrom);
+    const snapshot = buildSchengenStatusSnapshot({
+      now,
+      manualRemainingDays: driver.schengenManualRemainingDays,
+      manualAsOf: driver.schengenManualAsOf,
+      usageSinceCountFrom,
     });
-
-    let usedDays = aggregated.filter((d) => d.inSchengen).length;
-
-    if (aggregated.length === 0) {
-      usedDays = await countSchengenDaysWithFallback(params.id, windowFrom);
-    }
-    const remainingDays = Math.max(0, 90 - usedDays);
 
     return NextResponse.json({
       windowDays: 180,
-      usedDays,
-      remainingDays,
-      from: windowFrom.toISOString(),
-      to: now.toISOString(),
+      usedDays: snapshot.usedDays,
+      remainingDays: snapshot.remainingDays,
+      from: snapshot.from,
+      to: snapshot.to,
+      nextResetAt: snapshot.nextResetAt,
+      mode: snapshot.mode,
+      manual: snapshot.manual,
       borderCrossings: enrichedBorderCrossings,
       borderWindowFrom: borderWindowFrom.toISOString(),
     });

@@ -22,7 +22,9 @@ interface SchengenDriverRow {
     remainingDays: number;
     asOf: string;
     daysSinceManual: number;
+    expiresAtReset: boolean;
   } | null;
+  nextResetAt: string | null;
 }
 
 interface DriverSchengenStats {
@@ -30,10 +32,13 @@ interface DriverSchengenStats {
   remainingDays: number;
   from: string;
   to: string;
+  nextResetAt: string | null;
+  mode: "rolling" | "fixed_cycle";
   manual?: {
     remainingDays: number;
     asOf: string;
     daysSinceManual: number;
+    expiresAtReset: boolean;
   } | null;
 }
 
@@ -69,6 +74,9 @@ export default function SchengenOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [cycleStart, setCycleStart] = useState<string | null>(null);
+  const [cycleEnd, setCycleEnd] = useState<string | null>(null);
+  const [globalNextResetAt, setGlobalNextResetAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -94,6 +102,9 @@ export default function SchengenOverviewPage() {
         data.pendingConfirmationCounts || { total: 0, urgent: 0, warning: 0 }
       );
       setGeneratedAt(data.generatedAt || null);
+      setCycleStart(data.cycleStart || null);
+      setCycleEnd(data.cycleEnd || null);
+      setGlobalNextResetAt(data.nextResetAt || null);
     } catch (err: any) {
       setError(err.message || "Greška pri učitavanju");
     } finally {
@@ -259,12 +270,17 @@ export default function SchengenOverviewPage() {
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       Period praćenja
                     </p>
-                    <p className="text-sm font-medium text-slate-900 mt-0.5">
-                      {formatDateDMY(driverStats.from)} - {formatDateDMY(driverStats.to)}
-                    </p>
+                      <p className="text-sm font-medium text-slate-900 mt-0.5">
+                        {formatDateDMY(driverStats.from)} - {formatDateDMY(driverStats.to)}
+                      </p>
+                      {driverStats.nextResetAt && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Novi reset: {formatDateDMY(driverStats.nextResetAt)}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
+                </CardContent>
             </Card>
 
             {/* Manual Entry Warning */}
@@ -278,6 +294,11 @@ export default function SchengenOverviewPage() {
                       <p className="text-sm text-amber-800 mt-1">
                         Aktivan od {formatDateDMY(driverStats.manual.asOf)}. Početno preostalo dana: {driverStats.manual.remainingDays}.
                       </p>
+                      {driverStats.manual.expiresAtReset && driverStats.nextResetAt && (
+                        <p className="text-xs text-amber-700 mt-2">
+                          Ovaj ručni unos važi do reseta ciklusa {formatDateDMY(driverStats.nextResetAt)}.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -347,6 +368,12 @@ export default function SchengenOverviewPage() {
             </p>
           </div>
         </div>
+        {cycleStart && cycleEnd && (
+          <div className="mt-4 rounded-2xl bg-white/10 border border-white/15 px-4 py-3 text-sm text-dark-100">
+            Aktivni Schengen ciklus: {formatDateDMY(cycleStart)} - {formatDateDMY(cycleEnd)}
+            {globalNextResetAt ? ` · Novi reset: ${formatDateDMY(globalNextResetAt)}` : ""}
+          </div>
+        )}
       </PageHeader>
 
       <Card className="rounded-3xl shadow-lg border-none overflow-hidden bg-white/95 backdrop-blur-sm">
@@ -552,6 +579,11 @@ export default function SchengenOverviewPage() {
                           Ručni unos
                         </span>
                       )}
+                      {row.nextResetAt && (
+                        <span className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+                          Reset {formatDateDMY(row.nextResetAt)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -638,7 +670,9 @@ export default function SchengenOverviewPage() {
                               Ručni unos ({formatDateDMY(row.manual.asOf)})
                             </span>
                           ) : (
-                            <span className="text-xs text-slate-400">-</span>
+                            <span className="text-xs text-slate-400">
+                              {row.nextResetAt ? `Reset ${formatDateDMY(row.nextResetAt)}` : "-"}
+                            </span>
                           )}
                         </td>
                       </tr>
