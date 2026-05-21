@@ -17,6 +17,10 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function toDayKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const decoded = await getVerifiedAuthUserFromRequest(req);
@@ -85,6 +89,19 @@ export async function POST(req: NextRequest) {
       report.periodEnd && report.periodEnd < untilDate ? report.periodEnd : untilDate;
     const auditWindowFrom = new Date(SCHENGEN_RESET_BASE_DATE);
     const cycle = getSchengenCycleInfo(effectiveUntilDate);
+    const activeManualInCurrentCycle =
+      driver.schengenManualRemainingDays !== null &&
+      driver.schengenManualAsOf !== null &&
+      driver.schengenManualAsOf >= cycle.cycleStart &&
+      driver.schengenManualAsOf < cycle.cycleEndExclusive;
+    const manualAsOfDay = activeManualInCurrentCycle && driver.schengenManualAsOf
+      ? toDayKey(driver.schengenManualAsOf)
+      : null;
+    const reportStartsAfterManual =
+      activeManualInCurrentCycle &&
+      driver.schengenManualAsOf &&
+      report.periodStart &&
+      report.periodStart > driver.schengenManualAsOf;
 
     const positions = await prisma.position.findMany({
       where: {
@@ -138,11 +155,32 @@ export async function POST(req: NextRequest) {
 
     const internalDistance = await calculateInternalDistanceFromPositions(positions);
 
-    const oemUsedDays = report.coveredDays.filter((day) => {
+    const oemCoveredDaysFromReset = report.coveredDays.filter((day) => {
       const asDate = new Date(`${day}T00:00:00.000Z`);
       return asDate >= SCHENGEN_RESET_BASE_DATE && asDate <= effectiveUntilDate;
-    }).length;
-    const oemRemainingDays = Math.max(0, SCHENGEN_CYCLE_ENTITLEMENT_DAYS - oemUsedDays);
+    });
+    const incrementalCoveredDays =
+      activeManualInCurrentCycle && manualAsOfDay && reportStartsAfterManual
+        ? oemCoveredDaysFromReset.filter((day) => day > manualAsOfDay)
+        : oemCoveredDaysFromReset;
+    const baseUsedDays =
+      activeManualInCurrentCycle &&
+      reportStartsAfterManual &&
+      driver.schengenManualRemainingDays !== null
+        ? SCHENGEN_CYCLE_ENTITLEMENT_DAYS - driver.schengenManualRemainingDays
+        : 0;
+    const oemUsedDays = Math.min(
+      SCHENGEN_CYCLE_ENTITLEMENT_DAYS,
+      baseUsedDays + incrementalCoveredDays.length
+    );
+    const oemRemainingDays = Math.max(
+      0,
+      activeManualInCurrentCycle &&
+        reportStartsAfterManual &&
+        driver.schengenManualRemainingDays !== null
+        ? driver.schengenManualRemainingDays - incrementalCoveredDays.length
+        : SCHENGEN_CYCLE_ENTITLEMENT_DAYS - oemUsedDays
+    );
 
     const oemCrossings: NormalizedAuditCrossing[] = report.borderCrossings.map((crossing) => ({
       type: crossing.from === "BIH" && crossing.to === "SCHENGEN" ? "EXIT_BIH" : "ENTRY_BIH",
@@ -204,7 +242,12 @@ export async function POST(req: NextRequest) {
         schengenDays: oemUsedDays,
         remainingDays: oemRemainingDays,
         borderCrossings: report.borderCrossings,
-        coveredDays: report.coveredDays,
+        coveredDays: oemCoveredDaysFromReset,
+        incrementalCoveredDays,
+        baselineMode:
+          activeManualInCurrentCycle && reportStartsAfterManual
+            ? "incremental_from_manual"
+            : "absolute_from_reset",
       },
       internal: {
         totalDistanceKm: internalDistance.totalDistanceKm,

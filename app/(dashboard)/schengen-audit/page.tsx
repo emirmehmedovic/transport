@@ -57,6 +57,8 @@ type AuditResponse = {
       address: string | null;
     }>;
     coveredDays: string[];
+    incrementalCoveredDays: string[];
+    baselineMode: "absolute_from_reset" | "incremental_from_manual";
   };
   internal: {
     totalDistanceKm: number;
@@ -636,6 +638,7 @@ export default function SchengenAuditPage() {
                     <p>Vozač iz izvještaja: <span className="font-medium">{result.oem.driverNames.join(", ") || "-"}</span></p>
                     <p>Period izvještaja: <span className="font-medium">{formatDateTime(result.oem.periodStart)} - {formatDateTime(result.oem.periodEnd)}</span></p>
                     <p>Preostalo dana do datuma: <span className="font-medium">{result.oem.remainingDays}</span></p>
+                    <p>Način baseline-a: <span className="font-medium">{result.oem.baselineMode === "incremental_from_manual" ? "Nastavak na postojeći baseline" : "Apsolutno od 10.04.2026"}</span></p>
                   </div>
                 </div>
 

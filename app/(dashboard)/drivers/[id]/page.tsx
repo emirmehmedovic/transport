@@ -2289,7 +2289,12 @@ export default function DriverDetailPage() {
                               <p className="text-sm text-slate-500">U auditu nema detektovanih OEM BiH/Schengen prelaza.</p>
                             ) : (
                               <div className="space-y-3">
-                                {schengenStats.auditImport.oemBorderCrossings.map((crossing, index) => (
+                                {[...schengenStats.auditImport.oemBorderCrossings]
+                                  .sort(
+                                    (a, b) =>
+                                      new Date(b.at).getTime() - new Date(a.at).getTime()
+                                  )
+                                  .map((crossing, index) => (
                                   <div
                                     key={`${crossing.at}-${index}`}
                                     className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3"
