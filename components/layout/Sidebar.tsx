@@ -27,6 +27,7 @@ import {
   MapPin,
   Calendar,
   FileSpreadsheet,
+  Satellite,
 } from "lucide-react";
 import { useAuth } from "@/lib/authContext";
 
@@ -46,6 +47,7 @@ const navigation: { category?: string; items: NavItem[] }[] = [
       { name: "Route Replay", href: "/route-replay", icon: Route, roles: ["ADMIN", "DISPATCHER", "DRIVER"] },
       { name: "Schengen 90/180", href: "/schengen", icon: Shield, roles: ["ADMIN", "DISPATCHER", "DRIVER"] },
       { name: "Schengen Audit", href: "/schengen-audit", icon: FileSpreadsheet, roles: ["ADMIN", "DISPATCHER"] },
+      { name: "Volvo rFMS", href: "/volvo-rfms", icon: Satellite, roles: ["ADMIN", "DISPATCHER"] },
     ],
   },
   {

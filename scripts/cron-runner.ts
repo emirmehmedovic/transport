@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { generateRecurringLoadsForDate } from "../lib/recurring-loads";
 import { runNotificationJobs } from "./notification-runner";
 import { sendWeeklySchengenReportEmail } from "../lib/schengen-weekly-email";
+import { getVolvoRfmsConfig, syncVolvoRfmsPositions } from "../lib/volvo-rfms-sync";
 
 const CRON_TIMEZONE = "Europe/Sarajevo";
 
@@ -15,6 +16,21 @@ async function runRecurringLoads() {
 async function runNotifications() {
   console.log("[Cron] Running compliance & maintenance notifications");
   await runNotificationJobs();
+}
+
+async function runVolvoRfmsSync() {
+  const config = await getVolvoRfmsConfig();
+  if (!config.enabled || !config.primaryTracking) {
+    return;
+  }
+
+  console.log("[Cron] Running Volvo rFMS sync");
+  const result = await syncVolvoRfmsPositions({
+    persistPositions: true,
+  });
+  console.log(
+    `[Cron] Volvo rFMS sync done: api=${result.apiPositionsFetched}, saved=${result.positionsSaved}, drivers=${result.driversUpdated}`
+  );
 }
 
 function scheduleJobs() {
@@ -42,6 +58,15 @@ function scheduleJobs() {
       await sendWeeklySchengenReportEmail();
     } catch (error) {
       console.error("[Cron] Weekly Schengen report email failed:", error);
+    }
+  }, { timezone: CRON_TIMEZONE });
+
+  // Every 10 minutes
+  cron.schedule("*/10 * * * *", async () => {
+    try {
+      await runVolvoRfmsSync();
+    } catch (error) {
+      console.error("[Cron] Volvo rFMS sync failed:", error);
     }
   }, { timezone: CRON_TIMEZONE });
 

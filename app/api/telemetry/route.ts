@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { checkGeofences, checkLoadProximity } from '@/lib/geofence';
 import { processDriverBorderCrossingPushNotifications } from '@/lib/driver-schengen-push';
+import { getVolvoRfmsConfig } from '@/lib/volvo-rfms-sync';
 
 type TelemetryParams = {
   id: string | null;
@@ -344,6 +345,7 @@ async function handleTelemetry(request: NextRequest) {
 
     const entityCache = new Map<string, { id: string; userId: string; type: 'DRIVER' | 'MANAGER' }>();
     const latestPerEntity = new Map<string, SavedTelemetryPosition>();
+    const volvoConfig = await getVolvoRfmsConfig();
     let processedCount = 0;
 
     for (const [index, item] of telemetryItems.entries()) {
@@ -383,6 +385,10 @@ async function handleTelemetry(request: NextRequest) {
         });
 
         if (foundDriver) {
+          if ((volvoConfig.driverSources[foundDriver.id] || 'TRACCAR') === 'VOLVO_RFMS') {
+            telemetryDebug(`[Telemetry] ℹ️ Ignoring Traccar telemetry for Volvo-selected driver ${foundDriver.id}`);
+            continue;
+          }
           entity = { id: foundDriver.id, userId: foundDriver.userId, type: 'DRIVER' };
           entityCache.set(deviceId, entity);
         } else {
