@@ -250,6 +250,122 @@ export async function GET(
       usageSinceCountFrom,
     });
 
+    let auditImport: {
+      provider: "VOLVO" | "RIO";
+      sourceFileName: string | null;
+      selectedUntilDate: string;
+      note: string | null;
+      createdAt: string;
+      createdByName: string;
+      baselineApplied: boolean;
+      oemSchengenDays: number | null;
+      oemCoveredDays: string[];
+      oemBorderCrossings: Array<{
+        at: string;
+        from: string;
+        to: string;
+        address: string | null;
+      }>;
+    } | null = null;
+
+    if (snapshot.manual) {
+      const manualAsOf = snapshot.manual.asOf;
+      const auditLogs = await prisma.auditLog.findMany({
+        where: {
+          entity: "DRIVER",
+          entityId: params.id,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      const matchingAudit = auditLogs.find((log) => {
+        const changes =
+          log.changes && typeof log.changes === "object" && !Array.isArray(log.changes)
+            ? (log.changes as Prisma.JsonObject)
+            : null;
+        if (!changes || changes.type !== "SCHENGEN_AUDIT" || changes.baselineApplied !== true) {
+          return false;
+        }
+
+        const baseline =
+          changes.suggestedManualBaseline &&
+          typeof changes.suggestedManualBaseline === "object" &&
+          !Array.isArray(changes.suggestedManualBaseline)
+            ? (changes.suggestedManualBaseline as Prisma.JsonObject)
+            : null;
+        if (!baseline || typeof baseline.asOf !== "string") return false;
+
+        return baseline.asOf.slice(0, 10) === manualAsOf.slice(0, 10);
+      });
+
+      if (matchingAudit) {
+        const changes = matchingAudit.changes as Prisma.JsonObject;
+        const oem =
+          changes.oem && typeof changes.oem === "object" && !Array.isArray(changes.oem)
+            ? (changes.oem as Prisma.JsonObject)
+            : null;
+
+        auditImport = {
+          provider: changes.provider === "RIO" ? "RIO" : "VOLVO",
+          sourceFileName: typeof changes.sourceFileName === "string" ? changes.sourceFileName : null,
+          selectedUntilDate:
+            typeof changes.selectedUntilDate === "string"
+              ? changes.selectedUntilDate
+              : snapshot.manual.asOf,
+          note: typeof changes.note === "string" ? changes.note : null,
+          createdAt: matchingAudit.createdAt.toISOString(),
+          createdByName: `${matchingAudit.user.firstName} ${matchingAudit.user.lastName}`,
+          baselineApplied: true,
+          oemSchengenDays:
+            oem && typeof oem.schengenDays === "number" ? Number(oem.schengenDays) : null,
+          oemCoveredDays:
+            oem && Array.isArray(oem.coveredDays)
+              ? oem.coveredDays.filter((item): item is string => typeof item === "string")
+              : [],
+          oemBorderCrossings:
+            oem && Array.isArray(oem.borderCrossings)
+              ? oem.borderCrossings
+                  .map((item) => {
+                    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+                    const crossing = item as Prisma.JsonObject;
+                    if (
+                      typeof crossing.at !== "string" ||
+                      typeof crossing.from !== "string" ||
+                      typeof crossing.to !== "string"
+                    ) {
+                      return null;
+                    }
+                    return {
+                      at: crossing.at,
+                      from: crossing.from,
+                      to: crossing.to,
+                      address: typeof crossing.address === "string" ? crossing.address : null,
+                    };
+                  })
+                  .filter(
+                    (
+                      item
+                    ): item is {
+                      at: string;
+                      from: string;
+                      to: string;
+                      address: string | null;
+                    } => Boolean(item)
+                  )
+              : [],
+        };
+      }
+    }
+
     return NextResponse.json({
       windowDays: 180,
       usedDays: snapshot.usedDays,
@@ -259,6 +375,7 @@ export async function GET(
       nextResetAt: snapshot.nextResetAt,
       mode: snapshot.mode,
       manual: snapshot.manual,
+      auditImport,
       borderCrossings: enrichedBorderCrossings,
       borderWindowFrom: borderWindowFrom.toISOString(),
     });

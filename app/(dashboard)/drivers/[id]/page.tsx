@@ -25,6 +25,8 @@ import {
   Shield,
   TrendingUp,
   BarChart3,
+  FileSpreadsheet,
+  Loader2,
 } from "lucide-react";
 import { DriverPerformance } from "@/components/performance";
 import AuditTimelineCard from "@/components/audit/AuditTimelineCard";
@@ -117,6 +119,47 @@ type TruckOption = {
   isActive: boolean;
 };
 
+type SavedSchengenAudit = {
+  id: string;
+  createdAt: string;
+  createdBy: {
+    name: string;
+    email: string;
+  };
+  provider: "VOLVO" | "RIO";
+  sourceFileName: string | null;
+  selectedUntilDate: string;
+  note: string | null;
+  baselineApplied: boolean;
+  suggestedManualBaseline: {
+    asOf: string;
+    remainingDays: number;
+  } | null;
+  verdict: {
+    status: "OK" | "MINOR_MISMATCH" | "NEEDS_REVIEW";
+    label: string;
+    description: string;
+  };
+  comparison: {
+    schengenDaysDelta: number;
+    distanceDeltaKm: number | null;
+  };
+  oem: {
+    schengenDays?: number;
+    totalDistanceKm?: number | null;
+    borderCrossings?: Array<{
+      at: string;
+      from: string;
+      to: string;
+      address: string | null;
+    }>;
+  };
+  internal: {
+    schengenDays?: number;
+    totalDistanceKm?: number;
+  };
+};
+
 export default function DriverDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -133,6 +176,8 @@ export default function DriverDetailPage() {
     remainingDays: number;
     from: string;
     to: string;
+    nextResetAt?: string | null;
+    mode?: string;
     borderCrossings?: {
       type: "EXIT_BIH" | "ENTRY_BIH";
       recordedAt: string;
@@ -176,8 +221,28 @@ export default function DriverDetailPage() {
       remainingDays: number;
       asOf: string;
       daysSinceManual: number;
+      expiresAtReset?: boolean;
     };
+    auditImport?: {
+      provider: "VOLVO" | "RIO";
+      sourceFileName: string | null;
+      selectedUntilDate: string;
+      note: string | null;
+      createdAt: string;
+      createdByName: string;
+      baselineApplied: boolean;
+      oemSchengenDays: number | null;
+      oemCoveredDays: string[];
+      oemBorderCrossings: Array<{
+        at: string;
+        from: string;
+        to: string;
+        address: string | null;
+      }>;
+    } | null;
   } | null>(null);
+  const [schengenAudits, setSchengenAudits] = useState<SavedSchengenAudit[]>([]);
+  const [schengenAuditsLoading, setSchengenAuditsLoading] = useState(false);
   const [schengenError, setSchengenError] = useState<string>("");
   const [manualRemaining, setManualRemaining] = useState<string>("");
   const [manualAsOf, setManualAsOf] = useState<string>("");
@@ -229,6 +294,10 @@ export default function DriverDetailPage() {
 
   useEffect(() => {
     fetchSchengen();
+  }, [driverId]);
+
+  useEffect(() => {
+    fetchSchengenAudits();
   }, [driverId]);
 
   useEffect(() => {
@@ -394,6 +463,22 @@ export default function DriverDetailPage() {
       }
     } catch (err: any) {
       setSchengenError(err.message || "Greška pri učitavanju Schengen podataka");
+    }
+  };
+
+  const fetchSchengenAudits = async () => {
+    try {
+      setSchengenAuditsLoading(true);
+      const res = await fetch(`/api/drivers/${driverId}/schengen-audits?limit=8`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Greška pri učitavanju Schengen audita");
+      }
+      setSchengenAudits(data.audits || []);
+    } catch (err: any) {
+      setSchengenError(err.message || "Greška pri učitavanju Schengen audita");
+    } finally {
+      setSchengenAuditsLoading(false);
     }
   };
 
@@ -1714,6 +1799,109 @@ export default function DriverDetailPage() {
               </div>
             )}
           </div>
+
+          <div className="rounded-3xl bg-white/95 backdrop-blur-sm border border-slate-200/60 shadow-lg overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-slate-700" />
+                OEM audit history
+              </h3>
+            </div>
+            <div className="p-6">
+              {schengenAuditsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Učitavam OEM audit history...
+                </div>
+              ) : schengenAudits.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-8 text-center">
+                  <p className="text-sm text-slate-500">Nema sačuvanih OEM audita za ovog vozača.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {schengenAudits.map((audit) => (
+                    <div key={audit.id} className="rounded-2xl border border-slate-200 bg-white px-5 py-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-slate-900">
+                              {audit.provider} · {formatDateTimeDMY(audit.selectedUntilDate)}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ${
+                                audit.verdict.status === "OK"
+                                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                  : audit.verdict.status === "MINOR_MISMATCH"
+                                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                                  : "bg-rose-50 text-rose-700 ring-rose-200"
+                              }`}
+                            >
+                              {audit.verdict.label}
+                            </span>
+                            {audit.baselineApplied && (
+                              <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 bg-blue-50 text-blue-700 ring-blue-200">
+                                Baseline primijenjen
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-500">
+                            Sačuvao: {audit.createdBy.name} · {formatDateTimeDMY(audit.createdAt)}
+                          </p>
+                          {audit.note && <p className="text-sm text-slate-700">{audit.note}</p>}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-sm md:min-w-[280px]">
+                          <div>
+                            <p className="text-slate-500">OEM / Naš Schengen</p>
+                            <p className="font-semibold text-slate-900">
+                              {audit.oem.schengenDays ?? "-"} / {audit.internal.schengenDays ?? "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Delta dana</p>
+                            <p className="font-semibold text-slate-900">{audit.comparison.schengenDaysDelta}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">OEM km</p>
+                            <p className="font-semibold text-slate-900">
+                              {typeof audit.oem.totalDistanceKm === "number"
+                                ? `${audit.oem.totalDistanceKm.toFixed(1)} km`
+                                : "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Delta km</p>
+                            <p className="font-semibold text-slate-900">
+                              {typeof audit.comparison.distanceDeltaKm === "number"
+                                ? `${audit.comparison.distanceDeltaKm.toFixed(1)} km`
+                                : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {Array.isArray(audit.oem.borderCrossings) && audit.oem.borderCrossings.length > 0 && (
+                        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                            OEM prelazi iz audita
+                          </p>
+                          <div className="space-y-2">
+                            {audit.oem.borderCrossings.slice(0, 3).map((crossing, index) => (
+                              <div key={`${audit.id}-${crossing.at}-${index}`} className="text-sm text-slate-700">
+                                <span className="font-medium">{crossing.from} → {crossing.to}</span>
+                                <span className="text-slate-500"> · {formatDateTimeDMY(crossing.at)}</span>
+                                {crossing.address ? <span className="text-slate-500"> · {crossing.address}</span> : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1765,6 +1953,11 @@ export default function DriverDetailPage() {
                         Ručni unos aktivan. Preostalo {schengenStats.manual.remainingDays} dana na dan{" "}
                         {formatDate(schengenStats.manual.asOf)}.
                       </p>
+                      {schengenStats.manual.expiresAtReset && schengenStats.nextResetAt && (
+                        <p className="mt-2 text-xs text-amber-800">
+                          Ovaj ručni unos važi do reseta ciklusa {formatDate(schengenStats.nextResetAt)}.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -2013,6 +2206,122 @@ export default function DriverDetailPage() {
                       </>
                     )}
                   </div>
+
+                  {schengenStats.auditImport && (
+                    <div className="rounded-3xl border border-slate-200/60 bg-white shadow-sm overflow-hidden">
+                      <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/40">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <h4 className="text-base font-bold text-slate-900">
+                              Aktivni baseline je importovan iz OEM audita
+                            </h4>
+                            <p className="mt-1 text-sm text-slate-600">
+                              {schengenStats.auditImport.provider} · sačuvao {schengenStats.auditImport.createdByName} ·{" "}
+                              {formatDateTimeDMY(schengenStats.auditImport.createdAt)}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              Audit do datuma <span className="font-semibold text-slate-800">{formatDate(schengenStats.auditImport.selectedUntilDate)}</span>
+                              {schengenStats.auditImport.sourceFileName
+                                ? ` · ${schengenStats.auditImport.sourceFileName}`
+                                : ""}
+                            </p>
+                          </div>
+                          <span className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 bg-blue-50 text-blue-700 ring-blue-200">
+                            OEM import
+                          </span>
+                        </div>
+                        {schengenStats.auditImport.note && (
+                          <div className="mt-4 rounded-2xl border border-blue-100 bg-white/80 px-4 py-3">
+                            <p className="text-sm text-slate-700">{schengenStats.auditImport.note}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-6 space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/60 p-5">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">OEM Schengen dani</p>
+                            <p className="mt-3 text-3xl font-bold text-slate-900">
+                              {schengenStats.auditImport.oemSchengenDays ?? "-"}
+                            </p>
+                          </div>
+                          <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-50/50 to-slate-100/50 border border-blue-200/40 p-5">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Importovani OEM dani</p>
+                            <p className="mt-3 text-3xl font-bold text-slate-900">
+                              {schengenStats.auditImport.oemCoveredDays.length}
+                            </p>
+                          </div>
+                          <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200/60 p-5">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">OEM prelazi</p>
+                            <p className="mt-3 text-3xl font-bold text-slate-900">
+                              {schengenStats.auditImport.oemBorderCrossings.length}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 px-5 py-4">
+                          <h5 className="text-sm font-bold text-slate-900">Dani importovani iz audita</h5>
+                          {schengenStats.auditImport.oemCoveredDays.length === 0 ? (
+                            <p className="mt-2 text-sm text-slate-500">Nema sačuvanih OEM dana u ovom auditu.</p>
+                          ) : (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {schengenStats.auditImport.oemCoveredDays.map((day) => (
+                                <span
+                                  key={day}
+                                  className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200"
+                                >
+                                  {formatDate(day)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-100 bg-white overflow-hidden">
+                          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/60">
+                            <h5 className="text-sm font-bold text-slate-900">OEM prelazi iz istog audita</h5>
+                            <p className="mt-1 text-sm text-slate-500">
+                              Ovi prelazi dolaze iz OEM izvještaja i ne miješaju se sa internim GPS replay podacima.
+                            </p>
+                          </div>
+                          <div className="p-5">
+                            {schengenStats.auditImport.oemBorderCrossings.length === 0 ? (
+                              <p className="text-sm text-slate-500">U auditu nema detektovanih OEM BiH/Schengen prelaza.</p>
+                            ) : (
+                              <div className="space-y-3">
+                                {schengenStats.auditImport.oemBorderCrossings.map((crossing, index) => (
+                                  <div
+                                    key={`${crossing.at}-${index}`}
+                                    className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3"
+                                  >
+                                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                      <span
+                                        className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${
+                                          crossing.from === "BIH" && crossing.to === "SCHENGEN"
+                                            ? "bg-rose-50 text-rose-700 ring-rose-200"
+                                            : crossing.from === "SCHENGEN" && crossing.to === "BIH"
+                                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                            : "bg-blue-50 text-blue-700 ring-blue-200"
+                                        }`}
+                                      >
+                                        {crossing.from} → {crossing.to}
+                                      </span>
+                                      <p className="text-sm font-semibold text-slate-900">
+                                        {formatDateTimeDMY(crossing.at)}
+                                      </p>
+                                    </div>
+                                    {crossing.address && (
+                                      <p className="mt-2 text-sm text-slate-500">{crossing.address}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-center py-12">
