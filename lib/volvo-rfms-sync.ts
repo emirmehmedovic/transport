@@ -20,6 +20,7 @@ export type VolvoRfmsConfig = {
   initialLookbackHours: number;
   lastReceivedAt: string | null;
   backfill14dCompletedAt: string | null;
+  backfillChunksCompleted: string[];
   driverSources: Record<string, DriverTrackingSource>;
 };
 
@@ -63,6 +64,7 @@ export type VolvoRfmsOverview = {
 export type VolvoRfmsSyncResult = {
   mode: "preview" | "primary_tracking";
   starttime: string;
+  stoptime: string | null;
   pagesFetched: number;
   apiPositionsFetched: number;
   matchedPositions: number;
@@ -80,8 +82,19 @@ const DEFAULT_CONFIG: VolvoRfmsConfig = {
   initialLookbackHours: 24,
   lastReceivedAt: null,
   backfill14dCompletedAt: null,
+  backfillChunksCompleted: [],
   driverSources: {},
 };
+
+export const VOLVO_BACKFILL_CHUNKS = [
+  { key: "d13_to_d10", label: "13 do 10 dana unazad", startDaysAgo: 13, stopDaysAgo: 10 },
+  { key: "d10_to_d7", label: "10 do 7 dana unazad", startDaysAgo: 10, stopDaysAgo: 7 },
+  { key: "d7_to_d4", label: "7 do 4 dana unazad", startDaysAgo: 7, stopDaysAgo: 4 },
+  { key: "d4_to_d1", label: "4 do 1 dan unazad", startDaysAgo: 4, stopDaysAgo: 1 },
+  { key: "d1_to_d0", label: "Zadnji 1 dan", startDaysAgo: 1, stopDaysAgo: 0 },
+] as const;
+
+export type VolvoBackfillChunkKey = (typeof VOLVO_BACKFILL_CHUNKS)[number]["key"];
 
 function normalizeVin(value: string | null | undefined) {
   return (value || "").trim().toUpperCase();
@@ -167,6 +180,15 @@ export async function getVolvoRfmsConfig(): Promise<VolvoRfmsConfig> {
         parsed.backfill14dCompletedAt.length > 0
           ? parsed.backfill14dCompletedAt
           : null,
+      backfillChunksCompleted: Array.isArray(parsed.backfillChunksCompleted)
+        ? parsed.backfillChunksCompleted.filter(
+            (value): value is string =>
+              typeof value === "string" &&
+              VOLVO_BACKFILL_CHUNKS.some((chunk) => chunk.key === value)
+          )
+        : typeof parsed.backfill14dCompletedAt === "string" && parsed.backfill14dCompletedAt.length > 0
+          ? VOLVO_BACKFILL_CHUNKS.map((chunk) => chunk.key)
+          : [],
       driverSources:
         parsed.driverSources && typeof parsed.driverSources === "object"
           ? Object.fromEntries(
@@ -202,6 +224,11 @@ export async function saveVolvoRfmsConfig(
       typeof input.backfill14dCompletedAt === "string"
         ? input.backfill14dCompletedAt
         : current.backfill14dCompletedAt,
+    backfillChunksCompleted: Array.isArray(input.backfillChunksCompleted)
+      ? input.backfillChunksCompleted.filter((value) =>
+          VOLVO_BACKFILL_CHUNKS.some((chunk) => chunk.key === value)
+        )
+      : current.backfillChunksCompleted,
     driverSources:
       input.driverSources && typeof input.driverSources === "object"
         ? Object.fromEntries(
@@ -356,7 +383,7 @@ export async function buildVolvoRfmsOverview(): Promise<VolvoRfmsOverview> {
   };
 }
 
-async function fetchAllIncrementalPositions(starttime: string) {
+async function fetchAllIncrementalPositions(starttime: string, stoptime?: string | null) {
   const all: VolvoRfmsVehiclePosition[] = [];
   let cursor = starttime;
   let pagesFetched = 0;
@@ -365,6 +392,7 @@ async function fetchAllIncrementalPositions(starttime: string) {
   while (true) {
     const batch = await fetchVolvoVehiclePositionsSince({
       starttime: cursor,
+      stoptime,
       bypassCache: true,
     });
 
@@ -400,6 +428,8 @@ export async function syncVolvoRfmsPositions(options?: {
   persistPositions?: boolean;
   forceLookbackHours?: number | null;
   explicitStarttime?: string | null;
+  explicitStoptime?: string | null;
+  updateCursor?: boolean;
 }) {
   if (!isVolvoRfmsConfigured()) {
     throw new Error("Volvo rFMS credentials nisu podešeni");
@@ -413,7 +443,10 @@ export async function syncVolvoRfmsPositions(options?: {
       ? buildDefaultStarttime(options.forceLookbackHours)
       : config.lastReceivedAt || buildDefaultStarttime(config.initialLookbackHours);
 
-  const { positions, pagesFetched } = await fetchAllIncrementalPositions(starttime);
+  const { positions, pagesFetched } = await fetchAllIncrementalPositions(
+    starttime,
+    options?.explicitStoptime || null
+  );
   const localTruckMap = await getLocalTruckMap();
 
   let matchedPositions = 0;
@@ -513,7 +546,8 @@ export async function syncVolvoRfmsPositions(options?: {
     }
   }
 
-  if (options?.persistPositions && newestReceivedAt && newestReceivedAt !== config.lastReceivedAt) {
+  const shouldUpdateCursor = options?.updateCursor ?? options?.persistPositions === true;
+  if (shouldUpdateCursor && newestReceivedAt && newestReceivedAt !== config.lastReceivedAt) {
     await saveVolvoRfmsConfig({
       lastReceivedAt: newestReceivedAt,
     });
@@ -522,6 +556,7 @@ export async function syncVolvoRfmsPositions(options?: {
   const result: VolvoRfmsSyncResult = {
     mode: options?.persistPositions ? "primary_tracking" : "preview",
     starttime,
+    stoptime: options?.explicitStoptime || null,
     pagesFetched,
     apiPositionsFetched: positions.length,
     matchedPositions,

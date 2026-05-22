@@ -20,6 +20,7 @@ type VolvoConfig = {
   initialLookbackHours: number;
   lastReceivedAt: string | null;
   backfill14dCompletedAt: string | null;
+  backfillChunksCompleted: string[];
   driverSources: Record<string, "TRACCAR" | "VOLVO_RFMS">;
 };
 
@@ -64,6 +65,14 @@ type VolvoOverviewResponse = {
   };
 };
 
+const BACKFILL_CHUNKS = [
+  { key: "d13_to_d10", label: "13 do 10 dana unazad" },
+  { key: "d10_to_d7", label: "10 do 7 dana unazad" },
+  { key: "d7_to_d4", label: "7 do 4 dana unazad" },
+  { key: "d4_to_d1", label: "4 do 1 dan unazad" },
+  { key: "d1_to_d0", label: "Zadnji 1 dan" },
+] as const;
+
 type SyncResponse = {
   success: boolean;
   result: {
@@ -106,6 +115,7 @@ export default function VolvoRfmsPage() {
     initialLookbackHours: 24,
     lastReceivedAt: null,
     backfill14dCompletedAt: null,
+    backfillChunksCompleted: [],
     driverSources: {},
   });
   const [syncResult, setSyncResult] = useState<SyncResponse["result"] | null>(null);
@@ -209,7 +219,7 @@ export default function VolvoRfmsPage() {
     }
   };
 
-  const handleBackfill13Days = async () => {
+  const handleBackfillChunk = async (chunkKey: string, chunkLabel: string) => {
     try {
       setBackfilling(true);
       setMessage(null);
@@ -222,7 +232,8 @@ export default function VolvoRfmsPage() {
         },
         credentials: "include",
         body: JSON.stringify({
-          action: "backfill-13-days",
+          action: "backfill-chunk",
+          chunkKey,
         }),
       });
 
@@ -234,7 +245,7 @@ export default function VolvoRfmsPage() {
       }
 
       setSyncResult(json.result);
-      setMessage("Volvo 13-dnevni backfill je uspješno pokrenut i zaključan.");
+      setMessage(`Volvo backfill chunk "${chunkLabel}" je uspješno završen.`);
       await loadOverview();
     } catch (err: any) {
       setError(err.message || "Greška pri Volvo backfill-u");
@@ -267,20 +278,6 @@ export default function VolvoRfmsPage() {
               {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
               Pokreni sync
             </button>
-            {data?.isAdmin && !configForm.backfill14dCompletedAt && (
-              <button
-                onClick={handleBackfill13Days}
-                disabled={backfilling || loading || !data?.overview.configured}
-                className="flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-xs md:text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60"
-              >
-                {backfilling ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Truck className="h-4 w-4" />
-                )}
-                Backfill 13 dana
-              </button>
-            )}
           </div>
         }
       >
@@ -416,12 +413,60 @@ export default function VolvoRfmsPage() {
                 {formatDateTime(configForm.lastReceivedAt)}
               </p>
               <p className="mt-2">
-                <span className="font-semibold text-dark-900">14d backfill:</span>{" "}
+                <span className="font-semibold text-dark-900">Chunk backfill:</span>{" "}
                 {configForm.backfill14dCompletedAt
-                  ? `pokrenut ${formatDateTime(configForm.backfill14dCompletedAt)}`
-                  : "nije još pokrenut"}
+                  ? `završen ${formatDateTime(configForm.backfill14dCompletedAt)}`
+                  : `${configForm.backfillChunksCompleted.length}/${BACKFILL_CHUNKS.length} završenih chunkova`}
               </p>
             </div>
+
+            {data?.isAdmin && (
+              <div className="rounded-2xl border border-dark-100 bg-white p-4">
+                <p className="font-semibold text-dark-900">Volvo backfill chunkovi</p>
+                <p className="mt-1 text-sm text-dark-500">
+                  Pokreći ih ručno jedan po jedan. Završen chunk ostaje precrtan.
+                </p>
+                <div className="mt-4 space-y-2">
+                  {BACKFILL_CHUNKS.map((chunk) => {
+                    const completed = configForm.backfillChunksCompleted.includes(chunk.key);
+                    return (
+                      <div
+                        key={chunk.key}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-dark-100 bg-dark-50 px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p
+                            className={`font-medium ${
+                              completed ? "text-dark-400 line-through" : "text-dark-900"
+                            }`}
+                          >
+                            {chunk.label}
+                          </p>
+                        </div>
+                        {completed ? (
+                          <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                            Završeno
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => void handleBackfillChunk(chunk.key, chunk.label)}
+                            disabled={backfilling || loading || !data?.overview.configured}
+                            className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60"
+                          >
+                            {backfilling ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Truck className="h-3.5 w-3.5" />
+                            )}
+                            Pokreni
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleSaveConfig}

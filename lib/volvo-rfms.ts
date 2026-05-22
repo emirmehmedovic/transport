@@ -168,12 +168,16 @@ export async function fetchVolvoLatestVehiclePositions(options?: {
 
 export async function fetchVolvoVehiclePositionsSince(params: {
   starttime: string;
+  stoptime?: string | null;
   bypassCache?: boolean;
 }) {
   const query = new URLSearchParams({
     starttime: params.starttime,
     datetype: "received",
   });
+  if (params.stoptime) {
+    query.set("stoptime", params.stoptime);
+  }
 
   const data = await rfmsFetch<VolvoVehiclePositionsResponse>(
     `/vehiclepositions?${query.toString()}`,

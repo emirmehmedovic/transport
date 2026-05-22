@@ -5,6 +5,7 @@ import {
   getVolvoRfmsConfig,
   saveVolvoRfmsConfig,
   syncVolvoRfmsPositions,
+  VOLVO_BACKFILL_CHUNKS,
 } from "@/lib/volvo-rfms-sync";
 
 export const runtime = "nodejs";
@@ -97,35 +98,48 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (action === "backfill-13-days") {
+    if (action === "backfill-chunk") {
       if (auth.user.role !== "ADMIN") {
         return noStoreJson({ error: "Samo admin može pokrenuti Volvo backfill" }, { status: 403 });
       }
 
       const config = await getVolvoRfmsConfig();
-      if (config.backfill14dCompletedAt) {
-        return noStoreJson(
-          { error: "Volvo 13-dnevni backfill je već ranije pokrenut" },
-          { status: 409 }
-        );
+      const chunkKey = String(body.chunkKey || "");
+      const chunk = VOLVO_BACKFILL_CHUNKS.find((item) => item.key === chunkKey);
+      if (!chunk) {
+        return noStoreJson({ error: "Nepoznat Volvo backfill chunk" }, { status: 400 });
+      }
+
+      if (config.backfillChunksCompleted.includes(chunk.key)) {
+        return noStoreJson({ error: "Ovaj Volvo backfill chunk je već završen" }, { status: 409 });
       }
 
       const explicitStarttime = new Date(
-        Date.now() - 13 * 24 * 60 * 60 * 1000
+        Date.now() - chunk.startDaysAgo * 24 * 60 * 60 * 1000
+      ).toISOString();
+      const explicitStoptime = new Date(
+        Date.now() - chunk.stopDaysAgo * 24 * 60 * 60 * 1000
       ).toISOString();
 
       const result = await syncVolvoRfmsPositions({
         persistPositions: true,
         explicitStarttime,
+        explicitStoptime,
+        updateCursor: false,
       });
 
+      const nextCompleted = [...new Set([...config.backfillChunksCompleted, chunk.key])];
       const nextConfig = await saveVolvoRfmsConfig({
-        backfill14dCompletedAt: new Date().toISOString(),
-        lastReceivedAt: result.cursorAdvancedTo || config.lastReceivedAt,
+        backfillChunksCompleted: nextCompleted,
+        backfill14dCompletedAt:
+          nextCompleted.length === VOLVO_BACKFILL_CHUNKS.length
+            ? new Date().toISOString()
+            : config.backfill14dCompletedAt,
       });
 
       return noStoreJson({
         success: true,
+        chunkKey: chunk.key,
         config: nextConfig,
         result,
       });
