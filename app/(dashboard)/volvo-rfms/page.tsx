@@ -444,9 +444,23 @@ export default function VolvoRfmsPage() {
                           </p>
                         </div>
                         {completed ? (
-                          <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
-                            Završeno
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                              Završeno
+                            </span>
+                            <button
+                              onClick={() => void handleBackfillChunk(chunk.key, chunk.label)}
+                              disabled={backfilling || loading || !data?.overview.configured}
+                              className="inline-flex items-center gap-2 rounded-full border border-dark-200 bg-white px-3 py-1.5 text-xs font-semibold text-dark-700 hover:bg-dark-50 disabled:opacity-60"
+                            >
+                              {backfilling ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCcw className="h-3.5 w-3.5" />
+                              )}
+                              Ponovi
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={() => void handleBackfillChunk(chunk.key, chunk.label)}

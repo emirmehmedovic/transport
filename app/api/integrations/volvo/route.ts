@@ -110,10 +110,6 @@ export async function POST(request: NextRequest) {
         return noStoreJson({ error: "Nepoznat Volvo backfill chunk" }, { status: 400 });
       }
 
-      if (config.backfillChunksCompleted.includes(chunk.key)) {
-        return noStoreJson({ error: "Ovaj Volvo backfill chunk je već završen" }, { status: 409 });
-      }
-
       const explicitStarttime = new Date(
         Date.now() - chunk.startDaysAgo * 24 * 60 * 60 * 1000
       ).toISOString();
@@ -126,6 +122,7 @@ export async function POST(request: NextRequest) {
         explicitStarttime,
         explicitStoptime,
         updateCursor: false,
+        allowAllMatchedDrivers: true,
       });
 
       const nextCompleted = [...new Set([...config.backfillChunksCompleted, chunk.key])];

@@ -430,6 +430,7 @@ export async function syncVolvoRfmsPositions(options?: {
   explicitStarttime?: string | null;
   explicitStoptime?: string | null;
   updateCursor?: boolean;
+  allowAllMatchedDrivers?: boolean;
 }) {
   if (!isVolvoRfmsConfigured()) {
     throw new Error("Volvo rFMS credentials nisu podešeni");
@@ -467,7 +468,11 @@ export async function syncVolvoRfmsPositions(options?: {
     }
 
     const trackingSource = config.driverSources[truck.primaryDriver.id] || "TRACCAR";
-    if (options?.persistPositions && trackingSource !== "VOLVO_RFMS") {
+    if (
+      options?.persistPositions &&
+      !options?.allowAllMatchedDrivers &&
+      trackingSource !== "VOLVO_RFMS"
+    ) {
       continue;
     }
 
