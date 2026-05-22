@@ -209,7 +209,7 @@ export default function VolvoRfmsPage() {
     }
   };
 
-  const handleBackfill14Days = async () => {
+  const handleBackfill13Days = async () => {
     try {
       setBackfilling(true);
       setMessage(null);
@@ -222,7 +222,7 @@ export default function VolvoRfmsPage() {
         },
         credentials: "include",
         body: JSON.stringify({
-          action: "backfill-14-days",
+          action: "backfill-13-days",
         }),
       });
 
@@ -234,7 +234,7 @@ export default function VolvoRfmsPage() {
       }
 
       setSyncResult(json.result);
-      setMessage("Volvo 14-dnevni backfill je uspješno pokrenut i zaključan.");
+      setMessage("Volvo 13-dnevni backfill je uspješno pokrenut i zaključan.");
       await loadOverview();
     } catch (err: any) {
       setError(err.message || "Greška pri Volvo backfill-u");
@@ -269,7 +269,7 @@ export default function VolvoRfmsPage() {
             </button>
             {data?.isAdmin && !configForm.backfill14dCompletedAt && (
               <button
-                onClick={handleBackfill14Days}
+                onClick={handleBackfill13Days}
                 disabled={backfilling || loading || !data?.overview.configured}
                 className="flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-xs md:text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60"
               >
@@ -278,7 +278,7 @@ export default function VolvoRfmsPage() {
                 ) : (
                   <Truck className="h-4 w-4" />
                 )}
-                Backfill 14 dana
+                Backfill 13 dana
               </button>
             )}
           </div>
