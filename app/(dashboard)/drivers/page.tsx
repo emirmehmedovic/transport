@@ -51,7 +51,7 @@ export default function DriversPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [sortBy, setSortBy] = useState<"createdAt" | "hireDate" | "status" | "name">(
+  const [sortBy, setSortBy] = useState<"createdAt" | "hireDate" | "status" | "name" | "truckMake">(
     "createdAt"
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -64,6 +64,8 @@ export default function DriversPage() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "ACTIVE" | "VACATION" | "SICK_LEAVE" | "INACTIVE"
   >("all");
+  const [truckMakeFilter, setTruckMakeFilter] = useState("all");
+  const [availableTruckMakes, setAvailableTruckMakes] = useState<string[]>([]);
 
   useEffect(() => {
     fetchDrivers();
@@ -72,9 +74,10 @@ export default function DriversPage() {
   const fetchDrivers = async (overrides?: {
     search?: string;
     statusFilter?: "all" | "ACTIVE" | "VACATION" | "SICK_LEAVE" | "INACTIVE";
+    truckMakeFilter?: string;
     page?: number;
     pageSize?: number;
-    sortBy?: "createdAt" | "hireDate" | "status" | "name";
+    sortBy?: "createdAt" | "hireDate" | "status" | "name" | "truckMake";
     sortDir?: "asc" | "desc";
   }) => {
     try {
@@ -82,6 +85,7 @@ export default function DriversPage() {
       const params = new URLSearchParams();
       const effectiveSearch = overrides?.search ?? search;
       const effectiveStatus = overrides?.statusFilter ?? statusFilter;
+      const effectiveTruckMake = overrides?.truckMakeFilter ?? truckMakeFilter;
       const effectivePage = overrides?.page ?? page;
       const effectivePageSize = overrides?.pageSize ?? pageSize;
       const effectiveSortBy = overrides?.sortBy ?? sortBy;
@@ -92,6 +96,9 @@ export default function DriversPage() {
       }
       if (effectiveStatus !== "all") {
         params.set("status", effectiveStatus);
+      }
+      if (effectiveTruckMake !== "all") {
+        params.set("truckMake", effectiveTruckMake);
       }
 
       params.set("page", String(effectivePage));
@@ -110,6 +117,7 @@ export default function DriversPage() {
       }
 
       setDrivers(data.drivers || []);
+      setAvailableTruckMakes(data.filters?.truckMakes || []);
       if (data.pagination) {
         setPagination(data.pagination);
       }
@@ -228,7 +236,7 @@ export default function DriversPage() {
       </PageHeader>
 
       {/* Search & Filter Bar - Floating Style */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4">
         <div className="relative md:col-span-2 group">
           <div className="absolute inset-0 bg-white rounded-2xl md:rounded-full shadow-soft transition-all group-hover:shadow-soft-lg"></div>
           <div className="relative flex items-center px-4 md:px-6 py-3 md:py-4">
@@ -274,6 +282,31 @@ export default function DriversPage() {
             </select>
           </div>
         </div>
+
+        <div className="relative group">
+          <div className="absolute inset-0 bg-white rounded-2xl md:rounded-full shadow-soft transition-all group-hover:shadow-soft-lg"></div>
+          <div className="relative flex items-center px-4 md:px-6 py-3 md:py-4">
+            <Truck className="w-4 h-4 md:w-5 md:h-5 text-dark-400 flex-shrink-0" />
+            <select
+              className="w-full ml-3 md:ml-4 bg-transparent border-none text-dark-900 focus:outline-none font-medium appearance-none cursor-pointer text-xs md:text-sm"
+              value={truckMakeFilter}
+              onChange={(e) => {
+                const value = e.target.value;
+                setTruckMakeFilter(value);
+                setPage(1);
+                setLoading(true);
+                fetchDrivers({ truckMakeFilter: value, page: 1 });
+              }}
+            >
+              <option value="all">Sve marke</option>
+              {availableTruckMakes.map((make) => (
+                <option key={make} value={make}>
+                  {make}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -287,7 +320,7 @@ export default function DriversPage() {
               value={`${sortBy}:${sortDir}`}
               onChange={(e) => {
                 const [nextSortBy, nextSortDir] = e.target.value.split(":") as [
-                  "createdAt" | "hireDate" | "status" | "name",
+                  "createdAt" | "hireDate" | "status" | "name" | "truckMake",
                   "asc" | "desc"
                 ];
                 setSortBy(nextSortBy);
@@ -305,6 +338,8 @@ export default function DriversPage() {
               <option value="status:desc">Status (Z-A)</option>
               <option value="name:asc">Ime (A-Z)</option>
               <option value="name:desc">Ime (Z-A)</option>
+              <option value="truckMake:asc">Marka kamiona (A-Z)</option>
+              <option value="truckMake:desc">Marka kamiona (Z-A)</option>
             </select>
           </div>
           <div className="flex items-center gap-1.5 md:gap-2 bg-white rounded-full px-3 md:px-4 py-1.5 md:py-2 shadow-soft">

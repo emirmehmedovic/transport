@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim() || "";
     const status = searchParams.get("status")?.trim().toUpperCase() || "";
-    const sortBy = searchParams.get("sortBy")?.trim() || "createdAt"; // createdAt | hireDate | status | name
+    const truckMake = searchParams.get("truckMake")?.trim() || "";
+    const sortBy = searchParams.get("sortBy")?.trim() || "createdAt"; // createdAt | hireDate | status | name | truckMake
     const sortDir = (searchParams.get("sortDir")?.trim().toLowerCase() || "desc") as
       | "asc"
       | "desc";
@@ -48,6 +49,17 @@ export async function GET(req: NextRequest) {
       ];
     }
 
+    if (truckMake) {
+      where.primaryTruck = {
+        is: {
+          make: {
+            equals: truckMake,
+            mode: "insensitive",
+          },
+        },
+      };
+    }
+
     const skip = (page - 1) * pageSize;
 
     const orderBy =
@@ -57,9 +69,11 @@ export async function GET(req: NextRequest) {
         ? { hireDate: sortDir }
         : sortBy === "status"
         ? { status: sortDir }
+        : sortBy === "truckMake"
+        ? { primaryTruck: { make: sortDir } }
         : { createdAt: sortDir };
 
-    const [drivers, total] = await Promise.all([
+    const [drivers, total, truckMakes] = await Promise.all([
       prisma.driver.findMany({
         where,
         include: {
@@ -86,10 +100,32 @@ export async function GET(req: NextRequest) {
         take: pageSize,
       }),
       prisma.driver.count({ where }),
+      prisma.truck.findMany({
+        where: {
+          make: {
+            not: "",
+          },
+          primaryDriver: {
+            isNot: null,
+          },
+        },
+        select: {
+          make: true,
+        },
+        distinct: ["make"],
+        orderBy: {
+          make: "asc",
+        },
+      }),
     ]);
 
     return NextResponse.json({
       drivers,
+      filters: {
+        truckMakes: truckMakes
+          .map((truck) => truck.make)
+          .filter((value): value is string => Boolean(value)),
+      },
       pagination: {
         page,
         pageSize,
