@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     return noStoreJson({
+      isAdmin: auth.user.role === "ADMIN",
       config,
       overview,
     });
@@ -92,6 +93,40 @@ export async function POST(request: NextRequest) {
 
       return noStoreJson({
         success: true,
+        result,
+      });
+    }
+
+    if (action === "backfill-14-days") {
+      if (auth.user.role !== "ADMIN") {
+        return noStoreJson({ error: "Samo admin može pokrenuti Volvo backfill" }, { status: 403 });
+      }
+
+      const config = await getVolvoRfmsConfig();
+      if (config.backfill14dCompletedAt) {
+        return noStoreJson(
+          { error: "Volvo 14-dnevni backfill je već ranije pokrenut" },
+          { status: 409 }
+        );
+      }
+
+      const explicitStarttime = new Date(
+        Date.now() - 14 * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      const result = await syncVolvoRfmsPositions({
+        persistPositions: true,
+        explicitStarttime,
+      });
+
+      const nextConfig = await saveVolvoRfmsConfig({
+        backfill14dCompletedAt: new Date().toISOString(),
+        lastReceivedAt: result.cursorAdvancedTo || config.lastReceivedAt,
+      });
+
+      return noStoreJson({
+        success: true,
+        config: nextConfig,
         result,
       });
     }

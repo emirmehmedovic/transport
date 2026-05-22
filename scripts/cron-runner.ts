@@ -61,8 +61,8 @@ function scheduleJobs() {
     }
   }, { timezone: CRON_TIMEZONE });
 
-  // Every 10 minutes
-  cron.schedule("*/10 * * * *", async () => {
+  // Every 5 minutes
+  cron.schedule("*/5 * * * *", async () => {
     try {
       await runVolvoRfmsSync();
     } catch (error) {

@@ -19,6 +19,7 @@ type VolvoConfig = {
   primaryTracking: boolean;
   initialLookbackHours: number;
   lastReceivedAt: string | null;
+  backfill14dCompletedAt: string | null;
   driverSources: Record<string, "TRACCAR" | "VOLVO_RFMS">;
 };
 
@@ -47,6 +48,7 @@ type VolvoMappingRow = {
 };
 
 type VolvoOverviewResponse = {
+  isAdmin: boolean;
   config: VolvoConfig;
   overview: {
     configured: boolean;
@@ -95,6 +97,7 @@ export default function VolvoRfmsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [configForm, setConfigForm] = useState<VolvoConfig>({
@@ -102,6 +105,7 @@ export default function VolvoRfmsPage() {
     primaryTracking: false,
     initialLookbackHours: 24,
     lastReceivedAt: null,
+    backfill14dCompletedAt: null,
     driverSources: {},
   });
   const [syncResult, setSyncResult] = useState<SyncResponse["result"] | null>(null);
@@ -205,6 +209,40 @@ export default function VolvoRfmsPage() {
     }
   };
 
+  const handleBackfill14Days = async () => {
+    try {
+      setBackfilling(true);
+      setMessage(null);
+      setError(null);
+
+      const res = await fetch("/api/integrations/volvo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          action: "backfill-14-days",
+        }),
+      });
+
+      const json = (await res.json()) as
+        | (SyncResponse & { config?: VolvoConfig })
+        | { error?: string };
+      if (!res.ok || !("success" in json)) {
+        throw new Error(("error" in json && json.error) || "Greška pri Volvo backfill-u");
+      }
+
+      setSyncResult(json.result);
+      setMessage("Volvo 14-dnevni backfill je uspješno pokrenut i zaključan.");
+      await loadOverview();
+    } catch (err: any) {
+      setError(err.message || "Greška pri Volvo backfill-u");
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 px-4 md:px-0">
       <PageHeader
@@ -229,6 +267,20 @@ export default function VolvoRfmsPage() {
               {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
               Pokreni sync
             </button>
+            {data?.isAdmin && !configForm.backfill14dCompletedAt && (
+              <button
+                onClick={handleBackfill14Days}
+                disabled={backfilling || loading || !data?.overview.configured}
+                className="flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-xs md:text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60"
+              >
+                {backfilling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Truck className="h-4 w-4" />
+                )}
+                Backfill 14 dana
+              </button>
+            )}
           </div>
         }
       >
@@ -362,6 +414,12 @@ export default function VolvoRfmsPage() {
               <p>
                 <span className="font-semibold text-dark-900">Zadnji cursor:</span>{" "}
                 {formatDateTime(configForm.lastReceivedAt)}
+              </p>
+              <p className="mt-2">
+                <span className="font-semibold text-dark-900">14d backfill:</span>{" "}
+                {configForm.backfill14dCompletedAt
+                  ? `pokrenut ${formatDateTime(configForm.backfill14dCompletedAt)}`
+                  : "nije još pokrenut"}
               </p>
             </div>
 

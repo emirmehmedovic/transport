@@ -19,6 +19,7 @@ export type VolvoRfmsConfig = {
   primaryTracking: boolean;
   initialLookbackHours: number;
   lastReceivedAt: string | null;
+  backfill14dCompletedAt: string | null;
   driverSources: Record<string, DriverTrackingSource>;
 };
 
@@ -78,6 +79,7 @@ const DEFAULT_CONFIG: VolvoRfmsConfig = {
   primaryTracking: false,
   initialLookbackHours: 24,
   lastReceivedAt: null,
+  backfill14dCompletedAt: null,
   driverSources: {},
 };
 
@@ -160,6 +162,11 @@ export async function getVolvoRfmsConfig(): Promise<VolvoRfmsConfig> {
         typeof parsed.lastReceivedAt === "string" && parsed.lastReceivedAt.length > 0
           ? parsed.lastReceivedAt
           : null,
+      backfill14dCompletedAt:
+        typeof parsed.backfill14dCompletedAt === "string" &&
+        parsed.backfill14dCompletedAt.length > 0
+          ? parsed.backfill14dCompletedAt
+          : null,
       driverSources:
         parsed.driverSources && typeof parsed.driverSources === "object"
           ? Object.fromEntries(
@@ -191,6 +198,10 @@ export async function saveVolvoRfmsConfig(
         : current.initialLookbackHours,
     lastReceivedAt:
       typeof input.lastReceivedAt === "string" ? input.lastReceivedAt : current.lastReceivedAt,
+    backfill14dCompletedAt:
+      typeof input.backfill14dCompletedAt === "string"
+        ? input.backfill14dCompletedAt
+        : current.backfill14dCompletedAt,
     driverSources:
       input.driverSources && typeof input.driverSources === "object"
         ? Object.fromEntries(
@@ -388,6 +399,7 @@ async function fetchAllIncrementalPositions(starttime: string) {
 export async function syncVolvoRfmsPositions(options?: {
   persistPositions?: boolean;
   forceLookbackHours?: number | null;
+  explicitStarttime?: string | null;
 }) {
   if (!isVolvoRfmsConfigured()) {
     throw new Error("Volvo rFMS credentials nisu podešeni");
@@ -395,7 +407,9 @@ export async function syncVolvoRfmsPositions(options?: {
 
   const config = await getVolvoRfmsConfig();
   const starttime =
-    options?.forceLookbackHours && options.forceLookbackHours > 0
+    options?.explicitStarttime && options.explicitStarttime.length > 0
+      ? options.explicitStarttime
+      : options?.forceLookbackHours && options.forceLookbackHours > 0
       ? buildDefaultStarttime(options.forceLookbackHours)
       : config.lastReceivedAt || buildDefaultStarttime(config.initialLookbackHours);
 
