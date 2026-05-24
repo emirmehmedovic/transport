@@ -1,8 +1,11 @@
 import * as XLSX from "xlsx";
 import { isInBosniaAndHerzegovina } from "@/lib/bosnia";
 import { isInSchengen } from "@/lib/schengen";
+import { toDayKeyInTimeZone } from "@/lib/schengen-aggregate";
 
 type AuditRegion = "BIH" | "SCHENGEN" | "OTHER" | "UNKNOWN";
+
+const AUDIT_TIMEZONE = "Europe/Sarajevo";
 
 export type OemAuditEvent = {
   timestamp: Date;
@@ -280,7 +283,7 @@ function parseRioDateTime(dateText: string | null, timeText: string | null) {
   }
 
   const [hours, minutes, seconds] = (timeText || "00:00:00").split(":").map((part) => Number(part));
-  const parsed = new Date(Date.UTC(year, month, day, hours || 0, minutes || 0, seconds || 0));
+  const parsed = new Date(year, month, day, hours || 0, minutes || 0, seconds || 0);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -311,12 +314,15 @@ function determineRegion(params: {
 }
 
 function addCoveredDays(daySet: Set<string>, start: Date, end: Date) {
-  const cursor = new Date(start);
   const finish = end > start ? end : start;
+  const cursor = new Date(start);
+
+  daySet.add(toDayKeyInTimeZone(cursor, AUDIT_TIMEZONE));
+  daySet.add(toDayKeyInTimeZone(finish, AUDIT_TIMEZONE));
 
   while (cursor <= finish) {
-    daySet.add(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    daySet.add(toDayKeyInTimeZone(cursor, AUDIT_TIMEZONE));
+    cursor.setHours(cursor.getHours() + 6);
   }
 }
 

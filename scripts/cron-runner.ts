@@ -4,6 +4,8 @@ import { generateRecurringLoadsForDate } from "../lib/recurring-loads";
 import { runNotificationJobs } from "./notification-runner";
 import { sendWeeklySchengenReportEmail } from "../lib/schengen-weekly-email";
 import { getVolvoRfmsConfig, syncVolvoRfmsPositions } from "../lib/volvo-rfms-sync";
+import { getRioNightlyStatus } from "../lib/rio-status";
+import { runRioNightlyImport } from "./rio-nightly-runner";
 
 const CRON_TIMEZONE = "Europe/Sarajevo";
 
@@ -33,6 +35,19 @@ async function runVolvoRfmsSync() {
   );
 }
 
+async function runRioNightly() {
+  const status = await getRioNightlyStatus();
+  if (!status.enabled) {
+    return;
+  }
+
+  console.log("[Cron] Running RIO nightly import");
+  const result = await runRioNightlyImport();
+  console.log(
+    `[Cron] RIO nightly done: assets=${result.processedAssets}, ok=${result.successfulAssets}, failed=${result.failedAssets}`
+  );
+}
+
 function scheduleJobs() {
   // Every day at 00:00
   cron.schedule("0 0 * * *", async () => {
@@ -58,6 +73,15 @@ function scheduleJobs() {
       await sendWeeklySchengenReportEmail();
     } catch (error) {
       console.error("[Cron] Weekly Schengen report email failed:", error);
+    }
+  }, { timezone: CRON_TIMEZONE });
+
+  // Every day at 00:40
+  cron.schedule("40 0 * * *", async () => {
+    try {
+      await runRioNightly();
+    } catch (error) {
+      console.error("[Cron] RIO nightly failed:", error);
     }
   }, { timezone: CRON_TIMEZONE });
 

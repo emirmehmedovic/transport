@@ -14,7 +14,8 @@ RIO koristimo kao:
 - pomoć za tačniji `Schengen` obračun
 
 Osnovna ideja:
-- poslije `00:00` skripta preuzima RIO izvještaj za prethodni dan
+- poslije `00:00` skripta koristi authenticated RIO browser session
+- povlači dnevne `historic-events` podatke za prethodni dan
 - parsira vožnje / događaje / pozicije
 - poredi sa našim Traccar pozicijama
 - gdje Traccar ima rupe, dopunjava ih RIO podacima po originalnom `timestamp`-u
@@ -54,30 +55,50 @@ Razlog:
 
 Za prethodni dan:
 
-1. otvori RIO portal
-2. preuzme dnevni izvještaj kretanja / povijesti vožnje
-3. sačuva originalni fajl
-4. parsira Excel
-5. mapira vozilo na naš `Truck` i `Driver`
-6. normalizuje događaje / pozicije
-7. uporedi ih sa postojećim Traccar pozicijama
-8. doda samo ono što nedostaje
-9. zapiše audit log / summary
+1. otvori RIO portal i napravi authenticated session
+2. povuče dnevne `historic-events` podatke
+3. opcionalno sačuva raw JSON payload
+4. mapira vozilo na naš `Truck` i `Driver`
+5. normalizuje događaje / pozicije
+6. uporedi ih sa postojećim Traccar pozicijama
+7. doda samo ono što nedostaje
+8. zapiše audit log / summary
 
 ### 3. Način preuzimanja
 
 Preporuka:
 - `Playwright`
-- persistent browser session / sačuvan browser profil
+- authenticated browser session
+- interni RIO history endpointi
 
 Ne preporučuje se:
 - custom Chrome extension kao prva verzija
 - agresivni headless login svakih par minuta
+- oslanjanje na krhki UI export klik kao jedini tok
 
 Razlog:
 - Playwright je jednostavniji za održavanje
 - može raditi server-side
-- lakše je kontrolisati raspored i download tok
+- lakše je kontrolisati raspored i history fetch tok
+
+### 4. Konkretni endpointi
+
+Kroz browser session portal već zove:
+- `GET https://api.asset-history.rio.cloud/historic-events/assets/{assetId}`
+- `GET https://api.asset-history.rio.cloud/historic-positions/assets/{assetId}`
+
+Za nightly import je praktičniji `historic-events`, jer sa:
+- `include_only_event_types=position,...`
+
+vraća gusti `position` stream sa:
+- `occurred_at`
+- `metadata.position.latitude`
+- `metadata.position.longitude`
+- `metadata.address`
+- `metadata.driver_name`
+- `metadata.mileage_in_km`
+- `metadata.speed_in_km_per_hour`
+- `metadata.fuel_level_in_percentage`
 
 ---
 
@@ -87,9 +108,12 @@ Razlog:
 
 Predloženi dijelovi:
 
-- `scripts/rio-download-report.ts`
+- `lib/rio-portal.ts`
+- `lib/rio-history.ts`
 - `lib/rio-import.ts`
 - `lib/rio-reconciliation.ts`
+- `scripts/rio-download-history.ts`
+- `scripts/rio-import-history.ts`
 - `scripts/rio-nightly-runner.ts`
 
 Opcionalno:
@@ -98,15 +122,17 @@ Opcionalno:
 
 ### Odgovornosti
 
-`rio-download-report.ts`
-- login / otvaranje RIO portala
-- odabir datuma
-- pokretanje exporta
-- čekanje download-a
+`rio-portal.ts`
+- login na RIO
+- otvaranje asset-history page-a
+- hvatanje bearer tokena iz browser sessiona
+
+`rio-history.ts`
+- ekstrakcija gustih `position` tačaka iz `historic-events`
+- proračun lokalnog dnevnog UTC raspona
 
 `rio-import.ts`
-- parsing `.xls` / `.xlsx`
-- normalizacija u interni format
+- upis history / CSV tačaka u interni format i `Position`
 
 `rio-reconciliation.ts`
 - poređenje sa Traccar pozicijama
@@ -457,10 +483,31 @@ tehnički opravdan.
 Prvi praktični korak:
 
 1. proof-of-concept `Playwright` skripta
-2. download jednog dnevnog RIO izvještaja
+2. fetch jednog dnevnog `historic-events` payload-a
 3. parser i pregled izlaza
 
 Tek poslije toga:
 - reconciliation
 - import u `Position`
 - nightly scheduler
+
+---
+
+## Nalaz iz stvarnog RIO portala
+
+Za asset:
+- `88ec0899-39e9-4979-a6e7-f9abdd097725`
+
+potvrđeno je da `historic-events` sa `position` eventima vraća gust dnevni trag.
+
+Test za lokalni dan:
+- `2026-05-22`
+
+vratio je:
+- `805` history događaja za jedan dan
+
+To potvrđuje da portal session + `historic-events` endpoint daje dovoljno gust trag za:
+- nightly import
+- gap filling
+- fallback replay
+- Schengen obračun
