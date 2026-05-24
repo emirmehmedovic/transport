@@ -35,11 +35,12 @@ export async function resolveRioImportTarget(params: {
   }
 
   if (params.truckNumber) {
-    const truck = await prisma.truck.findUnique({
-      where: { truckNumber: params.truckNumber },
+    const normalizedLookup = normalizeRioTruckLookup(params.truckNumber);
+    const trucks = await prisma.truck.findMany({
       select: {
         id: true,
         truckNumber: true,
+        licensePlate: true,
         primaryDriver: {
           select: {
             id: true,
@@ -48,6 +49,11 @@ export async function resolveRioImportTarget(params: {
         },
       },
     });
+
+    const truck =
+      trucks.find((candidate) => normalizeRioTruckLookup(candidate.licensePlate) === normalizedLookup) ||
+      trucks.find((candidate) => normalizeRioTruckLookup(candidate.truckNumber) === normalizedLookup) ||
+      null;
 
     if (!truck || !truck.primaryDriver) {
       throw new Error("Kamion nije pronađen ili nema dodijeljenog primarnog vozača");
@@ -62,6 +68,13 @@ export async function resolveRioImportTarget(params: {
   }
 
   throw new Error("Potreban je driverId ili truckNumber");
+}
+
+function normalizeRioTruckLookup(value: string | null | undefined) {
+  return (value || "")
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 export async function importRioCsvPositions(params: {
