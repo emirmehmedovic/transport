@@ -166,6 +166,8 @@ async function saveRioPositionPoints(params: {
     };
   }
 
+  const latestPoint = params.points.at(-1)!;
+
   const from = new Date(params.points[0].timestamp.getTime() - DEFAULT_TIME_TOLERANCE_MS);
   const to = new Date(params.points.at(-1)!.timestamp.getTime() + DEFAULT_TIME_TOLERANCE_MS);
   const existingPositions = await prisma.position.findMany({
@@ -240,6 +242,30 @@ async function saveRioPositionPoints(params: {
       recordedAt: point.timestamp,
     });
     savedPoints += 1;
+  }
+
+  if (!params.dryRun) {
+    const driver = await prisma.driver.findUnique({
+      where: { id: params.target.driverId },
+      select: {
+        lastLocationUpdate: true,
+      },
+    });
+
+    const shouldUpdateLastKnown =
+      !driver?.lastLocationUpdate ||
+      latestPoint.timestamp.getTime() >= driver.lastLocationUpdate.getTime();
+
+    if (shouldUpdateLastKnown) {
+      await prisma.driver.update({
+        where: { id: params.target.driverId },
+        data: {
+          lastKnownLatitude: latestPoint.latitude,
+          lastKnownLongitude: latestPoint.longitude,
+          lastLocationUpdate: latestPoint.timestamp,
+        },
+      });
+    }
   }
 
   return {
