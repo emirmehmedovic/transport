@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Shield, Loader2, Calendar, TrendingDown, CheckCircle2, Truck } from "lucide-react";
+import { AlertTriangle, Shield, Loader2, Calendar, TrendingDown, CheckCircle2, Truck, Search, X } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
 import { useAuth } from "@/lib/authContext";
 import { getDriverStatusLabel } from "@/lib/ui-labels";
@@ -77,6 +77,7 @@ export default function SchengenOverviewPage() {
   const [cycleStart, setCycleStart] = useState<string | null>(null);
   const [cycleEnd, setCycleEnd] = useState<string | null>(null);
   const [globalNextResetAt, setGlobalNextResetAt] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -128,6 +129,11 @@ export default function SchengenOverviewPage() {
   };
 
   const warnings = rows.filter((r) => r.warning).length;
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) => row.name.toLowerCase().includes(query));
+  }, [rows, searchQuery]);
 
   // Circular progress component
   const CircularProgress = ({ value, max, warning }: { value: number; max: number; warning: boolean }) => {
@@ -505,20 +511,43 @@ export default function SchengenOverviewPage() {
 
       <Card className="rounded-3xl shadow-lg border-none overflow-hidden bg-white/95 backdrop-blur-sm">
         <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-100 px-6 py-5">
-          <CardTitle className="text-lg font-semibold text-slate-900">
-            Vozači
-            <span className="text-sm font-normal text-slate-500 ml-2">
-              (sortirano po preostalim danima)
-            </span>
-          </CardTitle>
-          <button
-            onClick={fetchSummary}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-          >
-            <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span className="text-sm font-medium">Osvježi</span>
-          </button>
+          <div className="space-y-1">
+            <CardTitle className="text-lg font-semibold text-slate-900">
+              Vozači
+              <span className="text-sm font-normal text-slate-500 ml-2">
+                (sortirano po preostalim danima)
+              </span>
+            </CardTitle>
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative min-w-[260px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Pretraži vozača po imenu"
+                className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label="Očisti pretragu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={fetchSummary}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="text-sm font-medium">Osvježi</span>
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -533,16 +562,18 @@ export default function SchengenOverviewPage() {
                 </CardContent>
               </Card>
             </div>
-          ) : rows.length === 0 ? (
+          ) : filteredRows.length === 0 ? (
             <div className="p-12 text-center">
               <Shield className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">Nema podataka.</p>
+              <p className="text-sm text-slate-500">
+                {searchQuery ? "Nema rezultata za unesenu pretragu." : "Nema podataka."}
+              </p>
             </div>
           ) : (
             <>
               {/* Mobile Cards */}
               <div className="md:hidden divide-y divide-slate-100">
-                {rows.map((row, index) => (
+                {filteredRows.map((row, index) => (
                   <div
                     key={row.driverId}
                     className="px-4 py-4 hover:bg-slate-50/50 transition-colors cursor-pointer active:bg-slate-100"
@@ -615,7 +646,7 @@ export default function SchengenOverviewPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {rows.map((row, index) => (
+                    {filteredRows.map((row, index) => (
                       <tr
                         key={row.driverId}
                         className="group hover:bg-slate-50/50 transition-all duration-200 cursor-pointer"

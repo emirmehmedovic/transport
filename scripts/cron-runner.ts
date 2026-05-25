@@ -6,6 +6,7 @@ import { sendWeeklySchengenReportEmail } from "../lib/schengen-weekly-email";
 import { getVolvoRfmsConfig, syncVolvoRfmsPositions } from "../lib/volvo-rfms-sync";
 import { getRioNightlyStatus } from "../lib/rio-status";
 import { runRioNightlyImport } from "./rio-nightly-runner";
+import { aggregateSchengenDaysAllDrivers } from "../lib/schengen-aggregate";
 
 const CRON_TIMEZONE = "Europe/Sarajevo";
 
@@ -48,6 +49,12 @@ async function runRioNightly() {
   );
 }
 
+async function runSchengenAggregation() {
+  console.log("[Cron] Running Schengen day aggregation");
+  const result = await aggregateSchengenDaysAllDrivers();
+  console.log(`[Cron] Schengen aggregation done: drivers=${result.drivers}`);
+}
+
 function scheduleJobs() {
   // Every day at 00:00
   cron.schedule("0 0 * * *", async () => {
@@ -82,6 +89,15 @@ function scheduleJobs() {
       await runRioNightly();
     } catch (error) {
       console.error("[Cron] RIO nightly failed:", error);
+    }
+  }, { timezone: CRON_TIMEZONE });
+
+  // Every day at 04:30
+  cron.schedule("30 4 * * *", async () => {
+    try {
+      await runSchengenAggregation();
+    } catch (error) {
+      console.error("[Cron] Schengen aggregation failed:", error);
     }
   }, { timezone: CRON_TIMEZONE });
 
