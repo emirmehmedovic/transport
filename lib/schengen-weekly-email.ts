@@ -2,6 +2,7 @@ import { AppNotificationType, DriverStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendHtmlEmail } from "@/lib/email";
 import { getSchengenSummaryRows } from "@/lib/schengen-summary";
+import { detectBorderCrossings, getNearestBorderCrossing } from "@/lib/schengen-border";
 
 export const SCHENGEN_WEEKLY_REPORT_SETTING_KEY = "schengen_weekly_report_config";
 export const SCHENGEN_WEEKLY_REPORT_HISTORY_SETTING_KEY = "schengen_weekly_report_history";
@@ -92,62 +93,120 @@ async function getWeeklyBorderCrossingsByDriver(driverIds: string[]) {
   const since = new Date();
   since.setDate(since.getDate() - 7);
 
-  const notifications = await prisma.appNotification.findMany({
-    where: {
-      driverId: { in: driverIds },
-      type: {
-        in: [
-          AppNotificationType.DRIVER_BORDER_EXIT_EU,
-          AppNotificationType.DRIVER_BORDER_RETURN_BIH,
-        ],
+  const [positions, borderZones, notifications] = await Promise.all([
+    prisma.position.findMany({
+      where: {
+        driverId: { in: driverIds },
+        recordedAt: { gte: since },
       },
-      createdAt: { gte: since },
-    },
-    select: {
-      driverId: true,
-      type: true,
-      confirmedAt: true,
-      data: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      select: {
+        driverId: true,
+        latitude: true,
+        longitude: true,
+        accuracy: true,
+        recordedAt: true,
+      },
+      orderBy: [{ driverId: "asc" }, { recordedAt: "asc" }],
+    }),
+    prisma.zone.findMany({
+      where: {
+        isActive: true,
+        type: "BORDER_CROSSING",
+      },
+      select: {
+        id: true,
+        name: true,
+        centerLat: true,
+        centerLon: true,
+      },
+    }),
+    prisma.appNotification.findMany({
+      where: {
+        driverId: { in: driverIds },
+        type: {
+          in: [
+            AppNotificationType.DRIVER_BORDER_EXIT_EU,
+            AppNotificationType.DRIVER_BORDER_RETURN_BIH,
+          ],
+        },
+        createdAt: { gte: since },
+      },
+      select: {
+        driverId: true,
+        confirmedAt: true,
+        data: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
-  const byDriver = new Map<string, WeeklyBorderCrossing[]>();
-
+  const notificationsByCrossing = new Map<string, { confirmedAt: string | null }>();
   for (const notification of notifications) {
-    if (!notification.driverId) {
-      continue;
-    }
-
+    if (!notification.driverId) continue;
     const payload =
-      notification.data && typeof notification.data === "object"
+      notification.data && typeof notification.data === "object" && !Array.isArray(notification.data)
         ? (notification.data as Record<string, unknown>)
         : null;
+    const crossingAt =
+      typeof payload?.crossingAt === "string" ? payload.crossingAt : null;
+    const crossingType =
+      typeof payload?.crossingType === "string" ? payload.crossingType : null;
+    if (!crossingAt || !crossingType) continue;
+    const key = `${notification.driverId}:${crossingType}:${crossingAt}`;
+    if (notificationsByCrossing.has(key)) continue;
+    notificationsByCrossing.set(key, {
+      confirmedAt: notification.confirmedAt?.toISOString() ?? null,
+    });
+  }
 
-    const crossingAtRaw =
-      typeof payload?.crossingAt === "string"
-        ? payload.crossingAt
-        : notification.createdAt.toISOString();
-    const crossingAt = new Date(crossingAtRaw);
-
-    if (Number.isNaN(crossingAt.getTime())) {
+  const positionsByDriver = new Map<
+    string,
+    Array<{ latitude: number; longitude: number; accuracy: number | null; recordedAt: Date }>
+  >();
+  for (const position of positions) {
+    if (!position.driverId) {
       continue;
     }
 
-    const entry: WeeklyBorderCrossing = {
-      crossingAt: crossingAt.toISOString(),
-      borderCrossingName:
-        typeof payload?.borderCrossingName === "string"
-          ? payload.borderCrossingName
-          : null,
-      type: notification.type,
-      confirmedAt: notification.confirmedAt?.toISOString() ?? null,
-    };
+    const bucket = positionsByDriver.get(position.driverId) ?? [];
+    bucket.push({
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracy: position.accuracy,
+      recordedAt: position.recordedAt,
+    });
+    positionsByDriver.set(position.driverId, bucket);
+  }
 
-    const existing = byDriver.get(notification.driverId) ?? [];
-    existing.push(entry);
-    byDriver.set(notification.driverId, existing);
+  const byDriver = new Map<string, WeeklyBorderCrossing[]>();
+  for (const driverId of driverIds) {
+    const transitions = positionsByDriver.get(driverId) ?? [];
+    if (transitions.length === 0) {
+      byDriver.set(driverId, []);
+      continue;
+    }
+
+    const crossings = detectBorderCrossings(transitions)
+      .map((crossing) => {
+        const nearest = getNearestBorderCrossing(crossing, borderZones);
+        const key = `${driverId}:${crossing.type}:${crossing.recordedAt}`;
+        const notification = notificationsByCrossing.get(key);
+
+        return {
+          crossingAt: crossing.recordedAt,
+          borderCrossingName: nearest?.name ?? null,
+          type:
+            crossing.type === "EXIT_BIH"
+              ? AppNotificationType.DRIVER_BORDER_EXIT_EU
+              : AppNotificationType.DRIVER_BORDER_RETURN_BIH,
+          confirmedAt: notification?.confirmedAt ?? null,
+        } satisfies WeeklyBorderCrossing;
+      })
+      .sort(
+        (a, b) => new Date(b.crossingAt).getTime() - new Date(a.crossingAt).getTime()
+      );
+
+    byDriver.set(driverId, crossings);
   }
 
   return byDriver;
@@ -269,26 +328,69 @@ function buildWeeklySchengenReportHtml(params: {
 }) {
   const generatedAt = formatDateTime(new Date(params.generatedAt));
   const criticalCount = params.rows.filter((row) => row.remainingDays <= 7).length;
+  const warningCount = params.rows.filter(
+    (row) => row.remainingDays > 7 && row.remainingDays <= 14
+  ).length;
 
-  const rowsHtml = params.rows
+  const driverCardsHtml = params.rows
     .map((row, index) => {
-      const severity =
+      const remainingColor =
         row.remainingDays <= 3
           ? "#dc2626"
           : row.remainingDays <= 7
             ? "#d97706"
-            : "#0f172a";
+            : row.remainingDays <= 14
+              ? "#b45309"
+              : "#166534";
+      const remainingBackground =
+        row.remainingDays <= 3
+          ? "#fef2f2"
+          : row.remainingDays <= 7
+            ? "#fff7ed"
+            : row.remainingDays <= 14
+              ? "#fffbeb"
+              : "#f0fdf4";
+      const progressWidth = Math.max(4, Math.min((row.remainingDays / 90) * 100, 100));
 
       return `
-        <tr>
-          <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;">${index + 1}</td>
-          <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;">${escapeHtml(row.name)}</td>
-          <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;">${escapeHtml(row.email)}</td>
-          <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;">${escapeHtml(getStatusLabel(row.status))}</td>
-          <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;">${escapeHtml(row.truckNumber || "-")}</td>
-          <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;text-align:center;">${row.usedDays}</td>
-          <td style="padding:12px 10px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:${severity};">${row.remainingDays}</td>
-        </tr>
+        <div style="border:1px solid #e2e8f0;border-radius:18px;background:#ffffff;padding:16px 16px 14px;margin-top:${index === 0 ? "0" : "12px"};">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:12px;color:#64748b;font-weight:700;">#${index + 1}</div>
+              <div style="margin-top:4px;font-size:17px;line-height:1.3;font-weight:800;color:#0f172a;">${escapeHtml(row.name)}</div>
+              <div style="margin-top:4px;font-size:12px;color:#64748b;">${escapeHtml(row.email)}</div>
+            </div>
+            <div style="display:inline-block;padding:7px 11px;border-radius:999px;background:${remainingBackground};color:${remainingColor};font-weight:800;font-size:14px;">
+              Preostalo ${row.remainingDays}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#f8fafc;color:#334155;font-size:12px;font-weight:700;">Status: ${escapeHtml(getStatusLabel(row.status))}</span>
+            <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#f8fafc;color:#334155;font-size:12px;font-weight:700;">Kamion: ${escapeHtml(row.truckNumber || "-")}</span>
+            <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#f8fafc;color:#334155;font-size:12px;font-weight:700;">Reset: ${row.nextResetAt ? escapeHtml(new Date(row.nextResetAt).toLocaleDateString("bs-BA")) : "-"}</span>
+          </div>
+
+          <div style="margin-top:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+              <div style="font-size:12px;font-weight:700;color:#475569;">Iskorišteno</div>
+              <div style="font-size:14px;font-weight:800;color:#334155;">${row.usedDays} / 90</div>
+            </div>
+            <div style="margin-top:6px;height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
+              <div style="height:8px;width:${Math.max(4, Math.min((row.usedDays / 90) * 100, 100))}%;background:#475569;border-radius:999px;"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+              <div style="font-size:12px;font-weight:700;color:#475569;">Preostalo</div>
+              <div style="font-size:14px;font-weight:800;color:${remainingColor};">${row.remainingDays} / 90</div>
+            </div>
+            <div style="margin-top:6px;height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
+              <div style="height:8px;width:${progressWidth}%;background:${remainingColor};border-radius:999px;"></div>
+            </div>
+          </div>
+        </div>
       `;
     })
     .join("");
@@ -305,12 +407,27 @@ function buildWeeklySchengenReportHtml(params: {
                   const confirmationLabel = crossing.confirmedAt
                     ? `Potvrđeno ${escapeHtml(formatDateTime(new Date(crossing.confirmedAt)))}`
                     : "Čeka potvrdu";
+                  const directionLabel =
+                    crossing.type === AppNotificationType.DRIVER_BORDER_EXIT_EU
+                      ? "Izlazak prema Schengenu"
+                      : "Povratak u BiH";
+                  const directionBg =
+                    crossing.type === AppNotificationType.DRIVER_BORDER_EXIT_EU
+                      ? "#fef2f2"
+                      : "#f0fdf4";
+                  const directionColor =
+                    crossing.type === AppNotificationType.DRIVER_BORDER_EXIT_EU
+                      ? "#b91c1c"
+                      : "#166534";
 
                   return `
-                    <div style="padding:10px 0;border-top:1px solid #e2e8f0;font-size:13px;">
-                      <div style="font-weight:600;color:#0f172a;">${escapeHtml(getCrossingTypeLabel(crossing.type))}</div>
-                      <div style="margin-top:4px;color:#334155;">${escapeHtml(formatDateTime(new Date(crossing.crossingAt)))}${crossing.borderCrossingName ? ` • ${escapeHtml(crossing.borderCrossingName)}` : ""}</div>
-                      <div style="margin-top:3px;color:#64748b;">${escapeHtml(confirmationLabel)}</div>
+                    <div style="padding:12px 0;border-top:1px solid #e2e8f0;font-size:13px;">
+                      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span style="display:inline-block;padding:4px 8px;border-radius:999px;background:${directionBg};color:${directionColor};font-weight:700;">${escapeHtml(directionLabel)}</span>
+                        <span style="font-weight:600;color:#0f172a;">${escapeHtml(formatDateTime(new Date(crossing.crossingAt)))}</span>
+                      </div>
+                      <div style="margin-top:6px;color:#334155;">${crossing.borderCrossingName ? `Prelaz: ${escapeHtml(crossing.borderCrossingName)}` : "Prelaz nije imenovan"}</div>
+                      <div style="margin-top:4px;color:#64748b;">${escapeHtml(confirmationLabel)}</div>
                     </div>
                   `;
                 })
@@ -318,9 +435,18 @@ function buildWeeklySchengenReportHtml(params: {
             </div>`;
 
       return `
-        <details style="margin-top:12px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
-          <summary style="padding:14px 16px;cursor:pointer;font-weight:600;">
-            ${escapeHtml(row.name)} • preostalo ${row.remainingDays} dana
+        <details style="margin-top:12px;border:1px solid #e2e8f0;border-radius:16px;background:#ffffff;overflow:hidden;">
+          <summary style="padding:16px 18px;cursor:pointer;font-weight:600;list-style:none;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+              <div>
+                <div style="font-weight:700;color:#0f172a;">${escapeHtml(row.name)}</div>
+                <div style="margin-top:4px;font-size:12px;color:#64748b;">${escapeHtml(row.truckNumber || "-")} • ${escapeHtml(getStatusLabel(row.status))}</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:700;">Iskorišteno ${row.usedDays}</span>
+                <span style="display:inline-block;padding:6px 10px;border-radius:999px;background:${row.remainingDays <= 7 ? "#fff7ed" : "#f0fdf4"};color:${row.remainingDays <= 7 ? "#b45309" : "#166534"};font-weight:800;">Preostalo ${row.remainingDays}</span>
+              </div>
+            </div>
           </summary>
           ${content}
         </details>
@@ -329,56 +455,53 @@ function buildWeeklySchengenReportHtml(params: {
     .join("");
 
   return `
-    <div style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a;">
-      <div style="max-width:1100px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
-        <div style="padding:28px 32px;background:linear-gradient(135deg,#0f172a,#1e293b);color:#ffffff;">
-          <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;">Transport Management</div>
-          <h1 style="margin:10px 0 6px;font-size:28px;line-height:1.2;">Sedmični Schengen izvještaj</h1>
-          <p style="margin:0;font-size:14px;opacity:0.9;">Stanje preostalih Schengen dana po vozaču. Vozači su poredani od najmanjeg broja preostalih dana.</p>
+    <div style="margin:0;padding:32px 20px;background:#e2e8f0;font-family:Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:1180px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ee;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(15,23,42,0.08);">
+        <div style="padding:34px 36px;background:#e5e7eb;color:#1e3a8a;border-bottom:1px solid #cbd5e1;">
+          <div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#dbe4ee;color:#334155;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">Transport Manager • Weekly Report</div>
+          <h1 style="margin:14px 0 8px;font-size:31px;line-height:1.15;color:#1e3a8a;">Sedmični Schengen izvještaj</h1>
+          <p style="margin:0;max-width:760px;font-size:15px;line-height:1.6;color:#334155;">Jasan pregled preostalih i iskorištenih Schengen dana, uz sažetak kritičnih vozača i zadnjih 7 dana ulazaka i izlazaka iz Schengen zone.</p>
         </div>
 
-	        <div style="padding:24px 32px 8px;">
-          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;min-width:180px;">
+		        <div style="padding:28px 36px 10px;">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:22px;">
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;min-width:190px;">
               <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Generisano</div>
-              <div style="margin-top:6px;font-size:18px;font-weight:700;">${escapeHtml(generatedAt)}</div>
+              <div style="margin-top:8px;font-size:18px;font-weight:800;">${escapeHtml(generatedAt)}</div>
             </div>
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;min-width:180px;">
-              <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Vozača u izvještaju</div>
-              <div style="margin-top:6px;font-size:18px;font-weight:700;">${params.rows.length}</div>
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:16px 18px;min-width:190px;">
+              <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#1d4ed8;">Vozača u izvještaju</div>
+              <div style="margin-top:8px;font-size:24px;font-weight:800;color:#1e3a8a;">${params.rows.length}</div>
             </div>
-            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:14px 16px;min-width:180px;">
+            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:16px 18px;min-width:230px;">
               <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#9a3412;">Kritično stanje</div>
-              <div style="margin-top:6px;font-size:18px;font-weight:700;color:#9a3412;">${criticalCount} vozača sa 7 ili manje dana</div>
+              <div style="margin-top:8px;font-size:24px;font-weight:800;color:#c2410c;">${criticalCount}</div>
+              <div style="margin-top:4px;font-size:13px;color:#9a3412;">vozača sa 7 ili manje dana</div>
+            </div>
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:16px;padding:16px 18px;min-width:230px;">
+              <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#92400e;">Rizik naredne 2 sedmice</div>
+              <div style="margin-top:8px;font-size:24px;font-weight:800;color:#b45309;">${warningCount}</div>
+              <div style="margin-top:4px;font-size:13px;color:#92400e;">vozača sa 8 do 14 dana</div>
             </div>
           </div>
 
-	          <table style="width:100%;border-collapse:collapse;font-size:14px;">
-            <thead>
-              <tr style="background:#f8fafc;text-align:left;">
-                <th style="padding:12px 10px;border-bottom:1px solid #cbd5e1;">#</th>
-                <th style="padding:12px 10px;border-bottom:1px solid #cbd5e1;">Vozač</th>
-                <th style="padding:12px 10px;border-bottom:1px solid #cbd5e1;">Email</th>
-                <th style="padding:12px 10px;border-bottom:1px solid #cbd5e1;">Status</th>
-                <th style="padding:12px 10px;border-bottom:1px solid #cbd5e1;">Kamion</th>
-                <th style="padding:12px 10px;border-bottom:1px solid #cbd5e1;text-align:center;">Iskorišteno</th>
-                <th style="padding:12px 10px;border-bottom:1px solid #cbd5e1;text-align:center;">Preostalo</th>
-              </tr>
-            </thead>
-	            <tbody>
-	              ${rowsHtml}
-	            </tbody>
-	          </table>
+          <div style="margin-bottom:14px;padding:16px 18px;border:1px solid #e2e8f0;border-radius:16px;background:#f8fafc;">
+            <div style="font-size:18px;font-weight:800;color:#0f172a;">Pregled preostalih dana</div>
+            <div style="margin-top:6px;font-size:13px;color:#64748b;">Vozači su sortirani od najmanjeg broja preostalih dana. Prikaz je optimizovan za otvaranje na telefonu i desktopu.</div>
+          </div>
+          <div>
+            ${driverCardsHtml}
+          </div>
 
             <div style="margin-top:24px;">
-              <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Zadnjih 7 dana prelazaka</div>
-              <div style="font-size:13px;color:#64748b;margin-bottom:12px;">Proširi vozača za pregled zadnje sedmice border crossing događaja.</div>
+              <div style="font-size:20px;font-weight:800;margin-bottom:8px;color:#0f172a;">Ulazi i izlazi u zadnjih 7 dana</div>
+              <div style="font-size:13px;color:#64748b;margin-bottom:12px;">Proširi vozača za pregled zadnje sedmice detektovanih prelazaka. Prikaz koristi isti izvor kao Schengen UI.</div>
               ${detailsHtml}
             </div>
-	        </div>
+		        </div>
 
-        <div style="padding:18px 32px 28px;color:#64748b;font-size:13px;">
-          Ovaj mail je generisan automatski petkom. Schengen obračun koristi 90/180 logiku i postojeće ručne override-e gdje su uneseni.
+        <div style="padding:18px 36px 30px;color:#64748b;font-size:13px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+          Ovaj mail je generisan automatski petkom. Schengen obračun koristi 90/180 logiku, postojeće ručne override-e gdje su uneseni i isti border crossing izvor kao Schengen ekran u aplikaciji.
         </div>
       </div>
     </div>
