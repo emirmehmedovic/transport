@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Shield, Loader2, Calendar, TrendingDown, CheckCircle2, Truck, Search, X } from "lucide-react";
+import { AlertTriangle, Shield, Loader2, Calendar, TrendingDown, CheckCircle2, Truck, Search, X, Mail, History } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
 import { useAuth } from "@/lib/authContext";
 import { getDriverStatusLabel } from "@/lib/ui-labels";
@@ -60,6 +60,18 @@ interface PendingConfirmationCounts {
   warning: number;
 }
 
+interface WeeklyReportHistoryEntry {
+  id: string;
+  triggeredAt: string;
+  trigger: "manual" | "cron";
+  triggeredByName: string | null;
+  recipients: string[];
+  success: boolean;
+  reason: string | null;
+  driverCount: number;
+  criticalCount: number;
+}
+
 export default function SchengenOverviewPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -78,6 +90,11 @@ export default function SchengenOverviewPage() {
   const [cycleEnd, setCycleEnd] = useState<string | null>(null);
   const [globalNextResetAt, setGlobalNextResetAt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [weeklyReportHistory, setWeeklyReportHistory] = useState<WeeklyReportHistoryEntry[]>([]);
+  const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
+  const [weeklyReportSending, setWeeklyReportSending] = useState(false);
+  const [weeklyReportError, setWeeklyReportError] = useState("");
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -88,6 +105,9 @@ export default function SchengenOverviewPage() {
     }
 
     fetchSummary();
+    if (user.role === "ADMIN") {
+      fetchWeeklyReportHistory();
+    }
   }, [user]);
 
   const fetchSummary = async () => {
@@ -125,6 +145,37 @@ export default function SchengenOverviewPage() {
       setError(err.message || "Greška pri učitavanju");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWeeklyReportHistory = async () => {
+    try {
+      setWeeklyReportLoading(true);
+      setWeeklyReportError("");
+      const res = await fetch("/api/schengen/weekly-report");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Greška pri učitavanju historije");
+      setWeeklyReportHistory(data.history || []);
+    } catch (err: any) {
+      setWeeklyReportError(err.message || "Greška pri učitavanju historije");
+    } finally {
+      setWeeklyReportLoading(false);
+    }
+  };
+
+  const sendWeeklyReportNow = async () => {
+    try {
+      setWeeklyReportSending(true);
+      setWeeklyReportError("");
+      const res = await fetch("/api/schengen/weekly-report", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Greška pri slanju izvještaja");
+      setWeeklyReportHistory(data.history || []);
+      setHistoryModalOpen(true);
+    } catch (err: any) {
+      setWeeklyReportError(err.message || "Greška pri slanju izvještaja");
+    } finally {
+      setWeeklyReportSending(false);
     }
   };
 
@@ -519,8 +570,34 @@ export default function SchengenOverviewPage() {
               </span>
             </CardTitle>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative min-w-[260px]">
+	          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {user?.role === "ADMIN" && (
+                <>
+                  <button
+                    onClick={sendWeeklyReportNow}
+                    disabled={weeklyReportSending}
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    <Mail className={`w-4 h-4 ${weeklyReportSending ? "animate-pulse" : ""}`} />
+                    <span className="text-sm font-medium">
+                      {weeklyReportSending ? "Šaljem..." : "Pošalji izvještaj"}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHistoryModalOpen(true);
+                      if (weeklyReportHistory.length === 0 && !weeklyReportLoading) {
+                        fetchWeeklyReportHistory();
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
+                  >
+                    <History className="w-4 h-4" />
+                    <span className="text-sm font-medium">Historija slanja</span>
+                  </button>
+                </>
+              )}
+	            <div className="relative min-w-[260px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={searchQuery}
@@ -529,7 +606,7 @@ export default function SchengenOverviewPage() {
                 className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
               />
               {searchQuery && (
-                <button
+	            <button
                   type="button"
                   onClick={() => setSearchQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
@@ -546,11 +623,18 @@ export default function SchengenOverviewPage() {
             >
               <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               <span className="text-sm font-medium">Osvježi</span>
-            </button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
+	            </button>
+	          </div>
+	        </CardHeader>
+	        <CardContent className="p-0">
+            {weeklyReportError && user?.role === "ADMIN" && (
+              <div className="px-6 pt-5">
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {weeklyReportError}
+                </div>
+              </div>
+            )}
+	          {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
             </div>
@@ -716,7 +800,7 @@ export default function SchengenOverviewPage() {
         </CardContent>
       </Card>
 
-      <style jsx>{`
+	      <style jsx>{`
         @keyframes fadeInUp {
           from {
             opacity: 0;
@@ -744,7 +828,83 @@ export default function SchengenOverviewPage() {
         tbody tr {
           animation: fadeInUp 0.3s ease-out backwards;
         }
-      `}</style>
-    </div>
-  );
-}
+	      `}</style>
+
+      {historyModalOpen && user?.role === "ADMIN" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
+          <div className="w-full max-w-4xl rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Historija slanja Schengen izvještaja</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Pregled ručnih i automatskih slanja sedmičnog izvještaja.
+                </p>
+              </div>
+              <button
+                onClick={() => setHistoryModalOpen(false)}
+                className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                aria-label="Zatvori historiju"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto p-6">
+              {weeklyReportLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
+                </div>
+              ) : weeklyReportHistory.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-10 text-center text-sm text-slate-500">
+                  Još nema zabilježene historije slanja.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {weeklyReportHistory.map((entry) => (
+                    <div key={entry.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${entry.success ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                              {entry.success ? "Uspješno" : "Neuspješno"}
+                            </span>
+                            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-200 text-slate-700">
+                              {entry.trigger === "manual" ? "Ručno" : "Cron"}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-sm font-semibold text-slate-900">
+                            {new Date(entry.triggeredAt).toLocaleString("bs-BA")}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Pokrenuo: {entry.triggeredByName || (entry.trigger === "cron" ? "Sistem" : "-")}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Primaoci: {entry.recipients.length > 0 ? entry.recipients.join(", ") : "-"}
+                          </p>
+                          {entry.reason && (
+                            <p className="mt-2 text-sm text-red-600">{entry.reason}</p>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
+                          <div className="rounded-xl bg-white border border-slate-200 px-4 py-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Vozača</div>
+                            <div className="mt-1 text-2xl font-bold text-slate-900">{entry.driverCount}</div>
+                          </div>
+                          <div className="rounded-xl bg-white border border-slate-200 px-4 py-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kritično</div>
+                            <div className="mt-1 text-2xl font-bold text-amber-600">{entry.criticalCount}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+	    </div>
+	  );
+	}

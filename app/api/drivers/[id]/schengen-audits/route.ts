@@ -2,6 +2,7 @@ import { AuditAction, AuditEntity, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { getSchengenCycleInfo } from "@/lib/schengen-cycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,55 @@ type StoredSchengenAudit = {
   dayComparison: Record<string, unknown>;
   crossingComparison: Record<string, unknown>;
 };
+
+function parseStoredSchengenAudit(value: Prisma.JsonValue | null): StoredSchengenAudit | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const changes = value as Prisma.JsonObject;
+  if (changes.type !== "SCHENGEN_AUDIT") return null;
+  return changes as unknown as StoredSchengenAudit;
+}
+
+async function restoreManualBaselineFromRemainingAudits(tx: Prisma.TransactionClient, driverId: string) {
+  const now = new Date();
+  const cycle = getSchengenCycleInfo(now);
+  const logs = await tx.auditLog.findMany({
+    where: {
+      entity: AuditEntity.DRIVER,
+      entityId: driverId,
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      changes: true,
+    },
+  });
+
+  const activeBaselineAudit = logs
+    .map((log) => parseStoredSchengenAudit(log.changes))
+    .find((audit) => {
+      if (!audit?.baselineApplied || !audit.suggestedManualBaseline) return false;
+      const asOf = new Date(audit.suggestedManualBaseline.asOf);
+      return asOf >= cycle.cycleStart && asOf < cycle.cycleEndExclusive;
+    });
+
+  if (!activeBaselineAudit?.suggestedManualBaseline) {
+    await tx.driver.update({
+      where: { id: driverId },
+      data: {
+        schengenManualRemainingDays: null,
+        schengenManualAsOf: null,
+      },
+    });
+    return;
+  }
+
+  await tx.driver.update({
+    where: { id: driverId },
+    data: {
+      schengenManualRemainingDays: Math.round(activeBaselineAudit.suggestedManualBaseline.remainingDays),
+      schengenManualAsOf: new Date(activeBaselineAudit.suggestedManualBaseline.asOf),
+    },
+  });
+}
 
 export async function GET(
   req: NextRequest,
@@ -209,6 +259,66 @@ export async function POST(
     console.error("Schengen audit save error:", error);
     return NextResponse.json(
       { error: error?.message || "Greška pri spremanju audita" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const decoded = await getVerifiedAuthUserFromRequest(req);
+    if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
+      return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const auditId = typeof body?.auditId === "string" ? body.auditId : null;
+    const resetAll = body?.resetAll === true;
+
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        entity: AuditEntity.DRIVER,
+        entityId: params.id,
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        changes: true,
+      },
+    });
+
+    const schengenAuditLogs = logs.filter((log) => parseStoredSchengenAudit(log.changes));
+
+    if (!resetAll && !auditId) {
+      return NextResponse.json({ error: "Potreban je auditId ili resetAll" }, { status: 400 });
+    }
+
+    const idsToDelete = resetAll
+      ? schengenAuditLogs.map((log) => log.id)
+      : schengenAuditLogs.filter((log) => log.id === auditId).map((log) => log.id);
+
+    if (idsToDelete.length === 0) {
+      return NextResponse.json({ error: "Audit nije pronađen" }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.auditLog.deleteMany({
+        where: {
+          id: { in: idsToDelete },
+        },
+      });
+
+      await restoreManualBaselineFromRemainingAudits(tx, params.id);
+    });
+
+    return NextResponse.json({ ok: true, deletedCount: idsToDelete.length, resetAll });
+  } catch (error: any) {
+    console.error("Schengen audit delete error:", error);
+    return NextResponse.json(
+      { error: error?.message || "Greška pri poništavanju audita" },
       { status: 500 }
     );
   }

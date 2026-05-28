@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, Download, FileSpreadsheet, Loader2, Save, Search, ShieldCheck, Upload } from "lucide-react";
+import { CheckCircle2, ChevronDown, Download, FileSpreadsheet, Loader2, RotateCcw, Save, Search, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -325,6 +325,56 @@ export default function SchengenAuditPage() {
     }
   };
 
+  const handleDeleteAudit = async (auditId: string) => {
+    if (!result && !driverId) return;
+
+    try {
+      setSavingAudit(true);
+      setError("");
+      const res = await fetch(`/api/drivers/${driverId}/schengen-audits`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ auditId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Greška pri poništavanju audita");
+
+      setStatusMessage("Audit je poništen.");
+      await loadHistory(driverId);
+    } catch (err: any) {
+      setError(err.message || "Greška pri poništavanju audita");
+    } finally {
+      setSavingAudit(false);
+    }
+  };
+
+  const handleResetAllAudits = async () => {
+    if (!driverId) return;
+
+    try {
+      setSavingAudit(true);
+      setError("");
+      const res = await fetch(`/api/drivers/${driverId}/schengen-audits`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ resetAll: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Greška pri resetovanju audita");
+
+      setStatusMessage("Svi sačuvani auditi i baseline su poništeni.");
+      await loadHistory(driverId);
+    } catch (err: any) {
+      setError(err.message || "Greška pri resetovanju audita");
+    } finally {
+      setSavingAudit(false);
+    }
+  };
+
   const handleExportCsv = () => {
     if (!result) return;
 
@@ -536,7 +586,18 @@ export default function SchengenAuditPage() {
 
       <Card className="rounded-3xl shadow-lg border-none overflow-hidden bg-white/95 backdrop-blur-sm">
         <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-100 px-6 py-5">
-          <CardTitle className="text-lg font-semibold text-slate-900">Sačuvani auditi</CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-lg font-semibold text-slate-900">Sačuvani auditi</CardTitle>
+            <button
+              type="button"
+              onClick={() => void handleResetAllAudits()}
+              disabled={savingAudit || history.length === 0 || !driverId}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Poništi sve
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="p-6">
           {historyLoading ? (
@@ -565,7 +626,8 @@ export default function SchengenAuditPage() {
                       </p>
                       {audit.note && <p className="text-sm text-slate-700">{audit.note}</p>}
                     </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm md:min-w-[280px]">
+                    <div className="flex flex-col items-stretch gap-3 md:min-w-[320px]">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <p className="text-slate-500">OEM / Naš Schengen</p>
                         <p className="font-semibold text-slate-900">
@@ -590,6 +652,16 @@ export default function SchengenAuditPage() {
                           {audit.baselineApplied ? "Primijenjen" : "Nije primijenjen"}
                         </p>
                       </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteAudit(audit.id)}
+                        disabled={savingAudit}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Poništi audit
+                      </button>
                     </div>
                   </div>
                 </div>

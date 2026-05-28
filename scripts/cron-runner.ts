@@ -74,8 +74,8 @@ function scheduleJobs() {
     }
   }, { timezone: CRON_TIMEZONE });
 
-  // Every Friday at 08:00
-  cron.schedule("0 8 * * 5", async () => {
+  // Every Friday at 07:00
+  cron.schedule("0 7 * * 5", async () => {
     try {
       await sendWeeklySchengenReportEmail();
     } catch (error) {

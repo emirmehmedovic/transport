@@ -427,7 +427,7 @@ export default function SettingsPage() {
                 <div>
                   <div className="font-semibold text-dark-900">Aktiviraj sedmični Schengen mail</div>
                   <div className="text-sm text-dark-600">
-                    Cron ga šalje petkom u 08:00 po vremenskoj zoni Europe/Sarajevo.
+                    Cron ga šalje petkom u 07:00 po vremenskoj zoni Europe/Sarajevo.
                   </div>
                 </div>
               </label>

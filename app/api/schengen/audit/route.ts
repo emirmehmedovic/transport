@@ -97,11 +97,11 @@ export async function POST(req: NextRequest) {
     const manualAsOfDay = activeManualInCurrentCycle && driver.schengenManualAsOf
       ? toDayKey(driver.schengenManualAsOf)
       : null;
-    const reportStartsAfterManual =
+    const reportOverlapsAfterManual =
       activeManualInCurrentCycle &&
       driver.schengenManualAsOf &&
-      report.periodStart &&
-      report.periodStart > driver.schengenManualAsOf;
+      report.periodEnd &&
+      report.periodEnd > driver.schengenManualAsOf;
 
     const positions = await prisma.position.findMany({
       where: {
@@ -160,12 +160,12 @@ export async function POST(req: NextRequest) {
       return asDate >= SCHENGEN_RESET_BASE_DATE && asDate <= effectiveUntilDate;
     });
     const incrementalCoveredDays =
-      activeManualInCurrentCycle && manualAsOfDay && reportStartsAfterManual
+      activeManualInCurrentCycle && manualAsOfDay && reportOverlapsAfterManual
         ? oemCoveredDaysFromReset.filter((day) => day > manualAsOfDay)
         : oemCoveredDaysFromReset;
     const baseUsedDays =
       activeManualInCurrentCycle &&
-      reportStartsAfterManual &&
+      reportOverlapsAfterManual &&
       driver.schengenManualRemainingDays !== null
         ? SCHENGEN_CYCLE_ENTITLEMENT_DAYS - driver.schengenManualRemainingDays
         : 0;
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
     const oemRemainingDays = Math.max(
       0,
       activeManualInCurrentCycle &&
-        reportStartsAfterManual &&
+        reportOverlapsAfterManual &&
         driver.schengenManualRemainingDays !== null
         ? driver.schengenManualRemainingDays - incrementalCoveredDays.length
         : SCHENGEN_CYCLE_ENTITLEMENT_DAYS - oemUsedDays
@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
         coveredDays: oemCoveredDaysFromReset,
         incrementalCoveredDays,
         baselineMode:
-          activeManualInCurrentCycle && reportStartsAfterManual
+          activeManualInCurrentCycle && reportOverlapsAfterManual
             ? "incremental_from_manual"
             : "absolute_from_reset",
       },
