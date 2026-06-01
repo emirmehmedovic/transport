@@ -169,11 +169,12 @@ export async function fetchVolvoLatestVehiclePositions(options?: {
 export async function fetchVolvoVehiclePositionsSince(params: {
   starttime: string;
   stoptime?: string | null;
+  datetype?: "created" | "received";
   bypassCache?: boolean;
 }) {
   const query = new URLSearchParams({
     starttime: params.starttime,
-    datetype: "received",
+    datetype: params.datetype || "received",
   });
   if (params.stoptime) {
     query.set("stoptime", params.stoptime);

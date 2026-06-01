@@ -19,6 +19,7 @@ export type VolvoRfmsConfig = {
   primaryTracking: boolean;
   initialLookbackHours: number;
   lastReceivedAt: string | null;
+  lastCreatedAt: string | null;
   backfill14dCompletedAt: string | null;
   backfillChunksCompleted: string[];
   driverSources: Record<string, DriverTrackingSource>;
@@ -81,6 +82,7 @@ const DEFAULT_CONFIG: VolvoRfmsConfig = {
   primaryTracking: false,
   initialLookbackHours: 24,
   lastReceivedAt: null,
+  lastCreatedAt: null,
   backfill14dCompletedAt: null,
   backfillChunksCompleted: [],
   driverSources: {},
@@ -175,6 +177,10 @@ export async function getVolvoRfmsConfig(): Promise<VolvoRfmsConfig> {
         typeof parsed.lastReceivedAt === "string" && parsed.lastReceivedAt.length > 0
           ? parsed.lastReceivedAt
           : null,
+      lastCreatedAt:
+        typeof parsed.lastCreatedAt === "string" && parsed.lastCreatedAt.length > 0
+          ? parsed.lastCreatedAt
+          : null,
       backfill14dCompletedAt:
         typeof parsed.backfill14dCompletedAt === "string" &&
         parsed.backfill14dCompletedAt.length > 0
@@ -220,6 +226,8 @@ export async function saveVolvoRfmsConfig(
         : current.initialLookbackHours,
     lastReceivedAt:
       typeof input.lastReceivedAt === "string" ? input.lastReceivedAt : current.lastReceivedAt,
+    lastCreatedAt:
+      typeof input.lastCreatedAt === "string" ? input.lastCreatedAt : current.lastCreatedAt,
     backfill14dCompletedAt:
       typeof input.backfill14dCompletedAt === "string"
         ? input.backfill14dCompletedAt
@@ -393,6 +401,7 @@ async function fetchAllIncrementalPositions(starttime: string, stoptime?: string
     const batch = await fetchVolvoVehiclePositionsSince({
       starttime: cursor,
       stoptime,
+      datetype: "created",
       bypassCache: true,
     });
 
@@ -404,17 +413,20 @@ async function fetchAllIncrementalPositions(starttime: string, stoptime?: string
       break;
     }
 
-    const latestReceived = batch.positions
-      .map((position) => position.ReceivedDateTime)
+    const latestCreated = batch.positions
+      .map((position) => {
+        const timestamp = getVolvoPositionTimestamp(position);
+        return timestamp ? timestamp.toISOString() : null;
+      })
       .filter((value): value is string => Boolean(value))
       .sort()
       .at(-1);
 
-    if (!latestReceived || latestReceived === cursor) {
+    if (!latestCreated || latestCreated === cursor) {
       break;
     }
 
-    cursor = latestReceived;
+    cursor = latestCreated;
   }
 
   return {
@@ -442,7 +454,9 @@ export async function syncVolvoRfmsPositions(options?: {
       ? options.explicitStarttime
       : options?.forceLookbackHours && options.forceLookbackHours > 0
       ? buildDefaultStarttime(options.forceLookbackHours)
-      : config.lastReceivedAt || buildDefaultStarttime(config.initialLookbackHours);
+      : config.lastCreatedAt ||
+        config.lastReceivedAt ||
+        buildDefaultStarttime(config.initialLookbackHours);
 
   const { positions, pagesFetched } = await fetchAllIncrementalPositions(
     starttime,
@@ -457,6 +471,7 @@ export async function syncVolvoRfmsPositions(options?: {
   let skippedNoMatch = 0;
   const warnings: string[] = [];
   let newestReceivedAt: string | null = config.lastReceivedAt;
+  let newestCreatedAt: string | null = config.lastCreatedAt;
 
   for (const position of positions) {
     const vin = normalizeVin(position.VIN);
@@ -484,6 +499,13 @@ export async function syncVolvoRfmsPositions(options?: {
     if (position.ReceivedDateTime) {
       if (!newestReceivedAt || position.ReceivedDateTime > newestReceivedAt) {
         newestReceivedAt = position.ReceivedDateTime;
+      }
+    }
+
+    if (recordedAt) {
+      const createdIso = recordedAt.toISOString();
+      if (!newestCreatedAt || createdIso > newestCreatedAt) {
+        newestCreatedAt = createdIso;
       }
     }
 
@@ -552,9 +574,14 @@ export async function syncVolvoRfmsPositions(options?: {
   }
 
   const shouldUpdateCursor = options?.updateCursor ?? options?.persistPositions === true;
-  if (shouldUpdateCursor && newestReceivedAt && newestReceivedAt !== config.lastReceivedAt) {
+  if (
+    shouldUpdateCursor &&
+    ((newestReceivedAt && newestReceivedAt !== config.lastReceivedAt) ||
+      (newestCreatedAt && newestCreatedAt !== config.lastCreatedAt))
+  ) {
     await saveVolvoRfmsConfig({
       lastReceivedAt: newestReceivedAt,
+      lastCreatedAt: newestCreatedAt,
     });
   }
 

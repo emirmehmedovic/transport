@@ -19,6 +19,7 @@ type VolvoConfig = {
   primaryTracking: boolean;
   initialLookbackHours: number;
   lastReceivedAt: string | null;
+  lastCreatedAt: string | null;
   backfill14dCompletedAt: string | null;
   backfillChunksCompleted: string[];
   driverSources: Record<string, "TRACCAR" | "VOLVO_RFMS">;
@@ -116,6 +117,7 @@ export default function VolvoRfmsPage() {
     primaryTracking: false,
     initialLookbackHours: 24,
     lastReceivedAt: null,
+    lastCreatedAt: null,
     backfill14dCompletedAt: null,
     backfillChunksCompleted: [],
     driverSources: {},
@@ -452,7 +454,7 @@ export default function VolvoRfmsPage() {
             <div className="rounded-2xl border border-dark-100 bg-dark-50 px-4 py-3 text-sm text-dark-600">
               <p>
                 <span className="font-semibold text-dark-900">Zadnji cursor:</span>{" "}
-                {formatDateTime(configForm.lastReceivedAt)}
+                {formatDateTime(configForm.lastCreatedAt || configForm.lastReceivedAt)}
               </p>
               <p className="mt-2">
                 <span className="font-semibold text-dark-900">Chunk backfill:</span>{" "}
