@@ -4,6 +4,7 @@ import { generateRecurringLoadsForDate } from "../lib/recurring-loads";
 import { runNotificationJobs } from "./notification-runner";
 import { sendWeeklySchengenReportEmail } from "../lib/schengen-weekly-email";
 import { getVolvoRfmsConfig, syncVolvoRfmsPositions } from "../lib/volvo-rfms-sync";
+import { runVolvoRfmsStaleAlertCheck } from "../lib/volvo-rfms-health";
 import { getRioNightlyStatus } from "../lib/rio-status";
 import { runRioNightlyImport } from "./rio-nightly-runner";
 import { aggregateSchengenDaysAllDrivers } from "../lib/schengen-aggregate";
@@ -33,6 +34,14 @@ async function runVolvoRfmsSync() {
   });
   console.log(
     `[Cron] Volvo rFMS sync done: api=${result.apiPositionsFetched}, saved=${result.positionsSaved}, drivers=${result.driversUpdated}`
+  );
+}
+
+async function runVolvoRfmsHealthCheck() {
+  console.log("[Cron] Running Volvo rFMS stale-position health check");
+  const result = await runVolvoRfmsStaleAlertCheck();
+  console.log(
+    `[Cron] Volvo health check done: stale=${result.staleDrivers}, action=${result.reason}`
   );
 }
 
@@ -107,6 +116,15 @@ function scheduleJobs() {
       await runVolvoRfmsSync();
     } catch (error) {
       console.error("[Cron] Volvo rFMS sync failed:", error);
+    }
+  }, { timezone: CRON_TIMEZONE });
+
+  // Every 10 minutes, offset from Volvo sync
+  cron.schedule("3,13,23,33,43,53 * * * *", async () => {
+    try {
+      await runVolvoRfmsHealthCheck();
+    } catch (error) {
+      console.error("[Cron] Volvo health check failed:", error);
     }
   }, { timezone: CRON_TIMEZONE });
 

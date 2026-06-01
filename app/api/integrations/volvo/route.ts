@@ -142,6 +142,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (action === "fill-gaps-24h") {
+      const now = new Date();
+      const explicitStoptime = now.toISOString();
+      const explicitStarttime = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+      const result = await syncVolvoRfmsPositions({
+        persistPositions: true,
+        explicitStarttime,
+        explicitStoptime,
+        updateCursor: false,
+        allowAllMatchedDrivers: true,
+      });
+
+      return noStoreJson({
+        success: true,
+        result,
+      });
+    }
+
     return noStoreJson({ error: "Nepoznata akcija" }, { status: 400 });
   } catch (error: any) {
     console.error("Error in Volvo integration action:", error);

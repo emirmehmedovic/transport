@@ -78,6 +78,7 @@ type SyncResponse = {
   result: {
     mode: "preview" | "primary_tracking";
     starttime: string;
+    stoptime?: string | null;
     pagesFetched: number;
     apiPositionsFetched: number;
     matchedPositions: number;
@@ -106,6 +107,7 @@ export default function VolvoRfmsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [gapFilling, setGapFilling] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -254,6 +256,38 @@ export default function VolvoRfmsPage() {
     }
   };
 
+  const handleFillGaps24h = async () => {
+    try {
+      setGapFilling(true);
+      setMessage(null);
+      setError(null);
+
+      const res = await fetch("/api/integrations/volvo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          action: "fill-gaps-24h",
+        }),
+      });
+
+      const json = (await res.json()) as SyncResponse | { error?: string };
+      if (!res.ok || !("success" in json)) {
+        throw new Error(("error" in json && json.error) || "Greška pri Volvo gap-fill importu");
+      }
+
+      setSyncResult(json.result);
+      setMessage("Volvo gap-fill za zadnja 24h je završen i dopunio je replay/live podatke gdje je bilo praznina.");
+      await loadOverview();
+    } catch (err: any) {
+      setError(err.message || "Greška pri Volvo gap-fill importu");
+    } finally {
+      setGapFilling(false);
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 px-4 md:px-0">
       <PageHeader
@@ -277,6 +311,14 @@ export default function VolvoRfmsPage() {
             >
               {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
               Pokreni sync
+            </button>
+            <button
+              onClick={handleFillGaps24h}
+              disabled={gapFilling || loading || !data?.overview.configured}
+              className="flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-xs md:text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60"
+            >
+              {gapFilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+              Popuni zadnja 24h
             </button>
           </div>
         }

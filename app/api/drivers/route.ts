@@ -76,7 +76,19 @@ export async function GET(req: NextRequest) {
     const [drivers, total, truckMakes] = await Promise.all([
       prisma.driver.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          cdlNumber: true,
+          cdlState: true,
+          cdlExpiry: true,
+          medicalCardExpiry: true,
+          hireDate: true,
+          status: true,
+          traccarDeviceId: true,
+          lastKnownLatitude: true,
+          lastKnownLongitude: true,
+          lastLocationUpdate: true,
+          createdAt: true,
           user: {
             select: {
               id: true,
@@ -120,7 +132,11 @@ export async function GET(req: NextRequest) {
     ]);
 
     return NextResponse.json({
-      drivers,
+      drivers: drivers.map((driver) => ({
+        ...driver,
+        licenseState: driver.cdlState,
+        licenseExpiry: driver.cdlExpiry,
+      })),
       filters: {
         truckMakes: truckMakes
           .map((truck) => truck.make)
