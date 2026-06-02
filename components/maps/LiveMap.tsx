@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, CircleMarker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Truck, Package, Navigation, ChevronDown, ChevronUp, MapPin } from "lucide-react";
+import { Truck, Package, Navigation, ChevronDown, ChevronUp, MapPin, TrendingUp } from "lucide-react";
 import { getLoadStatusLabel as getMappedLoadStatusLabel } from "@/lib/ui-labels";
 
 // Minimum zoom nivoi
@@ -499,11 +499,24 @@ interface DriverTrail {
   endAt: string | null;
 }
 
+interface SelectedDriverHistory {
+  driver: any;
+  positions: any[];
+  statistics: {
+    totalPositions: number;
+    avgSpeed: number;
+    totalDistance: number;
+  } | null;
+  loads: any[];
+}
+
 type DisplayMarkerEntity = {
   entity: DriverLocation;
   displayLatitude: number;
   displayLongitude: number;
   displaced: boolean;
+  groupSize: number;
+  showGroupBadge: boolean;
 };
 
 const OVERLAP_PIXEL_THRESHOLD = 22;
@@ -516,6 +529,8 @@ function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: numbe
       displayLatitude: entity.latitude,
       displayLongitude: entity.longitude,
       displaced: false,
+      groupSize: 1,
+      showGroupBadge: false,
     }));
   }
 
@@ -569,6 +584,8 @@ function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: numbe
         displayLatitude: entity.latitude,
         displayLongitude: entity.longitude,
         displaced: false,
+        groupSize: 1,
+        showGroupBadge: false,
       };
       return;
     }
@@ -592,6 +609,8 @@ function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: numbe
         displayLatitude: spreadLatLng.lat,
         displayLongitude: spreadLatLng.lng,
         displaced: true,
+        groupSize: indexes.length,
+        showGroupBadge: order === 0,
       };
     });
   });
@@ -630,7 +649,7 @@ function EntityMarkers({
 
   return (
     <>
-      {spreadEntities.map(({ entity, displayLatitude, displayLongitude, displaced }) => {
+      {spreadEntities.map(({ entity, displayLatitude, displayLongitude, displaced, groupSize, showGroupBadge }) => {
         const isSelected = selectedDriverId === entity.id || focusedDriverId === entity.id;
         const lastLocationUpdate = entity.lastUpdate ? new Date(entity.lastUpdate) : null;
         const icon = entity.type === "MANAGER"
@@ -651,6 +670,33 @@ function EntityMarkers({
                   opacity: 0.55,
                   dashArray: "4, 6",
                 }}
+              />
+            )}
+            {showGroupBadge && groupSize > 1 && (
+              <Marker
+                position={[entity.latitude, entity.longitude]}
+                icon={L.divIcon({
+                  html: `
+                    <div style="
+                      min-width: 28px;
+                      height: 28px;
+                      padding: 0 8px;
+                      border-radius: 999px;
+                      background: rgba(15, 23, 42, 0.92);
+                      color: white;
+                      border: 2px solid white;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      font: 700 12px/1 Arial, sans-serif;
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.28);
+                    ">+${groupSize - 1}</div>
+                  `,
+                  className: "driver-group-badge",
+                  iconSize: [28, 28],
+                  iconAnchor: [14, 14],
+                })}
+                zIndexOffset={-200}
               />
             )}
             <Marker
@@ -700,6 +746,8 @@ export default function LiveMap({
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const fetchInFlightRef = useRef(false);
   const [landmarks, setLandmarks] = useState<any[]>([]);
+  const [driverHistoryById, setDriverHistoryById] = useState<Record<string, SelectedDriverHistory>>({});
+  const [loadingDriverHistoryId, setLoadingDriverHistoryId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -836,6 +884,41 @@ export default function LiveMap({
       }
     } catch (error) {
       console.error("Error fetching landmarks:", error);
+    }
+  };
+
+  const fetchDriverHistoryCard = async (driverId: string) => {
+    if (driverHistoryById[driverId]) {
+      return;
+    }
+
+    setLoadingDriverHistoryId(driverId);
+    try {
+      const driverRes = await fetch(`/api/drivers/${driverId}`);
+      const driverData = await driverRes.json();
+
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 7);
+
+      const positionsRes = await fetch(
+        `/api/drivers/${driverId}/positions?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&limit=100`
+      );
+      const positionsData = await positionsRes.json();
+
+      setDriverHistoryById((prev) => ({
+        ...prev,
+        [driverId]: {
+          driver: driverData.driver,
+          positions: positionsData.positions || [],
+          statistics: positionsData.statistics || null,
+          loads: driverData.driver.loads || [],
+        },
+      }));
+    } catch (error) {
+      console.error("Error fetching live-map driver history:", error);
+    } finally {
+      setLoadingDriverHistoryId((current) => (current === driverId ? null : current));
     }
   };
 
@@ -1462,6 +1545,9 @@ export default function LiveMap({
                 } else {
                   setSelectedDriverId(entity.id);
                   setSelectedLoadId(null);
+                  if (entity.type === "DRIVER" && entity.driverId) {
+                    void fetchDriverHistoryCard(entity.driverId);
+                  }
                   if (onDriverSelected) {
                     onDriverSelected(entity.id);
                   }
@@ -1523,6 +1609,7 @@ export default function LiveMap({
             const entity = driverLocations.find(d => d.id === selectedDriverId)!;
             const isDriver = entity.type === 'DRIVER';
             const entityActive = isDriver && entity.loads.length > 0;
+            const selectedDriverHistory = isDriver && entity.driverId ? driverHistoryById[entity.driverId] : null;
 
             return (
               <div className="relative h-full rounded-3xl bg-dark-900/95 text-white border border-white/10 shadow-soft-xl backdrop-blur p-4 overflow-y-auto">
@@ -1566,6 +1653,72 @@ export default function LiveMap({
 
                 {isDriver && (
                   <>
+                    {selectedDriverHistory && (
+                      <div className="grid grid-cols-2 gap-3 pb-3 mb-3 border-b border-white/10">
+                        <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                          <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">Email</p>
+                          <p className="text-sm font-semibold text-white mt-1 break-all">
+                            {selectedDriverHistory.driver.user.email || "—"}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                          <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">Telefon</p>
+                          <p className="text-sm font-semibold text-white mt-1">
+                            {selectedDriverHistory.driver.user.phone || "—"}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                          <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">Status</p>
+                          <p className="text-sm font-semibold text-white mt-1">
+                            {selectedDriverHistory.driver.status === "ACTIVE" ? "Aktivan" : selectedDriverHistory.driver.status}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
+                          <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">GPS Device ID</p>
+                          <p className="text-sm font-semibold text-white mt-1 break-all">
+                            {selectedDriverHistory.driver.traccarDeviceId || "—"}
+                          </p>
+                        </div>
+                        {selectedDriverHistory.driver.primaryTruck && (
+                          <div className="rounded-2xl bg-white/5 border border-white/10 p-3 col-span-2">
+                            <p className="text-[11px] font-semibold text-dark-200 uppercase tracking-wide">Kamion</p>
+                            <p className="text-sm font-semibold text-white mt-1">
+                              {selectedDriverHistory.driver.primaryTruck.truckNumber} - {selectedDriverHistory.driver.primaryTruck.make} {selectedDriverHistory.driver.primaryTruck.model}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {loadingDriverHistoryId === entity.driverId && !selectedDriverHistory && (
+                      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 mb-3 text-sm text-dark-200">
+                        Učitavanje detalja vozača...
+                      </div>
+                    )}
+
+                    {selectedDriverHistory?.statistics && (
+                      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 mb-3">
+                        <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4 text-emerald-300" />
+                          Statistika (zadnjih 7 dana)
+                        </h4>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="text-center rounded-xl bg-blue-500/10 border border-blue-400/20 p-3">
+                            <p className="text-xl font-bold text-blue-200">{selectedDriverHistory.statistics.totalPositions}</p>
+                            <p className="text-[11px] text-dark-200 mt-1">Pozicija</p>
+                          </div>
+                          <div className="text-center rounded-xl bg-emerald-500/10 border border-emerald-400/20 p-3">
+                            <p className="text-xl font-bold text-emerald-200">{selectedDriverHistory.statistics.avgSpeed} km/h</p>
+                            <p className="text-[11px] text-dark-200 mt-1">Pros. brzina</p>
+                          </div>
+                          <div className="text-center rounded-xl bg-fuchsia-500/10 border border-fuchsia-400/20 p-3">
+                            <p className="text-xl font-bold text-fuchsia-200">{selectedDriverHistory.statistics.totalDistance} km</p>
+                            <p className="text-[11px] text-dark-200 mt-1">Distanca</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pb-3 mb-3 border-b border-white/10">
                       <button
                         type="button"
@@ -1634,6 +1787,41 @@ export default function LiveMap({
                         </p>
                       )}
                     </div>
+
+                    {selectedDriverHistory && (
+                      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 mb-3">
+                        <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-primary-300" />
+                          Nedavne pozicije ({selectedDriverHistory.positions.length})
+                        </h4>
+                        <div className="space-y-2 max-h-56 overflow-y-auto">
+                          {[...selectedDriverHistory.positions].reverse().slice(0, 12).map((pos: any) => (
+                            <div key={pos.id} className="rounded-xl bg-dark-900/60 border border-white/10 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-xs font-semibold text-white">
+                                    {pos.latitude.toFixed(6)}, {pos.longitude.toFixed(6)}
+                                  </p>
+                                  <p className="text-[11px] text-dark-200 mt-1">
+                                    {new Date(pos.recordedAt).toLocaleString("bs-BA")}
+                                  </p>
+                                </div>
+                                {pos.speed !== null && (
+                                  <span className="text-xs font-semibold text-blue-200 whitespace-nowrap">
+                                    {Math.round(pos.speed)} km/h
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {selectedDriverHistory.positions.length === 0 && (
+                            <p className="text-sm text-dark-300 text-center py-4">
+                              Nema evidencije pozicija
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Current Loads */}
                     {entity.loads.length > 0 && (
