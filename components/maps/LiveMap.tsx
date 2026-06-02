@@ -534,7 +534,7 @@ type DisplayMarkerEntity = {
 
 const OVERLAP_PIXEL_THRESHOLD = 22;
 const OVERLAP_SPREAD_RADIUS = 26;
-const CLUSTER_TO_SPREAD_ZOOM = 13;
+const CLUSTER_TO_SPREAD_ZOOM = 12;
 
 function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: number): DisplayMarkerEntity[] {
   if (entities.length <= 1) {
