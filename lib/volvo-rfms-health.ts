@@ -2,11 +2,12 @@ import { DriverStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendHtmlEmail } from "@/lib/email";
 import { isVolvoRfmsConfigured } from "@/lib/volvo-rfms";
-import { getVolvoRfmsConfig } from "@/lib/volvo-rfms-sync";
+import { buildVolvoRfmsOverview, getVolvoRfmsConfig } from "@/lib/volvo-rfms-sync";
 
 const VOLVO_RFMS_HEALTH_STATE_KEY = "volvo_rfms_health_state";
 const VOLVO_STALE_ALERT_RECIPIENTS = ["emir.m@live.com"];
 const STALE_THRESHOLD_MINUTES = 30;
+const LOCAL_LAG_ALERT_MINUTES = 10;
 
 type VolvoRfmsHealthState = {
   activeAlertDriverIds: string[];
@@ -20,10 +21,12 @@ type VolvoStaleDriver = {
   email: string | null;
   truckNumber: string | null;
   vin: string | null;
+  apiPositionAt: Date;
   lastLocationUpdate: Date | null;
   lastKnownLatitude: number | null;
   lastKnownLongitude: number | null;
-  staleMinutes: number;
+  apiFreshMinutes: number;
+  localLagMinutes: number;
 };
 
 const DEFAULT_STATE: VolvoRfmsHealthState = {
@@ -96,57 +99,83 @@ async function getStaleVolvoDrivers(): Promise<VolvoStaleDriver[]> {
   }
 
   const now = Date.now();
-  const drivers = await prisma.driver.findMany({
-    where: {
-      id: { in: monitoredDriverIds },
-      status: DriverStatus.ACTIVE,
-      primaryTruck: {
-        is: {
-          isActive: true,
+  const [drivers, overview] = await Promise.all([
+    prisma.driver.findMany({
+      where: {
+        id: { in: monitoredDriverIds },
+        status: DriverStatus.ACTIVE,
+        primaryTruck: {
+          is: {
+            isActive: true,
+          },
         },
       },
-    },
-    select: {
-      id: true,
-      lastLocationUpdate: true,
-      lastKnownLatitude: true,
-      lastKnownLongitude: true,
-      user: {
-        select: {
-          firstName: true,
-          lastName: true,
-          email: true,
+      select: {
+        id: true,
+        lastLocationUpdate: true,
+        lastKnownLatitude: true,
+        lastKnownLongitude: true,
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        primaryTruck: {
+          select: {
+            truckNumber: true,
+            vin: true,
+          },
         },
       },
-      primaryTruck: {
-        select: {
-          truckNumber: true,
-          vin: true,
-        },
-      },
-    },
-  });
+    }),
+    buildVolvoRfmsOverview(),
+  ]);
 
-  return drivers
-    .map((driver) => {
-      const staleMinutes = driver.lastLocationUpdate
-        ? Math.floor((now - driver.lastLocationUpdate.getTime()) / 60000)
+  const latestByDriverId = new Map(
+    overview.mappings
+      .filter((row) => row.driverId && row.latestPosition?.positionDateTime)
+      .map((row) => [row.driverId!, row.latestPosition!])
+  );
+
+  const candidates: Array<VolvoStaleDriver | null> = drivers.map((driver) => {
+      const latestApiPosition = latestByDriverId.get(driver.id);
+      if (!latestApiPosition?.positionDateTime) {
+        return null;
+      }
+
+      const apiPositionAt = new Date(latestApiPosition.positionDateTime);
+      const apiFreshMinutes = Math.floor((now - apiPositionAt.getTime()) / 60000);
+      const localLagMinutes = driver.lastLocationUpdate
+        ? Math.floor((apiPositionAt.getTime() - driver.lastLocationUpdate.getTime()) / 60000)
         : Number.POSITIVE_INFINITY;
 
-      return {
+      const staleDriver: VolvoStaleDriver = {
         driverId: driver.id,
         driverName: `${driver.user.firstName} ${driver.user.lastName}`.trim(),
         email: driver.user.email,
         truckNumber: driver.primaryTruck?.truckNumber ?? null,
         vin: driver.primaryTruck?.vin ?? null,
+        apiPositionAt,
         lastLocationUpdate: driver.lastLocationUpdate,
         lastKnownLatitude: driver.lastKnownLatitude,
         lastKnownLongitude: driver.lastKnownLongitude,
-        staleMinutes,
-      } satisfies VolvoStaleDriver;
-    })
-    .filter((driver) => driver.staleMinutes >= STALE_THRESHOLD_MINUTES)
-    .sort((a, b) => b.staleMinutes - a.staleMinutes);
+        apiFreshMinutes,
+        localLagMinutes,
+      };
+
+      return staleDriver;
+    });
+
+  return candidates
+    .filter((driver): driver is VolvoStaleDriver => driver !== null)
+    .filter(
+      (driver) =>
+        driver.apiFreshMinutes <= STALE_THRESHOLD_MINUTES &&
+        driver.localLagMinutes >= LOCAL_LAG_ALERT_MINUTES
+    )
+    .sort((a, b) => b.localLagMinutes - a.localLagMinutes);
 }
 
 function buildAlertHtml(drivers: VolvoStaleDriver[]) {
@@ -163,7 +192,8 @@ function buildAlertHtml(drivers: VolvoStaleDriver[]) {
           <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#111827;">${escapeHtml(driver.driverName)}</td>
           <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#374151;">${escapeHtml(driver.truckNumber || "—")}</td>
           <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#374151;">${escapeHtml(driver.email || "—")}</td>
-          <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#b91c1c;font-weight:700;">${Number.isFinite(driver.staleMinutes) ? `${driver.staleMinutes} min` : "Nema nikad"}</td>
+          <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#b91c1c;font-weight:700;">${Number.isFinite(driver.localLagMinutes) ? `${driver.localLagMinutes} min` : "Nema nikad"}</td>
+          <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#374151;">${escapeHtml(formatDateTime(driver.apiPositionAt))}</td>
           <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#374151;">${escapeHtml(formatDateTime(driver.lastLocationUpdate))}</td>
           <td style="padding:12px;border-bottom:1px solid #e5e7eb;font:14px/1.4 Arial,sans-serif;color:#374151;">${escapeHtml(location)}</td>
         </tr>
@@ -177,7 +207,7 @@ function buildAlertHtml(drivers: VolvoStaleDriver[]) {
         <div style="padding:20px 24px;background:#e5e7eb;border-bottom:1px solid #d1d5db;">
           <div style="font:700 22px/1.2 Arial,sans-serif;color:#1e3a8a;">Volvo alert</div>
           <div style="margin-top:6px;font:14px/1.5 Arial,sans-serif;color:#374151;">
-            Jedan ili više Volvo vozača nisu dobili novu poziciju duže od ${STALE_THRESHOLD_MINUTES} minuta.
+            Volvo API ima svježiju poziciju od naše lokalne evidencije za jedan ili više vozača.
           </div>
         </div>
         <div style="padding:20px 24px;">
@@ -191,8 +221,9 @@ function buildAlertHtml(drivers: VolvoStaleDriver[]) {
                 <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Vozač</th>
                 <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Kamion</th>
                 <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Email</th>
-                <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Kašnjenje</th>
-                <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Zadnja pozicija</th>
+                <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Lokalni lag</th>
+                <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">API pozicija</th>
+                <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Lokalna pozicija</th>
                 <th align="left" style="padding:12px;border-bottom:1px solid #e5e7eb;font:700 12px/1.4 Arial,sans-serif;color:#1f2937;text-transform:uppercase;">Koordinate</th>
               </tr>
             </thead>
