@@ -53,6 +53,16 @@ function ZoomHandler({
   return null;
 }
 
+function MapInstanceBridge({ onReady }: { onReady: (map: L.Map) => void }) {
+  const map = useMap();
+
+  useEffect(() => {
+    onReady(map);
+  }, [map, onReady]);
+
+  return null;
+}
+
 // Fix for default marker icons in Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -626,6 +636,7 @@ function EntityMarkers({
   hiddenDriverIds,
   hideOtherDrivers,
   onMarkerClick,
+  onGroupBadgeClick,
   showDriverLabels,
 }: {
   entities: DriverLocation[];
@@ -635,6 +646,7 @@ function EntityMarkers({
   hiddenDriverIds: Set<string>;
   hideOtherDrivers: boolean;
   onMarkerClick: (entity: DriverLocation, event: any) => void;
+  onGroupBadgeClick: (entity: DriverLocation) => void;
   showDriverLabels: boolean;
 }) {
   const map = useMap();
@@ -697,6 +709,12 @@ function EntityMarkers({
                   iconAnchor: [14, 14],
                 })}
                 zIndexOffset={-200}
+                eventHandlers={{
+                  click: (e: any) => {
+                    e.originalEvent?.stopPropagation();
+                    onGroupBadgeClick(entity);
+                  },
+                }}
               />
             )}
             <Marker
@@ -745,9 +763,19 @@ export default function LiveMap({
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const fetchInFlightRef = useRef(false);
+  const mapRef = useRef<L.Map | null>(null);
   const [landmarks, setLandmarks] = useState<any[]>([]);
   const [driverHistoryById, setDriverHistoryById] = useState<Record<string, SelectedDriverHistory>>({});
   const [loadingDriverHistoryId, setLoadingDriverHistoryId] = useState<string | null>(null);
+
+  const clearSelectedEntity = () => {
+    setSelectedDriverId(null);
+    setSelectedLoadId(null);
+    setSelectedTrailDriverId(null);
+    if (onDriverSelected) {
+      onDriverSelected("");
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -1139,12 +1167,7 @@ export default function LiveMap({
 
   const handleMapClick = () => {
     if (selectedDriverId) {
-      setSelectedDriverId(null);
-      setSelectedLoadId(null);
-      setSelectedTrailDriverId(null);
-      if (onDriverSelected) {
-        onDriverSelected("");
-      }
+      clearSelectedEntity();
     }
   };
 
@@ -1256,6 +1279,7 @@ export default function LiveMap({
         zoom={7}
         style={{ height: "100%", width: "100%" }}
       >
+          <MapInstanceBridge onReady={(map) => { mapRef.current = map; }} />
           <MapController focusedDriverId={focusedDriverId || null} driverLocations={driverLocations} />
           <ZoomHandler onZoomChange={setCurrentZoom} onMapClick={handleMapClick} />
           <TileLayer
@@ -1532,16 +1556,20 @@ export default function LiveMap({
               hiddenDriverIds={hiddenDriverIds}
               hideOtherDrivers={hideOtherDrivers}
               showDriverLabels={showDriverLabels}
+              onGroupBadgeClick={(entity) => {
+                const map = mapRef.current;
+                if (map) {
+                  map.setView([entity.latitude, entity.longitude], Math.max(currentZoom + 2, 13), {
+                    animate: true,
+                    duration: 0.8,
+                  });
+                }
+              }}
               onMarkerClick={(entity, e) => {
                 e.originalEvent?.stopPropagation();
 
                 if (entity.id === selectedDriverId) {
-                  setSelectedDriverId(null);
-                  setSelectedLoadId(null);
-                  setSelectedTrailDriverId(null);
-                  if (onDriverSelected) {
-                    onDriverSelected("");
-                  }
+                  clearSelectedEntity();
                 } else {
                   setSelectedDriverId(entity.id);
                   setSelectedLoadId(null);
@@ -1614,7 +1642,7 @@ export default function LiveMap({
             return (
               <div className="relative h-full rounded-3xl bg-dark-900/95 text-white border border-white/10 shadow-soft-xl backdrop-blur p-4 overflow-y-auto">
                 <button
-                  onClick={() => setSelectedDriverId(null)}
+                  onClick={clearSelectedEntity}
                   className="absolute top-3 right-3 text-dark-300 hover:text-white transition-colors"
                 >
                   ✕
