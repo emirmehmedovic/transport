@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, CircleMarker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, useMap, CircleMarker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Truck, Package, Navigation, ChevronDown, ChevronUp, MapPin, TrendingUp } from "lucide-react";
@@ -524,13 +524,17 @@ type DisplayMarkerEntity = {
   entity: DriverLocation;
   displayLatitude: number;
   displayLongitude: number;
+  clusterLatitude: number;
+  clusterLongitude: number;
   displaced: boolean;
   groupSize: number;
   showGroupBadge: boolean;
+  groupMembers: DriverLocation[];
 };
 
 const OVERLAP_PIXEL_THRESHOLD = 22;
 const OVERLAP_SPREAD_RADIUS = 26;
+const CLUSTER_TO_SPREAD_ZOOM = 13;
 
 function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: number): DisplayMarkerEntity[] {
   if (entities.length <= 1) {
@@ -538,9 +542,12 @@ function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: numbe
       entity,
       displayLatitude: entity.latitude,
       displayLongitude: entity.longitude,
+      clusterLatitude: entity.latitude,
+      clusterLongitude: entity.longitude,
       displaced: false,
       groupSize: 1,
       showGroupBadge: false,
+      groupMembers: [entity],
     }));
   }
 
@@ -593,9 +600,12 @@ function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: numbe
         entity,
         displayLatitude: entity.latitude,
         displayLongitude: entity.longitude,
+        clusterLatitude: entity.latitude,
+        clusterLongitude: entity.longitude,
         displaced: false,
         groupSize: 1,
         showGroupBadge: false,
+        groupMembers: [entity],
       };
       return;
     }
@@ -614,13 +624,17 @@ function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: numbe
         center.y + Math.sin(angle) * OVERLAP_SPREAD_RADIUS
       );
       const spreadLatLng = map.unproject(spreadPoint, zoom);
+      const clusterLatLng = map.unproject(center, zoom);
       results[index] = {
         entity: entities[index],
         displayLatitude: spreadLatLng.lat,
         displayLongitude: spreadLatLng.lng,
+        clusterLatitude: clusterLatLng.lat,
+        clusterLongitude: clusterLatLng.lng,
         displaced: true,
         groupSize: indexes.length,
         showGroupBadge: order === 0,
+        groupMembers: indexes.map((memberIndex) => entities[memberIndex]),
       };
     });
   });
@@ -661,16 +675,22 @@ function EntityMarkers({
 
   return (
     <>
-      {spreadEntities.map(({ entity, displayLatitude, displayLongitude, displaced, groupSize, showGroupBadge }) => {
+      {spreadEntities.map(({ entity, displayLatitude, displayLongitude, clusterLatitude, clusterLongitude, displaced, groupSize, showGroupBadge, groupMembers }) => {
         const isSelected = selectedDriverId === entity.id || focusedDriverId === entity.id;
         const lastLocationUpdate = entity.lastUpdate ? new Date(entity.lastUpdate) : null;
         const icon = entity.type === "MANAGER"
           ? createManagerIcon(entity.driverName, isSelected, lastLocationUpdate, showDriverLabels)
           : createDriverIcon(entity.driverName, entity.loads.length > 0, isSelected, lastLocationUpdate, showDriverLabels);
 
+        const collapsedCluster = groupSize > 1 && currentZoom < CLUSTER_TO_SPREAD_ZOOM;
+
+        if (collapsedCluster && !showGroupBadge) {
+          return null;
+        }
+
         return (
           <div key={entity.id}>
-            {displaced && (
+            {displaced && !collapsedCluster && (
               <Polyline
                 positions={[
                   [entity.latitude, entity.longitude],
@@ -684,46 +704,67 @@ function EntityMarkers({
                 }}
               />
             )}
-            {showGroupBadge && groupSize > 1 && (
+            {collapsedCluster && showGroupBadge && groupSize > 1 && (
               <Marker
-                position={[entity.latitude, entity.longitude]}
+                position={[clusterLatitude, clusterLongitude]}
                 icon={L.divIcon({
                   html: `
                     <div style="
-                      min-width: 28px;
-                      height: 28px;
-                      padding: 0 8px;
+                      min-width: 34px;
+                      height: 34px;
+                      padding: 0 10px;
                       border-radius: 999px;
-                      background: rgba(15, 23, 42, 0.92);
+                      background: rgba(30, 41, 59, 0.94);
                       color: white;
                       border: 2px solid white;
                       display: flex;
                       align-items: center;
                       justify-content: center;
-                      font: 700 12px/1 Arial, sans-serif;
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.28);
-                    ">+${groupSize - 1}</div>
+                      font: 700 13px/1 Arial, sans-serif;
+                      box-shadow: 0 6px 16px rgba(0,0,0,0.28);
+                    ">${groupSize}</div>
                   `,
                   className: "driver-group-badge",
-                  iconSize: [28, 28],
-                  iconAnchor: [14, 14],
+                  iconSize: [34, 34],
+                  iconAnchor: [17, 17],
                 })}
-                zIndexOffset={-200}
+                zIndexOffset={350}
                 eventHandlers={{
                   click: (e: any) => {
                     e.originalEvent?.stopPropagation();
                     onGroupBadgeClick(entity);
                   },
                 }}
+              >
+                <Tooltip direction="top" offset={[0, -16]} opacity={1} className="rounded-xl">
+                  <div className="min-w-[200px] max-w-[260px]">
+                    <div className="text-xs font-bold mb-2">Vozači na istoj lokaciji ({groupSize})</div>
+                    <div className="space-y-1">
+                      {groupMembers.slice(0, 8).map((member) => (
+                        <div key={member.id} className="text-xs">
+                          {member.driverName}
+                          {member.truckNumber ? ` • ${member.truckNumber}` : ""}
+                        </div>
+                      ))}
+                      {groupMembers.length > 8 && (
+                        <div className="text-xs font-semibold pt-1">
+                          + još {groupMembers.length - 8}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Tooltip>
+              </Marker>
+            )}
+            {!collapsedCluster && (
+              <Marker
+                position={[displayLatitude, displayLongitude]}
+                icon={icon}
+                eventHandlers={{
+                  click: (e: any) => onMarkerClick(entity, e),
+                }}
               />
             )}
-            <Marker
-              position={[displayLatitude, displayLongitude]}
-              icon={icon}
-              eventHandlers={{
-                click: (e: any) => onMarkerClick(entity, e),
-              }}
-            />
           </div>
         );
       })}
