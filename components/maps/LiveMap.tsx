@@ -499,6 +499,174 @@ interface DriverTrail {
   endAt: string | null;
 }
 
+type DisplayMarkerEntity = {
+  entity: DriverLocation;
+  displayLatitude: number;
+  displayLongitude: number;
+  displaced: boolean;
+};
+
+const OVERLAP_PIXEL_THRESHOLD = 22;
+const OVERLAP_SPREAD_RADIUS = 26;
+
+function buildSpreadEntities(map: L.Map, entities: DriverLocation[], zoom: number): DisplayMarkerEntity[] {
+  if (entities.length <= 1) {
+    return entities.map((entity) => ({
+      entity,
+      displayLatitude: entity.latitude,
+      displayLongitude: entity.longitude,
+      displaced: false,
+    }));
+  }
+
+  const projected = entities.map((entity) =>
+    map.project(L.latLng(entity.latitude, entity.longitude), zoom)
+  );
+
+  const parent = entities.map((_, index) => index);
+
+  const find = (index: number): number => {
+    let current = index;
+    while (parent[current] !== current) {
+      parent[current] = parent[parent[current]];
+      current = parent[current];
+    }
+    return current;
+  };
+
+  const union = (a: number, b: number) => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) {
+      parent[rootB] = rootA;
+    }
+  };
+
+  for (let i = 0; i < projected.length; i += 1) {
+    for (let j = i + 1; j < projected.length; j += 1) {
+      if (projected[i].distanceTo(projected[j]) <= OVERLAP_PIXEL_THRESHOLD) {
+        union(i, j);
+      }
+    }
+  }
+
+  const groups = new Map<number, number[]>();
+  for (let index = 0; index < entities.length; index += 1) {
+    const root = find(index);
+    const list = groups.get(root) ?? [];
+    list.push(index);
+    groups.set(root, list);
+  }
+
+  const results: DisplayMarkerEntity[] = Array.from({ length: entities.length });
+
+  groups.forEach((indexes) => {
+    if (indexes.length === 1) {
+      const onlyIndex = indexes[0];
+      const entity = entities[onlyIndex];
+      results[onlyIndex] = {
+        entity,
+        displayLatitude: entity.latitude,
+        displayLongitude: entity.longitude,
+        displaced: false,
+      };
+      return;
+    }
+
+    const center = indexes.reduce(
+      (accumulator, index) => accumulator.add(projected[index]),
+      L.point(0, 0)
+    ).divideBy(indexes.length);
+
+    const angleStep = (Math.PI * 2) / indexes.length;
+
+    indexes.forEach((index, order) => {
+      const angle = -Math.PI / 2 + order * angleStep;
+      const spreadPoint = L.point(
+        center.x + Math.cos(angle) * OVERLAP_SPREAD_RADIUS,
+        center.y + Math.sin(angle) * OVERLAP_SPREAD_RADIUS
+      );
+      const spreadLatLng = map.unproject(spreadPoint, zoom);
+      results[index] = {
+        entity: entities[index],
+        displayLatitude: spreadLatLng.lat,
+        displayLongitude: spreadLatLng.lng,
+        displaced: true,
+      };
+    });
+  });
+
+  return results;
+}
+
+function EntityMarkers({
+  entities,
+  currentZoom,
+  selectedDriverId,
+  focusedDriverId,
+  hiddenDriverIds,
+  hideOtherDrivers,
+  onMarkerClick,
+  showDriverLabels,
+}: {
+  entities: DriverLocation[];
+  currentZoom: number;
+  selectedDriverId: string | null;
+  focusedDriverId?: string | null;
+  hiddenDriverIds: Set<string>;
+  hideOtherDrivers: boolean;
+  onMarkerClick: (entity: DriverLocation, event: any) => void;
+  showDriverLabels: boolean;
+}) {
+  const map = useMap();
+
+  const visibleEntities = entities.filter((entity) => {
+    if (hiddenDriverIds.has(entity.id)) return false;
+    if (hideOtherDrivers && selectedDriverId && entity.id !== selectedDriverId) return false;
+    return true;
+  });
+
+  const spreadEntities = buildSpreadEntities(map, visibleEntities, currentZoom);
+
+  return (
+    <>
+      {spreadEntities.map(({ entity, displayLatitude, displayLongitude, displaced }) => {
+        const isSelected = selectedDriverId === entity.id || focusedDriverId === entity.id;
+        const lastLocationUpdate = entity.lastUpdate ? new Date(entity.lastUpdate) : null;
+        const icon = entity.type === "MANAGER"
+          ? createManagerIcon(entity.driverName, isSelected, lastLocationUpdate, showDriverLabels)
+          : createDriverIcon(entity.driverName, entity.loads.length > 0, isSelected, lastLocationUpdate, showDriverLabels);
+
+        return (
+          <div key={entity.id}>
+            {displaced && (
+              <Polyline
+                positions={[
+                  [entity.latitude, entity.longitude],
+                  [displayLatitude, displayLongitude],
+                ]}
+                pathOptions={{
+                  color: isSelected ? "#EF4444" : "#64748B",
+                  weight: 2,
+                  opacity: 0.55,
+                  dashArray: "4, 6",
+                }}
+              />
+            )}
+            <Marker
+              position={[displayLatitude, displayLongitude]}
+              icon={icon}
+              eventHandlers={{
+                click: (e: any) => onMarkerClick(entity, e),
+              }}
+            />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export default function LiveMap({
   focusedDriverId,
   hideAllDrivers = false,
@@ -1272,57 +1440,35 @@ export default function LiveMap({
           })}
 
           {/* Render driver and manager locations */}
-          {!hideAllDrivers && driverLocations.map((entity) => {
-            const isSelected = selectedDriverId === entity.id || focusedDriverId === entity.id;
-            const lastLocationUpdate = entity.lastUpdate ? new Date(entity.lastUpdate) : null;
+          {!hideAllDrivers && (
+            <EntityMarkers
+              entities={driverLocations}
+              currentZoom={currentZoom}
+              selectedDriverId={selectedDriverId}
+              focusedDriverId={focusedDriverId || null}
+              hiddenDriverIds={hiddenDriverIds}
+              hideOtherDrivers={hideOtherDrivers}
+              showDriverLabels={showDriverLabels}
+              onMarkerClick={(entity, e) => {
+                e.originalEvent?.stopPropagation();
 
-            // Hide if this driver is in the hiddenDriverIds set
-            if (hiddenDriverIds.has(entity.id)) {
-              return null;
-            }
-
-            // Hide other drivers if hideOtherDrivers is true and this one is not selected
-            if (hideOtherDrivers && selectedDriverId && entity.id !== selectedDriverId) {
-              return null;
-            }
-
-            const icon = entity.type === 'MANAGER'
-              ? createManagerIcon(entity.driverName, isSelected, lastLocationUpdate, showDriverLabels)
-              : createDriverIcon(entity.driverName, entity.loads.length > 0, isSelected, lastLocationUpdate, showDriverLabels);
-
-            return (
-              <Marker
-                key={entity.id}
-                position={[entity.latitude, entity.longitude]}
-                icon={icon}
-                eventHandlers={{
-                  click: async (e: any) => {
-                    // Prevent map click event from firing
-                    e.originalEvent?.stopPropagation();
-
-                    if (entity.id === selectedDriverId) {
-                      // Deselect
-                      setSelectedDriverId(null);
-                      setSelectedLoadId(null);
-                      setSelectedTrailDriverId(null);
-                      // Notify parent to show all drivers again
-                      if (onDriverSelected) {
-                        onDriverSelected("");
-                      }
-                    } else {
-                      // Select entity and show current location/panel only.
-                      setSelectedDriverId(entity.id);
-                      setSelectedLoadId(null);
-                      // Call onDriverSelected callback if provided
-                      if (onDriverSelected) {
-                        onDriverSelected(entity.id);
-                      }
-                    }
-                  },
-                }}
-              />
-            );
-          })}
+                if (entity.id === selectedDriverId) {
+                  setSelectedDriverId(null);
+                  setSelectedLoadId(null);
+                  setSelectedTrailDriverId(null);
+                  if (onDriverSelected) {
+                    onDriverSelected("");
+                  }
+                } else {
+                  setSelectedDriverId(entity.id);
+                  setSelectedLoadId(null);
+                  if (onDriverSelected) {
+                    onDriverSelected(entity.id);
+                  }
+                }
+              }}
+            />
+          )}
 
           {/* Render landmarks */}
           {!hideLandmarks && showMarkers && landmarks.map((landmark) => (
