@@ -22,7 +22,8 @@
     "monitor:salko": "node scripts/monitor-salko-gps.js",
     "check:salko": "node scripts/check-salko-positions.js",
     "check:positions": "node scripts/check-all-positions.js",
-    "watch:gps": "./scripts/watch-gps-logs.sh"
+    "watch:gps": "./scripts/watch-gps-logs.sh",
+    "schengen:aggregate": "npx tsx scripts/aggregate-schengen.ts"
   },
   "keywords": [],
   "author": "",
