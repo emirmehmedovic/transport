@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Shield, Loader2, Calendar, TrendingDown, CheckCircle2, Truck, Search, X, Mail, History } from "lucide-react";
+import { AlertTriangle, Shield, Loader2, Calendar, TrendingDown, CheckCircle2, Truck, Search, X, Mail, History, Database } from "lucide-react";
 import { formatDateDMY } from "@/lib/date";
 import { useAuth } from "@/lib/authContext";
 import { getDriverStatusLabel } from "@/lib/ui-labels";
@@ -95,6 +95,8 @@ export default function SchengenOverviewPage() {
   const [weeklyReportSending, setWeeklyReportSending] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState("");
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [aggregating, setAggregating] = useState(false);
+  const [aggregationSuccess, setAggregationSuccess] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -176,6 +178,27 @@ export default function SchengenOverviewPage() {
       setWeeklyReportError(err.message || "Greška pri slanju izvještaja");
     } finally {
       setWeeklyReportSending(false);
+    }
+  };
+
+  const runAggregation = async () => {
+    if (!confirm("Pokrenuti agregaciju Schengen dana za sve vozače? Ovo može trajati nekoliko minuta.")) {
+      return;
+    }
+    try {
+      setAggregating(true);
+      setAggregationSuccess("");
+      setError("");
+      const res = await fetch("/api/schengen/aggregate", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Greška pri agregaciji");
+      setAggregationSuccess(`Uspješno agregirano za ${data.result.drivers} vozača`);
+      // Refresh summary after aggregation
+      setTimeout(() => fetchSummary(), 1000);
+    } catch (err: any) {
+      setError(err.message || "Greška pri agregaciji");
+    } finally {
+      setAggregating(false);
     }
   };
 
@@ -616,6 +639,19 @@ export default function SchengenOverviewPage() {
                 </button>
               )}
             </div>
+            {user?.role === "ADMIN" && (
+              <button
+                onClick={runAggregation}
+                disabled={aggregating || loading}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                title="Pokreni agregaciju Schengen dana za sve vozače"
+              >
+                <Database className={`w-4 h-4 ${aggregating ? 'animate-pulse' : ''}`} />
+                <span className="text-sm font-medium">
+                  {aggregating ? "Agregiram..." : "Agregiraj dane"}
+                </span>
+              </button>
+            )}
             <button
               onClick={fetchSummary}
               disabled={loading}
@@ -627,6 +663,13 @@ export default function SchengenOverviewPage() {
 	          </div>
 	        </CardHeader>
 	        <CardContent className="p-0">
+            {aggregationSuccess && user?.role === "ADMIN" && (
+              <div className="px-6 pt-5">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {aggregationSuccess}
+                </div>
+              </div>
+            )}
             {weeklyReportError && user?.role === "ADMIN" && (
               <div className="px-6 pt-5">
                 <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
