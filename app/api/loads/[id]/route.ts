@@ -13,9 +13,10 @@ export const dynamic = "force-dynamic";
 // GET /api/loads/[id] - Detalji pojedinačnog loada
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -25,7 +26,7 @@ export async function GET(
     }
 
     const load = await prisma.load.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         driver: {
           select: {
@@ -80,7 +81,7 @@ export async function GET(
       );
     }
 
-    const proofOfDeliveryUploaded = await hasProofOfDelivery(params.id);
+    const proofOfDeliveryUploaded = await hasProofOfDelivery(id);
 
     return NextResponse.json({
       load: {
@@ -100,9 +101,10 @@ export async function GET(
 // PUT /api/loads/[id] - Ažuriranje loada
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -118,7 +120,7 @@ export async function PUT(
       );
     }
 
-    const existing = await prisma.load.findUnique({ where: { id: params.id } });
+    const existing = await prisma.load.findUnique({ where: { id } });
 
     if (!existing) {
       return NextResponse.json(
@@ -196,7 +198,7 @@ export async function PUT(
     }
 
     if (status === "COMPLETED") {
-      const podExists = await hasProofOfDelivery(params.id);
+      const podExists = await hasProofOfDelivery(id);
       if (!podExists) {
         return NextResponse.json(
           { error: "Load ne može biti završen bez uploadovanog POD dokumenta." },
@@ -206,7 +208,7 @@ export async function PUT(
     }
 
     const updated = await prisma.load.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         pickupAddress,
         pickupCity,
@@ -310,7 +312,7 @@ export async function PUT(
       data: {
         action: "UPDATE",
         entity: "LOAD",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });
@@ -328,9 +330,10 @@ export async function PUT(
 // DELETE /api/loads/[id] - Brisanje loada
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -346,7 +349,7 @@ export async function DELETE(
       );
     }
 
-    const existing = await prisma.load.findUnique({ where: { id: params.id } });
+    const existing = await prisma.load.findUnique({ where: { id } });
 
     if (!existing) {
       return NextResponse.json(
@@ -355,13 +358,13 @@ export async function DELETE(
       );
     }
 
-    await prisma.load.delete({ where: { id: params.id } });
+    await prisma.load.delete({ where: { id: id } });
 
     await prisma.auditLog.create({
       data: {
         action: "DELETE",
         entity: "LOAD",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });

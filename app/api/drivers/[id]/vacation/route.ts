@@ -5,9 +5,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // POST /api/drivers/[id]/vacation - Dodavanje vacation/sick leave perioda
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -39,7 +40,7 @@ export async function POST(
 
     // Provjera da li vozač postoji
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         user: true,
       },
@@ -55,7 +56,7 @@ export async function POST(
     // Provjera da li se period preklapa sa postojećim
     const overlapping = await prisma.vacationPeriod.findFirst({
       where: {
-        driverId: params.id,
+        driverId: id,
         OR: [
           {
             AND: [
@@ -89,7 +90,7 @@ export async function POST(
     // Kreiranje vacation perioda
     const vacationPeriod = await prisma.vacationPeriod.create({
       data: {
-        driverId: params.id,
+        driverId: id,
         startDate: start,
         endDate: end,
         type,
@@ -101,7 +102,7 @@ export async function POST(
     const today = new Date();
     if (start <= today && end >= today) {
       await prisma.driver.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           status: type === "VACATION" ? "VACATION" : "SICK_LEAVE",
         },
@@ -114,7 +115,7 @@ export async function POST(
         action: "CREATE",
         userId: decoded.userId,
         entity: "DRIVER",
-        entityId: params.id,
+        entityId: id,
         changes: {
           type,
           start: start.toISOString(),

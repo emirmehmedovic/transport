@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
@@ -34,7 +35,7 @@ export async function PATCH(
     const notification = await prisma.appNotification.findFirst({
       where: {
         id: notificationId,
-        driverId: params.id,
+        driverId: id,
       },
       select: {
         id: true,
@@ -97,7 +98,7 @@ export async function PATCH(
       userId: decoded.userId,
       action: AuditAction.UPDATE,
       entity: AuditEntity.DRIVER,
-      entityId: params.id,
+      entityId: id,
       changes: createChanges(
         {
           notificationId,

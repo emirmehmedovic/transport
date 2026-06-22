@@ -8,9 +8,10 @@ import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -21,7 +22,7 @@ export async function GET(
     }
 
     const zone = await prisma.zone.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         events: {
           take: 50,
@@ -65,9 +66,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -102,7 +104,7 @@ export async function PUT(
     if (notifyOnExit !== undefined) updateData.notifyOnExit = notifyOnExit;
 
     const zone = await prisma.zone.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
     });
 
@@ -133,9 +135,10 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -146,7 +149,7 @@ export async function DELETE(
     }
 
     await prisma.zone.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     // Create audit log
@@ -155,7 +158,7 @@ export async function DELETE(
         userId: decoded.userId,
         action: 'DELETE',
         entity: 'DRIVER',
-        entityId: params.id,
+        entityId: id,
       },
     });
 

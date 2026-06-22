@@ -5,7 +5,7 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // PUT /api/claims/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const decoded = await getVerifiedAuthUserFromRequest(req);
@@ -15,9 +15,10 @@ export async function PUT(
 
     const body = await req.json();
     const { claimNumber, amount, status, notes } = body;
+    const { id } = await params;
 
     const claim = await prisma.claim.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         claimNumber: claimNumber ?? undefined,
         amount: amount ? parseFloat(amount) : undefined,
@@ -30,7 +31,7 @@ export async function PUT(
       data: {
         action: "UPDATE",
         entity: "DOCUMENT",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });
@@ -45,7 +46,7 @@ export async function PUT(
 // DELETE /api/claims/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const decoded = await getVerifiedAuthUserFromRequest(req);
@@ -53,12 +54,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.claim.delete({ where: { id: params.id } });
+    const { id } = await params;
+    await prisma.claim.delete({ where: { id } });
     await prisma.auditLog.create({
       data: {
         action: "DELETE",
         entity: "DOCUMENT",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });

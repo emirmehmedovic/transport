@@ -48,15 +48,16 @@ export const dynamic = "force-dynamic";
 // Returns Schengen 90/180 stats based on Position records
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
 
-    if (decoded.role === "DRIVER" && decoded.driverId !== params.id) {
+    if (decoded.role === "DRIVER" && decoded.driverId !== id) {
       return NextResponse.json(
         { error: "Nemate dozvolu za pristup" },
         { status: 403 }
@@ -67,7 +68,7 @@ export async function GET(
     const borderWindowFrom = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: {
         id: true,
         schengenManualRemainingDays: true,
@@ -81,7 +82,7 @@ export async function GET(
 
     const positionsForTransitions = await prisma.position.findMany({
       where: {
-        driverId: params.id,
+        driverId: id,
         recordedAt: { gte: borderWindowFrom },
       },
       select: {
@@ -118,7 +119,7 @@ export async function GET(
 
     const confirmationNotifications = await prisma.appNotification.findMany({
       where: {
-        driverId: params.id,
+        driverId: id,
         type: {
           in: [
             AppNotificationType.DRIVER_BORDER_EXIT_EU,
@@ -242,7 +243,7 @@ export async function GET(
       manualRemainingDays: driver.schengenManualRemainingDays,
       manualAsOf: driver.schengenManualAsOf,
     }).countFrom;
-    const usageSinceCountFrom = await countSchengenDaysWithFallback(params.id, countFrom);
+    const usageSinceCountFrom = await countSchengenDaysWithFallback(id, countFrom);
     const snapshot = buildSchengenStatusSnapshot({
       now,
       manualRemainingDays: driver.schengenManualRemainingDays,
@@ -273,7 +274,7 @@ export async function GET(
       const auditLogs = await prisma.auditLog.findMany({
         where: {
           entity: "DRIVER",
-          entityId: params.id,
+          entityId: id,
         },
         orderBy: { createdAt: "desc" },
         take: 50,

@@ -11,9 +11,10 @@ import { z } from "zod";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const authUser = await getVerifiedAuthUserFromRequest(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,7 +27,7 @@ export async function POST(
 
     // Check if route plan exists
     const routePlan = await prisma.weeklyRoutePlan.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!routePlan) {
@@ -48,7 +49,7 @@ export async function POST(
 
     // Generate loads
     const loads = await generateLoadsForRoutePlan(
-      params.id,
+      id,
       startDate,
       endDate,
       prisma

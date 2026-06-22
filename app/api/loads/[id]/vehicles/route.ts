@@ -4,9 +4,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -28,7 +29,7 @@ export async function POST(
     };
 
     const load = await prisma.load.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         vehicles: true,
         truck: true,
@@ -73,7 +74,7 @@ export async function POST(
 
     const vehicle = await prisma.vehicle.create({
       data: {
-        loadId: params.id,
+        loadId: id,
         vin,
         make,
         model,

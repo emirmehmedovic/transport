@@ -9,9 +9,10 @@ import { auditPayment, getClientIp } from '@/lib/auditLog';
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Autentifikacija
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
@@ -28,7 +29,7 @@ export async function PATCH(
 
     // Dohvati pay stub
     const payStub = await prisma.payStub.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!payStub) {
@@ -47,7 +48,7 @@ export async function PATCH(
 
     // Update pay stub
     const updatedPayStub = await prisma.payStub.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         isPaid: true,
         paidDate: new Date(),

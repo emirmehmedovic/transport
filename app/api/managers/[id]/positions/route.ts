@@ -8,9 +8,10 @@ export const dynamic = "force-dynamic";
 // GET /api/managers/[id]/positions - Get position history for manager (ADMIN only)
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -33,7 +34,7 @@ export async function GET(
 
     // Check if manager exists
     const manager = await prisma.manager.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!manager) {
@@ -44,7 +45,7 @@ export async function GET(
     }
 
     const where: any = {
-      managerId: params.id,
+      managerId: id,
     };
 
     if (startDate && endDate) {

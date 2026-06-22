@@ -9,9 +9,10 @@ import { deleteFile } from '@/lib/fileUpload';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Autentifikacija
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
@@ -20,7 +21,7 @@ export async function GET(
 
     // Dohvati dokument
     const document = await prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         load: {
           select: {
@@ -102,9 +103,10 @@ export async function GET(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Autentifikacija
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
@@ -121,7 +123,7 @@ export async function DELETE(
 
     // Dohvati dokument
     const document = await prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!document) {
@@ -141,7 +143,7 @@ export async function DELETE(
 
     // Obriši iz baze
     await prisma.document.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({

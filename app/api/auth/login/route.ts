@@ -25,7 +25,7 @@ const failedLoginAttempts = new Map<
 >();
 
 function getClientIp(request: NextRequest) {
-  return request.ip || request.headers.get("x-forwarded-for") || "unknown";
+  return request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
 }
 
 function getLoginAttemptKey(request: NextRequest, email: string) {

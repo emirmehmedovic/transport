@@ -5,16 +5,17 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/loads/[id]/stops
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
 
     const load = await prisma.load.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: { id: true, driverId: true },
     });
 
@@ -27,7 +28,7 @@ export async function GET(
     }
 
     const stops = await prisma.loadStop.findMany({
-      where: { loadId: params.id },
+      where: { loadId: id },
       orderBy: { sequence: "asc" },
     });
 
@@ -41,9 +42,10 @@ export async function GET(
 // POST /api/loads/[id]/stops
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -74,7 +76,7 @@ export async function POST(
 
     const stop = await prisma.loadStop.create({
       data: {
-        loadId: params.id,
+        loadId: id,
         type,
         sequence: sequence ?? 1,
         address,

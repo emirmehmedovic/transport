@@ -5,9 +5,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // PUT /api/toll-permits/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -27,7 +28,7 @@ export async function PUT(
     } = body;
 
     const tollPermit = await prisma.tollPermit.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         countryCode: countryCode ? countryCode.toUpperCase() : undefined,
         countryName: countryName ?? undefined,
@@ -54,15 +55,16 @@ export async function PUT(
 // DELETE /api/toll-permits/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.tollPermit.delete({ where: { id: params.id } });
+    await prisma.tollPermit.delete({ where: { id: id } });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error("Toll permit delete error:", error);

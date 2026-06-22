@@ -8,16 +8,17 @@ export const dynamic = "force-dynamic";
 // GET /api/inspections/[id]
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
 
     const inspection = await prisma.inspection.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         driver: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
         truck: { select: { id: true, truckNumber: true } },
@@ -43,9 +44,10 @@ export async function GET(
 // PUT /api/inspections/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -64,7 +66,7 @@ export async function PUT(
     } = body;
 
     const inspection = await prisma.inspection.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         type,
         status,
@@ -81,7 +83,7 @@ export async function PUT(
       data: {
         action: "UPDATE",
         entity: "DOCUMENT",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });
@@ -96,21 +98,22 @@ export async function PUT(
 // DELETE /api/inspections/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.inspection.delete({ where: { id: params.id } });
+    await prisma.inspection.delete({ where: { id } });
 
     await prisma.auditLog.create({
       data: {
         action: "DELETE",
         entity: "DOCUMENT",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });

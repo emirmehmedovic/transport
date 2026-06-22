@@ -6,9 +6,10 @@ import { truckSchema } from "@/lib/validation/truck";
 // GET /api/trucks/[id] - Detalji pojedinačnog kamiona
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -18,7 +19,7 @@ export async function GET(
     }
 
     const truck = await prisma.truck.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         primaryDriver: {
           select: {
@@ -114,9 +115,10 @@ export async function GET(
 // PUT /api/trucks/[id] - Ažuriranje kamiona
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -154,7 +156,7 @@ export async function PUT(
 
     // Provjera da li kamion postoji
     const existingTruck = await prisma.truck.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingTruck) {
@@ -194,7 +196,7 @@ export async function PUT(
 
     // Ažuriranje kamiona
     const truck = await prisma.truck.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         truckNumber,
         vin,
@@ -238,9 +240,10 @@ export async function PUT(
 // DELETE /api/trucks/[id] - Brisanje kamiona
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
@@ -251,7 +254,7 @@ export async function DELETE(
 
     // Provjera da li kamion postoji
     const truck = await prisma.truck.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         loads: {
           where: {
@@ -280,7 +283,7 @@ export async function DELETE(
 
     // Brisanje kamiona
     await prisma.truck.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     // Kreiranje audit log-a

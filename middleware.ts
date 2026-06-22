@@ -15,7 +15,7 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute
 
 function getClientIdentifier(request: NextRequest): string {
-  return request.ip || request.headers.get("x-forwarded-for") || "unknown";
+  return request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
 }
 
 function getRateLimitPolicy(request: NextRequest) {

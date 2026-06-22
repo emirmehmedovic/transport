@@ -6,9 +6,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/users/[id] - Detalji pojedinačnog korisnika
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
@@ -18,7 +19,7 @@ export async function GET(
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         email: true,
@@ -60,9 +61,10 @@ export async function GET(
 // PUT /api/users/[id] - Ažuriranje korisnika
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
@@ -84,7 +86,7 @@ export async function PUT(
 
     // Provjera da li korisnik postoji
     const existingUser = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingUser) {
@@ -125,7 +127,7 @@ export async function PUT(
 
     // Ažuriranje korisnika
     const user = await prisma.user.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       select: {
         id: true,
@@ -178,9 +180,10 @@ export async function PUT(
 // DELETE /api/users/[id] - Brisanje korisnika
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
@@ -191,7 +194,7 @@ export async function DELETE(
 
     // Provjera da li korisnik postoji
     const user = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         driver: true,
       },
@@ -214,7 +217,7 @@ export async function DELETE(
 
     // Brisanje korisnika (cascade će obrisati povezane podatke)
     await prisma.user.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     // Kreiranje audit log-a

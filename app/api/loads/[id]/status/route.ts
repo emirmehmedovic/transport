@@ -40,9 +40,10 @@ const STATUS_TRANSITIONS: Record<LoadStatus, LoadStatus[]> = {
 // PATCH /api/loads/[id]/status - Promjena statusa loada
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -61,7 +62,7 @@ export async function PATCH(
       );
     }
 
-    const load = await prisma.load.findUnique({ where: { id: params.id } });
+    const load = await prisma.load.findUnique({ where: { id } });
 
     if (!load) {
       return NextResponse.json(
@@ -96,7 +97,7 @@ export async function PATCH(
     }
 
     if (status === "COMPLETED") {
-      const podExists = await hasProofOfDelivery(params.id);
+      const podExists = await hasProofOfDelivery(id);
       if (!podExists) {
         return NextResponse.json(
           { error: "Load ne može biti završen bez uploadovanog POD dokumenta." },
@@ -117,7 +118,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.load.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
     });
 

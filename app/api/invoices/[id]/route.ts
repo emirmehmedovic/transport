@@ -5,14 +5,15 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/invoices/[id]
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
 
     const invoice = await prisma.invoice.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { customer: true, lines: true },
     });
     if (!invoice) {
@@ -28,9 +29,10 @@ export async function GET(
 // PUT /api/invoices/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -54,7 +56,7 @@ export async function PUT(
     const totalAmount = computedLines.reduce((sum, l) => sum + l.lineTotal, 0);
 
     const invoice = await prisma.invoice.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         issueDate: issueDate ? new Date(issueDate) : undefined,
         dueDate: dueDate ? new Date(dueDate) : undefined,
@@ -80,15 +82,16 @@ export async function PUT(
 // DELETE /api/invoices/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.invoice.delete({ where: { id: params.id } });
+    await prisma.invoice.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error("Invoice delete error:", error);

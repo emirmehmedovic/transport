@@ -18,9 +18,10 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Nevažeća autentifikacija' }, { status: 401 });
@@ -38,7 +39,7 @@ export async function POST(
 
     // Get the load
     const load = await prisma.load.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         driver: {
           select: {
@@ -111,7 +112,7 @@ export async function POST(
     }
 
     const updatedLoad = await prisma.load.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       include: {
         driver: {

@@ -5,9 +5,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/trucks/[id]/maintenance - Lista maintenance zapisa za kamion
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -17,7 +18,7 @@ export async function GET(
     }
 
     const records = await prisma.maintenanceRecord.findMany({
-      where: { truckId: params.id },
+      where: { truckId: id },
       orderBy: { performedDate: "desc" },
     });
 
@@ -52,9 +53,10 @@ function calculateNextServiceDue(
 // POST /api/trucks/[id]/maintenance - Kreiranje maintenance zapisa
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -89,7 +91,7 @@ export async function POST(
 
     const record = await prisma.maintenanceRecord.create({
       data: {
-        truckId: params.id,
+        truckId: id,
         type,
         description,
         performedDate: new Date(performedDate),

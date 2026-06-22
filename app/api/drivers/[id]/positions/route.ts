@@ -25,16 +25,17 @@ const MAX_LIMIT = 50000;
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const canViewOwnPositions =
-      decoded.role === 'DRIVER' && decoded.driverId === params.id;
+      decoded.role === 'DRIVER' && decoded.driverId === id;
     const canViewAnyPositions =
       decoded.role === 'ADMIN' || decoded.role === 'DISPATCHER';
 
@@ -70,7 +71,7 @@ export async function GET(
 
     // Verify driver exists
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: {
         id: true,
         traccarDeviceId: true,
@@ -89,7 +90,7 @@ export async function GET(
 
     const totalAvailable = await prisma.position.count({
       where: {
-        driverId: params.id,
+        driverId: id,
         recordedAt: {
           gte: startDate,
           lte: endDate,
@@ -100,7 +101,7 @@ export async function GET(
     // Fetch position history
     const positions = await prisma.position.findMany({
       where: {
-        driverId: params.id,
+        driverId: id,
         recordedAt: {
           gte: startDate,
           lte: endDate,

@@ -8,9 +8,10 @@ type LoadApprovalStatus = (typeof ALLOWED_APPROVALS)[number];
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
@@ -24,14 +25,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Nevažeći status odobrenja" }, { status: 400 });
     }
 
-    const existing = await prisma.load.findUnique({ where: { id: params.id } });
+    const existing = await prisma.load.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: "Load nije pronađen" }, { status: 404 });
     }
 
     const now = new Date();
     const updated = await prisma.load.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         approvalStatus,
         approvalNote: note || null,

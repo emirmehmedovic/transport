@@ -10,9 +10,10 @@ import path from 'path';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Autentifikacija
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
@@ -21,7 +22,7 @@ export async function GET(
 
     // Dohvati dokument
     const document = await prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         load: { select: { id: true, driverId: true, requestedByUserId: true } },
         inspection: { select: { id: true, driverId: true } },

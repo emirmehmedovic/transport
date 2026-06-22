@@ -17,9 +17,10 @@ import { formatDateTimeDMY } from "@/lib/date";
 // PATCH /api/loads/[id]/assign - Dodjela drivera i trucka loadu
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -35,7 +36,7 @@ export async function PATCH(
     };
 
     const load = await prisma.load.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         vehicles: true,
         stops: {
@@ -105,7 +106,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.load.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         driverId: driverId || null,
         truckId: truckId || null,

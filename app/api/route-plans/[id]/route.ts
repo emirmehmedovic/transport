@@ -10,9 +10,10 @@ import { z } from "zod";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const authUser = await getVerifiedAuthUserFromRequest(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,7 +25,7 @@ export async function GET(
     }
 
     const routePlan = await prisma.weeklyRoutePlan.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         driver: {
           include: {
@@ -115,9 +116,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const authUser = await getVerifiedAuthUserFromRequest(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -130,7 +132,7 @@ export async function PUT(
 
     // Check if route plan exists
     const existingRoutePlan = await prisma.weeklyRoutePlan.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existingRoutePlan) {
@@ -182,7 +184,7 @@ export async function PUT(
     if (validatedData.stops) {
       // Delete existing stops
       await prisma.routePlanStop.deleteMany({
-        where: { routePlanId: params.id },
+        where: { routePlanId: id },
       });
 
       // Create new stops
@@ -207,7 +209,7 @@ export async function PUT(
 
     // Update route plan
     const routePlan = await prisma.weeklyRoutePlan.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       include: {
         stops: {
@@ -278,9 +280,10 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const authUser = await getVerifiedAuthUserFromRequest(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -293,7 +296,7 @@ export async function DELETE(
 
     // Check if route plan exists
     const existingRoutePlan = await prisma.weeklyRoutePlan.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existingRoutePlan) {
@@ -302,7 +305,7 @@ export async function DELETE(
 
     // Update status to CANCELLED
     const routePlan = await prisma.weeklyRoutePlan.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         status: "CANCELLED",
       },

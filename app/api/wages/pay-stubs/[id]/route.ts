@@ -8,9 +8,10 @@ import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Autentifikacija
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
@@ -19,7 +20,7 @@ export async function GET(
 
     // Dohvati pay stub
     const payStub = await prisma.payStub.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         driver: {
           select: {

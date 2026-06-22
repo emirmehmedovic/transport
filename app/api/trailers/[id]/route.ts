@@ -6,16 +6,17 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/trailers/[id]
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
 
     const trailer = await prisma.trailer.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         currentTruck: {
           select: { id: true, truckNumber: true, make: true, model: true },
@@ -37,9 +38,10 @@ export async function GET(
 // PUT /api/trailers/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -65,7 +67,7 @@ export async function PUT(
     } = body;
 
     const trailer = await prisma.trailer.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         trailerNumber,
         vin: vin ?? undefined,
@@ -130,15 +132,16 @@ export async function PUT(
 // DELETE /api/trailers/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.trailer.delete({ where: { id: params.id } });
+    await prisma.trailer.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error("Trailer delete error:", error);

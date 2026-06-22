@@ -8,16 +8,17 @@ import { calculateLoadETA } from '@/lib/eta';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
     // Calculate ETA
-    const eta = await calculateLoadETA(params.id);
+    const eta = await calculateLoadETA(id);
 
     if (!eta) {
       return NextResponse.json(

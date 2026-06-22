@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
@@ -18,7 +19,7 @@ export async function POST(
     if (
       decoded.role !== "ADMIN" &&
       decoded.role !== "DISPATCHER" &&
-      !(decoded.role === "DRIVER" && decoded.driverId === params.id)
+      !(decoded.role === "DRIVER" && decoded.driverId === id)
     ) {
       return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
     }
@@ -62,7 +63,7 @@ export async function POST(
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="border-crossings-${params.id}.pdf"`,
+        "Content-Disposition": `attachment; filename="border-crossings-${id}.pdf"`,
       },
     });
   } catch (error: any) {

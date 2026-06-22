@@ -8,9 +8,10 @@ import { getVerifiedAuthUserFromRequest } from '@/lib/api-auth';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -22,7 +23,7 @@ export async function GET(
     }
 
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         traccarDeviceId: true,
@@ -60,9 +61,10 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -91,7 +93,7 @@ export async function PUT(
         select: { id: true, user: { select: { firstName: true, lastName: true } } },
       });
 
-      if (existingDriver && existingDriver.id !== params.id) {
+      if (existingDriver && existingDriver.id !== id) {
         return NextResponse.json(
           {
             error: `Device ID already assigned to ${existingDriver.user.firstName} ${existingDriver.user.lastName}`,
@@ -103,7 +105,7 @@ export async function PUT(
 
     // Update driver's Traccar device ID
     const driver = await prisma.driver.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         traccarDeviceId: traccarDeviceId || null,
       },
@@ -156,9 +158,10 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -170,7 +173,7 @@ export async function DELETE(
     }
 
     const driver = await prisma.driver.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         traccarDeviceId: null,
       },

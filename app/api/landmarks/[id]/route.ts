@@ -6,9 +6,10 @@ import { landmarkSchema } from "@/lib/validation/landmark";
 // GET /api/landmarks/[id] - Detalji pojedinačnog landmark-a
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -18,7 +19,7 @@ export async function GET(
     }
 
     const landmark = await prisma.landmark.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         createdBy: {
           select: {
@@ -51,9 +52,10 @@ export async function GET(
 // PUT /api/landmarks/[id] - Ažuriranje landmark-a
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -72,7 +74,7 @@ export async function PUT(
 
     // Provjera da li landmark postoji
     const existingLandmark = await prisma.landmark.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!existingLandmark) {
@@ -85,7 +87,7 @@ export async function PUT(
     // Ažuriranje landmark-a
     const landmark = await prisma.$transaction(async (tx) => {
       const updatedLandmark = await tx.landmark.update({
-        where: { id: params.id },
+        where: { id: id },
         data: parsed.data,
         include: {
           createdBy: {
@@ -125,9 +127,10 @@ export async function PUT(
 // DELETE /api/landmarks/[id] - Brisanje landmark-a
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
@@ -138,7 +141,7 @@ export async function DELETE(
 
     // Provjera da li landmark postoji
     const landmark = await prisma.landmark.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!landmark) {
@@ -151,7 +154,7 @@ export async function DELETE(
     // Brisanje landmark-a
     await prisma.$transaction(async (tx) => {
       await tx.landmark.delete({
-        where: { id: params.id },
+        where: { id: id },
       });
 
       // Kreiranje audit log-a

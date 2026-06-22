@@ -6,9 +6,10 @@ import { driverSchema } from "@/lib/validation/driver";
 // GET /api/drivers/[id] - Detalji pojedinačnog vozača
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -18,7 +19,7 @@ export async function GET(
     }
 
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         user: {
           select: {
@@ -108,9 +109,10 @@ export async function GET(
 // PUT /api/drivers/[id] - Ažuriranje vozača
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (
       !decoded ||
@@ -161,7 +163,7 @@ export async function PUT(
 
     // Provjera da li vozač postoji
     const existingDriver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         user: true,
       },
@@ -179,7 +181,7 @@ export async function PUT(
       const licenseExists = await prisma.driver.findFirst({
         where: {
           cdlNumber: licenseNumber,
-          id: { not: params.id },
+          id: { not: id },
         },
       });
 
@@ -196,7 +198,7 @@ export async function PUT(
       const deviceExists = await prisma.driver.findFirst({
         where: {
           traccarDeviceId: traccarDeviceId,
-          id: { not: params.id },
+          id: { not: id },
         },
         include: {
           user: {
@@ -220,7 +222,7 @@ export async function PUT(
 
     // Ažuriranje vozača
     const driver = await prisma.driver.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         cdlNumber: licenseNumber,
         cdlState: licenseState,
@@ -270,9 +272,10 @@ export async function PUT(
 // DELETE /api/drivers/[id] - Brisanje vozača
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json(
@@ -283,7 +286,7 @@ export async function DELETE(
 
     // Provjera da li vozač postoji
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         user: true,
         loads: {
@@ -313,7 +316,7 @@ export async function DELETE(
 
     // Brisanje vozača
     await prisma.driver.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     // Kreiranje audit log-a

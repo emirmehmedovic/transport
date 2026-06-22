@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 // GET /api/managers/[id] - Get single manager details (ADMIN only)
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -28,7 +29,7 @@ export async function GET(
     }
 
     const manager = await prisma.manager.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         user: {
           select: {
@@ -63,9 +64,10 @@ export async function GET(
 // PATCH /api/managers/[id] - Update manager (ADMIN only)
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -85,7 +87,7 @@ export async function PATCH(
 
     // Check if manager exists
     const existingManager = await prisma.manager.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { user: true },
     });
 
@@ -105,7 +107,7 @@ export async function PATCH(
       const existingOtherManager = await prisma.manager.findFirst({
         where: {
           traccarDeviceId: body.traccarDeviceId,
-          id: { not: params.id },
+          id: { not: id },
         },
       });
 
@@ -133,7 +135,7 @@ export async function PATCH(
 
     // Update manager data
     const updatedManager = await prisma.manager.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         hireDate: body.hireDate,
         department: body.department,
@@ -158,7 +160,7 @@ export async function PATCH(
     await auditUpdate(
       decoded.userId,
       AuditEntity.MANAGER,
-      params.id,
+      id,
       existingManager,
       updatedManager
     );
@@ -184,9 +186,10 @@ export async function PATCH(
 // DELETE /api/managers/[id] - Delete manager (ADMIN only)
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -204,7 +207,7 @@ export async function DELETE(
 
     // Check if manager exists
     const manager = await prisma.manager.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     if (!manager) {
@@ -216,14 +219,14 @@ export async function DELETE(
 
     // Delete manager (cascade will handle related records)
     await prisma.manager.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     // Audit log
     await auditDelete(
       decoded.userId,
       AuditEntity.MANAGER,
-      params.id,
+      id,
       manager
     );
 

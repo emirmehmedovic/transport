@@ -5,9 +5,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // PATCH /api/trucks/[id]/assign-driver - Dodjela primarnog i backup vozača kamionu
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -32,7 +33,7 @@ export async function PATCH(
 
     // Provjera da li kamion postoji
     const truck = await prisma.truck.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: {
         id: true,
         truckNumber: true,
@@ -78,7 +79,7 @@ export async function PATCH(
     }
 
     const updatedTruck = await prisma.truck.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         primaryDriverId: primaryDriverId ?? null,
         backupDriverId: backupDriverId ?? null,

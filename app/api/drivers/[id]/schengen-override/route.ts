@@ -6,9 +6,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // Body: { remainingDays: number | null, asOf?: string }
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
@@ -20,7 +21,7 @@ export async function POST(
 
     if (remainingDays === null || remainingDays === undefined) {
       await prisma.driver.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           schengenManualRemainingDays: null,
           schengenManualAsOf: null,
@@ -44,7 +45,7 @@ export async function POST(
     }
 
     await prisma.driver.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         schengenManualRemainingDays: Math.round(parsedRemaining),
         schengenManualAsOf: asOf,

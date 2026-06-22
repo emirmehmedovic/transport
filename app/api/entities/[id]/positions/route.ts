@@ -16,9 +16,10 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -35,7 +36,7 @@ export async function GET(
 
     // Try to find driver first
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: {
         id: true,
         traccarDeviceId: true,
@@ -51,7 +52,7 @@ export async function GET(
     // If not driver, try manager
     const manager = !driver
       ? await prisma.manager.findUnique({
-          where: { id: params.id },
+          where: { id: id },
           select: {
             id: true,
             traccarDeviceId: true,
@@ -92,7 +93,7 @@ export async function GET(
     }
 
     // Build query
-    const where: any = entityType === "DRIVER" ? { driverId: params.id } : { managerId: params.id };
+    const where: any = entityType === "DRIVER" ? { driverId: id } : { managerId: id };
 
     if (startDate && endDate) {
       where.recordedAt = {

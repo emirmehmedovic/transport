@@ -4,9 +4,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; vehicleId: string } }
+  { params }: { params: Promise<{ id: string; vehicleId: string }> }
 ) {
   try {
+    const { id, vehicleId } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -17,8 +18,8 @@ export async function DELETE(
 
     const vehicle = await prisma.vehicle.findFirst({
       where: {
-        id: params.vehicleId,
-        loadId: params.id,
+        id: vehicleId,
+        loadId: id,
       },
     });
 

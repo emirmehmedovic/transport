@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: "Nevažeća autentifikacija" }, { status: 401 });
@@ -30,7 +31,7 @@ export async function PATCH(
     }
 
     const existingDocument = await prisma.document.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         approvalStatus: true,
@@ -43,7 +44,7 @@ export async function PATCH(
     }
 
     const document = await prisma.document.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         approvalStatus: status,
         reviewedAt: status === "PENDING" ? null : new Date(),

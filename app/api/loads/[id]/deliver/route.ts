@@ -6,9 +6,10 @@ const TARGET_STATUS = "DELIVERED" as const;
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json(
@@ -17,7 +18,7 @@ export async function POST(
       );
     }
 
-    const load = await prisma.load.findUnique({ where: { id: params.id } });
+    const load = await prisma.load.findUnique({ where: { id } });
 
     if (!load) {
       return NextResponse.json(
@@ -41,7 +42,7 @@ export async function POST(
     }
 
     const updated = await prisma.load.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         status: TARGET_STATUS,
         actualDeliveryDate: new Date(),

@@ -5,16 +5,17 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/incidents/[id]
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
 
     const incident = await prisma.incident.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         driver: { select: { id: true, user: { select: { firstName: true, lastName: true } } } },
         truck: { select: { id: true, truckNumber: true } },
@@ -42,9 +43,10 @@ export async function GET(
 // PUT /api/incidents/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -62,7 +64,7 @@ export async function PUT(
     } = body;
 
     const incident = await prisma.incident.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         trailerId: trailerId ?? undefined,
         loadId: loadId ?? undefined,
@@ -78,7 +80,7 @@ export async function PUT(
       data: {
         action: "UPDATE",
         entity: "DOCUMENT",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });
@@ -93,20 +95,21 @@ export async function PUT(
 // DELETE /api/incidents/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.incident.delete({ where: { id: params.id } });
+    await prisma.incident.delete({ where: { id } });
     await prisma.auditLog.create({
       data: {
         action: "DELETE",
         entity: "DOCUMENT",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });

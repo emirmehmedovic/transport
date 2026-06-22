@@ -5,9 +5,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/trucks/[id]/expenses - Lista troškova kamiona + agregacija po tipu
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -17,7 +18,7 @@ export async function GET(
     }
 
     const expenses = await prisma.truckExpense.findMany({
-      where: { truckId: params.id },
+      where: { truckId: id },
       orderBy: { date: "desc" },
     });
 
@@ -40,9 +41,10 @@ export async function GET(
 // POST /api/trucks/[id]/expenses - Kreiranje troška kamiona
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json(
@@ -76,7 +78,7 @@ export async function POST(
 
     const expense = await prisma.truckExpense.create({
       data: {
-        truckId: params.id,
+        truckId: id,
         type,
         description,
         amount: Number(amount),

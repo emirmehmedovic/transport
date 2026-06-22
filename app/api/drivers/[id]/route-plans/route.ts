@@ -8,9 +8,10 @@ import { prisma } from "@/lib/prisma";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const authUser = await getVerifiedAuthUserFromRequest(request);
     if (!authUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,7 +20,7 @@ export async function GET(
     // Access control: DRIVER can only see their own, others can see all
     if (
       authUser.role === "DRIVER" &&
-      authUser.driverId !== params.id
+      authUser.driverId !== id
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -30,7 +31,7 @@ export async function GET(
 
     // Build where clause
     const where: any = {
-      driverId: params.id,
+      driverId: id,
     };
 
     if (status) {
@@ -88,7 +89,7 @@ export async function GET(
       const now = new Date();
       upcomingLoads = await prisma.load.findMany({
         where: {
-          driverId: params.id,
+          driverId: id,
           scheduledPickupDate: {
             gte: now,
           },

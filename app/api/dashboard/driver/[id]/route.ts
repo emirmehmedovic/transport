@@ -26,16 +26,17 @@ function startOfMonth(date: Date) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
 
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
     }
 
-    const driverId = params.id;
+    const driverId = id;
 
     if (
       decoded.role !== "ADMIN" &&

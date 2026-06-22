@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
@@ -24,7 +25,7 @@ export async function PATCH(
     }
 
     const load = await prisma.load.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: {
         id: true,
         driverId: true,
@@ -53,7 +54,7 @@ export async function PATCH(
     };
 
     const updated = await prisma.load.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         checklist: checklist ?? undefined,
         delayReason:
@@ -80,7 +81,7 @@ export async function PATCH(
       data: {
         action: "UPDATE",
         entity: "LOAD",
-        entityId: params.id,
+        entityId: id,
         userId: decoded.userId,
       },
     });

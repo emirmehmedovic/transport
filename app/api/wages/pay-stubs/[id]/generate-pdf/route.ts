@@ -10,9 +10,10 @@ import { LoadWageDetail } from '@/lib/wageCalculator';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Autentifikacija
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
@@ -29,7 +30,7 @@ export async function POST(
 
     // Dohvati pay stub
     const payStub = await prisma.payStub.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         driver: {
           select: {
@@ -135,7 +136,7 @@ export async function POST(
 
     // Update pay stub sa PDF path
     const updatedPayStub = await prisma.payStub.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         pdfPath,
       },

@@ -13,9 +13,10 @@ import { calculateTruckPerformance } from '@/lib/performanceCalculator';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Autentifikacija
     const decoded = await getVerifiedAuthUserFromRequest(request);
     if (!decoded) {
@@ -44,13 +45,13 @@ export async function GET(
 
     // Calculate performance
     const performance = await calculateTruckPerformance(
-      params.id,
+      id,
       startDate,
       endDate
     );
 
     return NextResponse.json({
-      truckId: params.id,
+      truckId: id,
       periodStart: startDate.toISOString(),
       periodEnd: endDate.toISOString(),
       performance,

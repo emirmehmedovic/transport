@@ -5,14 +5,15 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // GET /api/customers/[id]
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
 
     const customer = await prisma.customer.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { invoices: true },
     });
     if (!customer) {
@@ -29,9 +30,10 @@ export async function GET(
 // PUT /api/customers/[id]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -41,7 +43,7 @@ export async function PUT(
     const { name, email, phone, vatNumber, address } = body;
 
     const customer = await prisma.customer.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name,
         email: email ?? undefined,
@@ -61,15 +63,16 @@ export async function PUT(
 // DELETE /api/customers/[id]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || decoded.role !== "ADMIN") {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.customer.delete({ where: { id: params.id } });
+    await prisma.customer.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error("Customer delete error:", error);

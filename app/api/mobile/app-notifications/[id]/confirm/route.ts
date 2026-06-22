@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
@@ -21,7 +22,7 @@ export async function POST(
 
     const existing = await prisma.appNotification.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: decoded.userId,
         requiresConfirmation: true,
       },

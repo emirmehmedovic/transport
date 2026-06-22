@@ -5,9 +5,10 @@ import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 // PUT /api/loads/[id]/stops/[stopId]
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string; stopId: string } }
+  { params }: { params: Promise<{ id: string; stopId: string }> }
 ) {
   try {
+    const { id, stopId } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
@@ -31,7 +32,7 @@ export async function PUT(
     } = body;
 
     const stop = await prisma.loadStop.update({
-      where: { id: params.stopId },
+      where: { id: stopId },
       data: {
         type,
         sequence,
@@ -59,15 +60,16 @@ export async function PUT(
 // DELETE /api/loads/[id]/stops/[stopId]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; stopId: string } }
+  { params }: { params: Promise<{ id: string; stopId: string }> }
 ) {
   try {
+    const { id, stopId } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu" }, { status: 403 });
     }
 
-    await prisma.loadStop.delete({ where: { id: params.stopId } });
+    await prisma.loadStop.delete({ where: { id: stopId } });
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error("Stop delete error:", error);

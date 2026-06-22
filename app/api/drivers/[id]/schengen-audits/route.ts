@@ -79,9 +79,10 @@ async function restoreManualBaselineFromRemainingAudits(tx: Prisma.TransactionCl
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded) {
       return NextResponse.json({ error: "Neautorizovan pristup" }, { status: 401 });
@@ -90,7 +91,7 @@ export async function GET(
     if (
       decoded.role !== "ADMIN" &&
       decoded.role !== "DISPATCHER" &&
-      !(decoded.role === "DRIVER" && decoded.driverId === params.id)
+      !(decoded.role === "DRIVER" && decoded.driverId === id)
     ) {
       return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
     }
@@ -100,7 +101,7 @@ export async function GET(
     const logs = await prisma.auditLog.findMany({
       where: {
         entity: AuditEntity.DRIVER,
-        entityId: params.id,
+        entityId: id,
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -149,9 +150,10 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
@@ -171,7 +173,7 @@ export async function POST(
     }
 
     const driver = await prisma.driver.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: { id: true },
     });
     if (!driver) {
@@ -220,7 +222,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       if (applyBaseline && changes.suggestedManualBaseline) {
         await tx.driver.update({
-          where: { id: params.id },
+          where: { id: id },
           data: {
             schengenManualRemainingDays: Math.round(changes.suggestedManualBaseline.remainingDays),
             schengenManualAsOf: new Date(changes.suggestedManualBaseline.asOf),
@@ -233,7 +235,7 @@ export async function POST(
           userId: decoded.userId,
           action: AuditAction.UPDATE,
           entity: AuditEntity.DRIVER,
-          entityId: params.id,
+          entityId: id,
           changes: changes as Prisma.InputJsonValue,
           ipAddress:
             req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -266,9 +268,10 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const decoded = await getVerifiedAuthUserFromRequest(req);
     if (!decoded || (decoded.role !== "ADMIN" && decoded.role !== "DISPATCHER")) {
       return NextResponse.json({ error: "Nemate dozvolu za pristup" }, { status: 403 });
@@ -281,7 +284,7 @@ export async function DELETE(
     const logs = await prisma.auditLog.findMany({
       where: {
         entity: AuditEntity.DRIVER,
-        entityId: params.id,
+        entityId: id,
       },
       orderBy: { createdAt: "desc" },
       select: {
@@ -311,7 +314,7 @@ export async function DELETE(
         },
       });
 
-      await restoreManualBaselineFromRemainingAudits(tx, params.id);
+      await restoreManualBaselineFromRemainingAudits(tx, id);
     });
 
     return NextResponse.json({ ok: true, deletedCount: idsToDelete.length, resetAll });
