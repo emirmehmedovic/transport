@@ -239,55 +239,16 @@ export async function countSchengenDaysWithFallbackBatch(
     }
   }
 
-  const until = new Date();
-  const transitionWindowFrom = new Date(earliestFrom.getTime() - 365 * DAY_MS);
-  const transitionPositions = await prisma.position.findMany({
-    where: {
-      driverId: {
-        in: uniqueDrivers.map((driver) => driver.driverId),
-      },
-      recordedAt: { gte: transitionWindowFrom, lte: until },
-    },
-    select: {
-      driverId: true,
-      latitude: true,
-      longitude: true,
-      accuracy: true,
-      recordedAt: true,
-    },
-    orderBy: [{ driverId: "asc" }, { recordedAt: "asc" }],
-  });
-
-  const positionsByDriver = new Map<
-    string,
-    Array<{ latitude: number; longitude: number; accuracy: number | null; recordedAt: Date }>
-  >();
-
-  for (const position of transitionPositions) {
-    if (!position.driverId) continue;
-    const bucket = positionsByDriver.get(position.driverId) ?? [];
-    bucket.push({
-      latitude: position.latitude,
-      longitude: position.longitude,
-      accuracy: position.accuracy,
-      recordedAt: position.recordedAt,
-    });
-    positionsByDriver.set(position.driverId, bucket);
-  }
-
-  for (const driver of uniqueDrivers) {
-    const driverPositions = positionsByDriver.get(driver.driverId) ?? [];
-    if (driverPositions.length === 0) continue;
-
-    const signalDays = countSchengenUsageDaysFromSignals({
-      positions: driverPositions,
-      crossings: detectBorderCrossings(driverPositions),
-      from: driver.from,
-      until,
-    });
-
-    result.set(driver.driverId, Math.max(result.get(driver.driverId) ?? 0, signalDays));
-  }
+  // Performance optimization: Removed "transition window" logic that was loading
+  // up to 365 days of positions for ALL drivers on every API request.
+  // This caused timeouts with millions of positions.
+  //
+  // Border crossing detection is now handled by the background cron job
+  // (aggregateSchengenDaysAllDrivers) which runs daily at 04:30.
+  // The aggregated data is stored in the schengenDay table and read here.
+  //
+  // For drivers without aggregated data, the fallback logic above will
+  // calculate from positions on-demand (acceptable for new drivers).
 
   return result;
 }
