@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { isInSchengen } from "@/lib/schengen";
+import { detectBorderCrossings } from "@/lib/schengen-border";
+import { isInBosniaAndHerzegovina } from "@/lib/bosnia";
 
 const SCHENGEN_TIMEZONE = "Europe/Sarajevo";
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function toDayKeyInTimeZone(date: Date, timeZone = SCHENGEN_TIMEZONE): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -32,6 +35,104 @@ function chunkArray<T>(items: T[], size: number): T[][] {
     chunks.push(items.slice(i, i + size));
   }
   return chunks;
+}
+
+function addSchengenIntervalDays(params: {
+  days: Set<string>;
+  start: Date;
+  end: Date;
+  from: Date;
+  until: Date;
+}) {
+  const intervalStart = params.start > params.from ? params.start : params.from;
+  const intervalEnd = params.end < params.until ? params.end : params.until;
+
+  if (intervalEnd < intervalStart) return;
+
+  let cursor = new Date(`${toDayKeyInTimeZone(intervalStart)}T00:00:00.000Z`);
+  const endKey = toDayKeyInTimeZone(intervalEnd);
+
+  while (toDayKeyInTimeZone(cursor) <= endKey) {
+    params.days.add(toDayKeyInTimeZone(cursor));
+    cursor = new Date(cursor.getTime() + DAY_MS);
+  }
+}
+
+function getSchengenUsageDayKeysFromSignals(params: {
+  positions: Array<{
+    latitude: number;
+    longitude: number;
+    recordedAt: Date;
+  }>;
+  crossings: Array<{
+    type: "EXIT_BIH" | "ENTRY_BIH";
+    recordedAt: string;
+  }>;
+  from: Date;
+  until: Date;
+}) {
+  const days = new Set<string>();
+
+  for (const position of params.positions) {
+    if (position.recordedAt < params.from || position.recordedAt > params.until) continue;
+    if (!isInSchengen(position.latitude, position.longitude)) continue;
+    if (isInBosniaAndHerzegovina(position.latitude, position.longitude)) continue;
+    days.add(toDayKeyInTimeZone(position.recordedAt));
+  }
+
+  let openExitAt: Date | null = null;
+  const sortedCrossings = [...params.crossings].sort(
+    (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
+  );
+
+  for (const crossing of sortedCrossings) {
+    const crossingAt = new Date(crossing.recordedAt);
+    if (Number.isNaN(crossingAt.getTime())) continue;
+
+    if (crossing.type === "EXIT_BIH") {
+      openExitAt = crossingAt;
+      continue;
+    }
+
+    if (!openExitAt) continue;
+
+    addSchengenIntervalDays({
+      days,
+      start: openExitAt,
+      end: crossingAt,
+      from: params.from,
+      until: params.until,
+    });
+    openExitAt = null;
+  }
+
+  if (openExitAt) {
+    addSchengenIntervalDays({
+      days,
+      start: openExitAt,
+      end: params.until,
+      from: params.from,
+      until: params.until,
+    });
+  }
+
+  return days;
+}
+
+export function countSchengenUsageDaysFromSignals(params: {
+  positions: Array<{
+    latitude: number;
+    longitude: number;
+    recordedAt: Date;
+  }>;
+  crossings: Array<{
+    type: "EXIT_BIH" | "ENTRY_BIH";
+    recordedAt: string;
+  }>;
+  from: Date;
+  until: Date;
+}) {
+  return getSchengenUsageDayKeysFromSignals(params).size;
 }
 
 export async function countSchengenDaysWithFallback(
@@ -98,46 +199,94 @@ export async function countSchengenDaysWithFallbackBatch(
     }
   }
 
-  if (fallbackDrivers.length === 0) {
-    return result;
+  if (fallbackDrivers.length > 0) {
+    const earliestFallbackFrom = fallbackDrivers.reduce(
+      (earliest, current) => (current.from < earliest ? current.from : earliest),
+      fallbackDrivers[0].from
+    );
+
+    const positions = await prisma.position.findMany({
+      where: {
+        driverId: {
+          in: fallbackDrivers.map((driver) => driver.driverId),
+        },
+        recordedAt: { gte: earliestFallbackFrom },
+      },
+      select: {
+        driverId: true,
+        latitude: true,
+        longitude: true,
+        recordedAt: true,
+      },
+      orderBy: [{ driverId: "asc" }, { recordedAt: "asc" }],
+    });
+
+    const daysInSchengenByDriver = new Map<string, Set<string>>();
+    for (const pos of positions) {
+      if (!pos.driverId) continue;
+      if (pos.latitude === null || pos.longitude === null) continue;
+      if (!isInSchengen(pos.latitude, pos.longitude)) continue;
+      const fromDate = fromByDriver.get(pos.driverId);
+      if (!fromDate || pos.recordedAt < fromDate) continue;
+      const dayKey = toDayKeyInTimeZone(new Date(pos.recordedAt));
+      const daySet = daysInSchengenByDriver.get(pos.driverId) || new Set<string>();
+      daySet.add(dayKey);
+      daysInSchengenByDriver.set(pos.driverId, daySet);
+    }
+
+    for (const driver of fallbackDrivers) {
+      result.set(driver.driverId, daysInSchengenByDriver.get(driver.driverId)?.size || 0);
+    }
   }
 
-  const earliestFallbackFrom = fallbackDrivers.reduce(
-    (earliest, current) => (current.from < earliest ? current.from : earliest),
-    fallbackDrivers[0].from
-  );
-
-  const positions = await prisma.position.findMany({
+  const until = new Date();
+  const transitionWindowFrom = new Date(earliestFrom.getTime() - 365 * DAY_MS);
+  const transitionPositions = await prisma.position.findMany({
     where: {
       driverId: {
-        in: fallbackDrivers.map((driver) => driver.driverId),
+        in: uniqueDrivers.map((driver) => driver.driverId),
       },
-      recordedAt: { gte: earliestFallbackFrom },
+      recordedAt: { gte: transitionWindowFrom, lte: until },
     },
     select: {
       driverId: true,
       latitude: true,
       longitude: true,
+      accuracy: true,
       recordedAt: true,
     },
     orderBy: [{ driverId: "asc" }, { recordedAt: "asc" }],
   });
 
-  const daysInSchengenByDriver = new Map<string, Set<string>>();
-  for (const pos of positions) {
-    if (!pos.driverId) continue;
-    if (pos.latitude === null || pos.longitude === null) continue;
-    if (!isInSchengen(pos.latitude, pos.longitude)) continue;
-    const fromDate = fromByDriver.get(pos.driverId);
-    if (!fromDate || pos.recordedAt < fromDate) continue;
-    const dayKey = toDayKeyInTimeZone(new Date(pos.recordedAt));
-    const daySet = daysInSchengenByDriver.get(pos.driverId) || new Set<string>();
-    daySet.add(dayKey);
-    daysInSchengenByDriver.set(pos.driverId, daySet);
+  const positionsByDriver = new Map<
+    string,
+    Array<{ latitude: number; longitude: number; accuracy: number | null; recordedAt: Date }>
+  >();
+
+  for (const position of transitionPositions) {
+    if (!position.driverId) continue;
+    const bucket = positionsByDriver.get(position.driverId) ?? [];
+    bucket.push({
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracy: position.accuracy,
+      recordedAt: position.recordedAt,
+    });
+    positionsByDriver.set(position.driverId, bucket);
   }
 
-  for (const driver of fallbackDrivers) {
-    result.set(driver.driverId, daysInSchengenByDriver.get(driver.driverId)?.size || 0);
+  for (const driver of uniqueDrivers) {
+    const driverPositions = positionsByDriver.get(driver.driverId) ?? [];
+    if (driverPositions.length === 0) continue;
+
+    const signalDays = countSchengenUsageDaysFromSignals({
+      positions: driverPositions,
+      crossings: detectBorderCrossings(driverPositions),
+      from: driver.from,
+      until,
+    });
+
+    result.set(driver.driverId, Math.max(result.get(driver.driverId) ?? 0, signalDays));
   }
 
   return result;
@@ -156,6 +305,7 @@ export async function aggregateSchengenDaysForDriver(
     select: {
       latitude: true,
       longitude: true,
+      accuracy: true,
       recordedAt: true,
     },
     orderBy: { recordedAt: "asc" },
@@ -171,9 +321,26 @@ export async function aggregateSchengenDaysForDriver(
     const dayKey = toDayKey(new Date(pos.recordedAt));
     const entry = dayMap.get(dayKey) || { inSchengen: false, count: 0 };
     entry.count += 1;
-    if (!entry.inSchengen && isInSchengen(pos.latitude, pos.longitude)) {
+    if (
+      !entry.inSchengen &&
+      isInSchengen(pos.latitude, pos.longitude) &&
+      !isInBosniaAndHerzegovina(pos.latitude, pos.longitude)
+    ) {
       entry.inSchengen = true;
     }
+    dayMap.set(dayKey, entry);
+  }
+
+  const signalDayKeys = getSchengenUsageDayKeysFromSignals({
+    positions,
+    crossings: detectBorderCrossings(positions),
+    from,
+    until: to,
+  });
+
+  for (const dayKey of signalDayKeys) {
+    const entry = dayMap.get(dayKey) || { inSchengen: false, count: 0 };
+    entry.inSchengen = true;
     dayMap.set(dayKey, entry);
   }
 
@@ -213,16 +380,30 @@ export async function aggregateSchengenDaysForDrivers(
       driverId: true,
       latitude: true,
       longitude: true,
+      accuracy: true,
       recordedAt: true,
     },
     orderBy: [{ driverId: "asc" }, { recordedAt: "asc" }],
   });
 
   const dayMap = new Map<string, { driverId: string; date: Date; inSchengen: boolean; count: number }>();
+  const positionsByDriver = new Map<
+    string,
+    Array<{ latitude: number; longitude: number; accuracy: number | null; recordedAt: Date }>
+  >();
 
   for (const pos of positions) {
     if (!pos.driverId) continue;
     if (pos.latitude === null || pos.longitude === null) continue;
+    const bucket = positionsByDriver.get(pos.driverId) ?? [];
+    bucket.push({
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      accuracy: pos.accuracy,
+      recordedAt: pos.recordedAt,
+    });
+    positionsByDriver.set(pos.driverId, bucket);
+
     const dayKey = toDayKey(new Date(pos.recordedAt));
     const compositeKey = `${pos.driverId}:${dayKey}`;
     const existing: {
@@ -238,11 +419,39 @@ export async function aggregateSchengenDaysForDrivers(
       };
 
     existing.count += 1;
-    if (!existing.inSchengen && isInSchengen(pos.latitude, pos.longitude)) {
+    if (
+      !existing.inSchengen &&
+      isInSchengen(pos.latitude, pos.longitude) &&
+      !isInBosniaAndHerzegovina(pos.latitude, pos.longitude)
+    ) {
       existing.inSchengen = true;
     }
 
     dayMap.set(compositeKey, existing);
+  }
+
+  for (const driverId of driverIds) {
+    const driverPositions = positionsByDriver.get(driverId) ?? [];
+    if (driverPositions.length === 0) continue;
+
+    const signalDayKeys = getSchengenUsageDayKeysFromSignals({
+      positions: driverPositions,
+      crossings: detectBorderCrossings(driverPositions),
+      from,
+      until: to,
+    });
+
+    for (const dayKey of signalDayKeys) {
+      const compositeKey = `${driverId}:${dayKey}`;
+      const existing = dayMap.get(compositeKey) || {
+        driverId,
+        date: dayStart(new Date(dayKey)),
+        inSchengen: false,
+        count: 0,
+      };
+      existing.inSchengen = true;
+      dayMap.set(compositeKey, existing);
+    }
   }
 
   const upserts = Array.from(dayMap.values()).map((entry) =>
