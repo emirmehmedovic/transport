@@ -97,6 +97,7 @@ export default function SchengenOverviewPage() {
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [aggregating, setAggregating] = useState(false);
   const [aggregationSuccess, setAggregationSuccess] = useState("");
+  const [aggregationProgress, setAggregationProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     if (!user) return;
@@ -185,20 +186,50 @@ export default function SchengenOverviewPage() {
     if (!confirm("Pokrenuti agregaciju Schengen dana za sve vozače? Ovo može trajati nekoliko minuta.")) {
       return;
     }
+
     try {
       setAggregating(true);
       setAggregationSuccess("");
       setError("");
-      const res = await fetch("/api/schengen/aggregate", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Greška pri agregaciji");
-      setAggregationSuccess(`Uspješno agregirano za ${data.result.drivers} vozača`);
+      setAggregationProgress({ current: 0, total: rows.length });
+
+      let successCount = 0;
+      let failedCount = 0;
+
+      // Process each driver one by one
+      for (let i = 0; i < rows.length; i++) {
+        const driver = rows[i];
+        setAggregationProgress({ current: i + 1, total: rows.length });
+
+        try {
+          const res = await fetch(`/api/schengen/aggregate/${driver.driverId}`, {
+            method: "POST",
+          });
+
+          if (res.ok) {
+            successCount++;
+          } else {
+            failedCount++;
+            console.error(`Failed to aggregate driver ${driver.name}`);
+          }
+        } catch (err) {
+          failedCount++;
+          console.error(`Error aggregating driver ${driver.name}:`, err);
+        }
+      }
+
+      setAggregationSuccess(
+        `Uspješno agregirano ${successCount} vozača` +
+        (failedCount > 0 ? ` (${failedCount} greška)` : "")
+      );
+
       // Refresh summary after aggregation
       setTimeout(() => fetchSummary(), 1000);
     } catch (err: any) {
       setError(err.message || "Greška pri agregaciji");
     } finally {
       setAggregating(false);
+      setAggregationProgress({ current: 0, total: 0 });
     }
   };
 
@@ -644,11 +675,13 @@ export default function SchengenOverviewPage() {
                 onClick={runAggregation}
                 disabled={aggregating || loading}
                 className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                title="Pokreni agregaciju Schengen dana za sve vozače"
+                title="Pokreni agregaciju Schengen dana za sve vozače (vozač po vozač)"
               >
                 <Database className={`w-4 h-4 ${aggregating ? 'animate-pulse' : ''}`} />
                 <span className="text-sm font-medium">
-                  {aggregating ? "Agregiram..." : "Agregiraj dane"}
+                  {aggregating
+                    ? `Agregiram ${aggregationProgress.current}/${aggregationProgress.total}...`
+                    : "Agregiraj dane"}
                 </span>
               </button>
             )}
