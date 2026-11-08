@@ -8,7 +8,7 @@ import { isInBosniaAndHerzegovina } from "./bosnia";
 import { getSchengenUsageDayKeysFromSignals } from "./schengen-aggregate";
 import { localDayStart } from "./schengen-dates";
 
-export async function getSchengenFreshness(driverId: string, truckNumber: string | null, now = new Date(), rio?: Awaited<ReturnType<typeof getRioNightlyStatus>>) {
+export async function getSchengenFreshness(driverId: string, truckNumber: string | null, now = new Date(), rio?: Awaited<ReturnType<typeof getRioNightlyStatus>>, licensePlate?: string | null) {
   const today = toDayKeyInTimeZone(now), yesterday = shiftDay(today, -1);
   const [latest, todayPositions, importStatus, previous] = await Promise.all([
     prisma.position.findFirst({ where: { driverId, recordedAt: { lte: now }, OR: [{ accuracy: null }, { accuracy: { lte: 250 } }] }, orderBy: { recordedAt: "desc" }, select: { recordedAt: true, deviceId: true, latitude: true, longitude: true } }),
@@ -16,7 +16,9 @@ export async function getSchengenFreshness(driverId: string, truckNumber: string
     rio ? Promise.resolve(rio) : getRioNightlyStatus(),
     prisma.position.findFirst({ where: { driverId, recordedAt: { lt: localDayStart(today) }, OR: [{ accuracy: null }, { accuracy: { lte: 250 } }] }, orderBy: { recordedAt: "desc" }, select: { recordedAt: true, latitude: true, longitude: true, accuracy: true } }),
   ]);
-  const asset = truckNumber ? findRioAssetByTruckNumber(truckNumber) : null;
+  // RIO identifies vehicles by plate; truckNumber may be an internal fleet ID.
+  const asset = (licensePlate ? findRioAssetByTruckNumber(licensePlate) : null)
+    || (truckNumber ? findRioAssetByTruckNumber(truckNumber) : null);
   const nightly = Boolean(!latest?.deviceId.startsWith("volvo:") && (asset || latest?.deviceId.toLowerCase().includes("rio")));
   const result = asset ? importStatus.lastRunResults.find(r => r.assetId === asset.assetId) : null;
   const importComplete = nightly && importStatus.lastRunDate === yesterday && Boolean(importStatus.lastRunFinishedAt) && !importStatus.lastRunDryRun && Boolean(result && !result.error && !result.skippedReason);

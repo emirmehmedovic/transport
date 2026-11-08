@@ -100,6 +100,16 @@ test('audit uses same local date boundary', () => {
  positions=[{...p('2026-11-11T23:55:00+01:00'),deviceId:'rio:test'}];
  const nightly=await freshnessModule.getSchengenFreshness('d',asset.truckNumber,until,{lastRunDate:'2026-11-11',lastRunFinishedAt:'2026-11-12T00:00:00Z',lastRunDryRun:false,lastRunResults:[{assetId:asset.assetId}]});
  assert.equal(nightly.importComplete,true); assert.equal(nightly.todayRecorded,false); assert.equal(nightly.assumedStillInside,true);
+ const imported={lastRunDate:'2026-11-11',lastRunFinishedAt:'2026-11-12T00:00:00Z',lastRunDryRun:false,lastRunResults:[{assetId:asset.assetId,scannedPoints:0}]};
+ const byPlate=await freshnessModule.getSchengenFreshness('d','240923-0725',until,imported,asset.truckNumber.toLowerCase().replaceAll('-',' '));
+ assert.equal(byPlate.importComplete,true);assert.equal(byPlate.stale,false);
+ const unknown=await freshnessModule.getSchengenFreshness('d','240923-0725',until,imported,'UNKNOWN');
+ assert.equal(unknown.importComplete,false);
+ const failedPlate=await freshnessModule.getSchengenFreshness('d','240923-0725',until,{...imported,lastRunResults:[{assetId:asset.assetId,error:'Import failed'}]},asset.truckNumber);
+ assert.equal(failedPlate.importComplete,false);
+ const oldDate=await freshnessModule.getSchengenFreshness('d','240923-0725',until,{...imported,lastRunDate:'2026-11-10'},asset.truckNumber);
+ assert.equal(oldDate.importComplete,false);
+ passed++;console.log('PASS plate matches internal fleet IDs without hiding unknown, failed or wrong-date imports');
  positions=[{...p('2026-11-09T18:00:00+01:00'),deviceId:'rio:test'}];
  const rest=await freshnessModule.getSchengenFreshness('d',asset.truckNumber,until,{lastRunDate:'2026-11-11',lastRunFinishedAt:'2026-11-12T00:00:00Z',lastRunDryRun:false,lastRunResults:[{assetId:asset.assetId,scannedPoints:0}]});
  assert.equal(rest.stale,false); assert.equal(rest.importComplete,true); assert.ok(rest.note.includes('odmora')); assert.equal(rest.todayRecorded,false);

@@ -75,7 +75,7 @@ export async function GET(
         id: true,
         schengenManualRemainingDays: true,
         schengenManualAsOf: true,
-        primaryTruck: { select: { truckNumber: true } },
+        primaryTruck: { select: { truckNumber: true, licensePlate: true } },
       },
     });
 
@@ -370,7 +370,7 @@ export async function GET(
       }
     }
 
-    const freshness = await getSchengenFreshness(id, driver.primaryTruck?.truckNumber ?? null, now);
+    const freshness = await getSchengenFreshness(id, driver.primaryTruck?.truckNumber ?? null, now, undefined, driver.primaryTruck?.licensePlate);
     return NextResponse.json({
       corrections: await getSchengenDayCorrections(id),
       freshness,

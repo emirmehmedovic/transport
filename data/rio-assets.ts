@@ -108,6 +108,7 @@ export const RIO_ASSETS: RioAssetMapping[] = [
 ];
 
 export function findRioAssetByTruckNumber(truckNumber: string) {
-  const normalized = truckNumber.trim().toUpperCase();
-  return RIO_ASSETS.find((asset) => asset.truckNumber.toUpperCase() === normalized) || null;
+  const normalize = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const normalized = normalize(truckNumber);
+  return RIO_ASSETS.find((asset) => normalize(asset.truckNumber) === normalized) || null;
 }

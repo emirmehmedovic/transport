@@ -52,7 +52,7 @@ export async function getSchengenSummaryRows(): Promise<{
         select: { firstName: true, lastName: true, email: true },
       },
       primaryTruck: {
-        select: { truckNumber: true },
+        select: { truckNumber: true, licensePlate: true },
       },
     },
   });
@@ -70,7 +70,7 @@ export async function getSchengenSummaryRows(): Promise<{
 
   const rio = await getRioNightlyStatus();
   const rows: SchengenSummaryRow[] = await Promise.all(drivers.map(async (driver) => {
-    const freshness = await getSchengenFreshness(driver.id, driver.primaryTruck?.truckNumber ?? null, now, rio);
+    const freshness = await getSchengenFreshness(driver.id, driver.primaryTruck?.truckNumber ?? null, now, rio, driver.primaryTruck?.licensePlate);
     const snapshot = buildSchengenStatusSnapshot({
       now,
       manualRemainingDays: driver.schengenManualRemainingDays,
