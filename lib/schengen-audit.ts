@@ -1,3 +1,4 @@
+import { dayKeyDate, toDayKeyInTimeZone } from "./schengen-dates";
 type DayStatus = "MATCH_SCHENGEN" | "MATCH_OUTSIDE" | "OEM_ONLY" | "INTERNAL_ONLY";
 type CrossingType = "EXIT_BIH" | "ENTRY_BIH";
 
@@ -68,10 +69,8 @@ export function buildSchengenAuditDayComparison(params: {
     internalOnly: 0,
   };
 
-  const cursor = new Date(params.from);
-  cursor.setUTCHours(0, 0, 0, 0);
-  const finish = new Date(params.to);
-  finish.setUTCHours(0, 0, 0, 0);
+  const cursor = dayKeyDate(toDayKeyInTimeZone(params.from));
+  const finish = dayKeyDate(toDayKeyInTimeZone(params.to));
 
   while (cursor <= finish) {
     const key = cursor.toISOString().slice(0, 10);

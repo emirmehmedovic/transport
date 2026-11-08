@@ -58,7 +58,7 @@ type AuditResponse = {
     }>;
     coveredDays: string[];
     incrementalCoveredDays: string[];
-    baselineMode: "absolute_from_reset" | "incremental_from_manual";
+    baselineMode: "rolling" | "absolute_from_reset" | "incremental_from_manual";
   };
   internal: {
     totalDistanceKm: number;
@@ -113,7 +113,7 @@ type AuditResponse = {
   suggestedManualBaseline: {
     asOf: string;
     remainingDays: number;
-  };
+  } | null;
 };
 
 type SavedAudit = {
@@ -710,7 +710,7 @@ export default function SchengenAuditPage() {
                     <p>Vozač iz izvještaja: <span className="font-medium">{result.oem.driverNames.join(", ") || "-"}</span></p>
                     <p>Period izvještaja: <span className="font-medium">{formatDateTime(result.oem.periodStart)} - {formatDateTime(result.oem.periodEnd)}</span></p>
                     <p>Preostalo dana do datuma: <span className="font-medium">{result.oem.remainingDays}</span></p>
-                    <p>Način baseline-a: <span className="font-medium">{result.oem.baselineMode === "incremental_from_manual" ? "Nastavak na postojeći baseline" : "Apsolutno od 10.04.2026"}</span></p>
+                    <p>Način baseline-a: <span className="font-medium">{result.oem.baselineMode === "incremental_from_manual" ? "Nastavak na postojeći baseline" : "Klizni period od 180 dana"}</span></p>
                   </div>
                 </div>
 
@@ -721,7 +721,7 @@ export default function SchengenAuditPage() {
                     <p>Kamion: <span className="font-medium">{result.driver.truckNumber || "-"}</span></p>
                     <p>Gap segmenti: <span className="font-medium">{result.internal.gapCount}</span></p>
                     <p>Gap kilometri: <span className="font-medium">{result.internal.gapDistanceKm.toFixed(1)} km</span></p>
-                    <p>Novi reset: <span className="font-medium">{formatDateTime(result.internal.nextResetAt)}</span></p>
+                    <p>Obračun se pomjera svakog dana; nema datuma reseta.</p>
                     <p>Metoda distance: <span className="font-medium">{result.internal.distanceMethod}</span></p>
                   </div>
                 </div>
@@ -741,8 +741,8 @@ export default function SchengenAuditPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500">Predloženi manual baseline</p>
-                    <p className="text-xl font-bold text-slate-900">{result.suggestedManualBaseline.remainingDays} dana</p>
+                    <p className="text-slate-500">Korekcije boravka</p>
+                    <p className="text-sm text-slate-700">Ispravite konkretne datume na profilu vozača.</p>
                   </div>
                 </div>
               </div>
@@ -874,15 +874,7 @@ export default function SchengenAuditPage() {
                   {savingAudit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Sačuvaj audit
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveAudit(true)}
-                  disabled={savingAudit}
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {savingAudit ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                  Postavi baseline i sačuvaj
-                </button>
+
                 <button
                   type="button"
                   onClick={handleExportCsv}

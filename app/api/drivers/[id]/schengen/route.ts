@@ -1,3 +1,5 @@
+import { getSchengenDayCorrections } from "@/lib/schengen-corrections";
+import { getSchengenFreshness, entryToday } from "@/lib/schengen-freshness";
 import { AppNotificationType, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
@@ -73,6 +75,7 @@ export async function GET(
         id: true,
         schengenManualRemainingDays: true,
         schengenManualAsOf: true,
+        primaryTruck: { select: { truckNumber: true } },
       },
     });
 
@@ -367,7 +370,12 @@ export async function GET(
       }
     }
 
+    const freshness = await getSchengenFreshness(id, driver.primaryTruck?.truckNumber ?? null, now);
     return NextResponse.json({
+      corrections: await getSchengenDayCorrections(id),
+      freshness,
+      entryToday: entryToday(snapshot.usedDays, freshness.todayRecorded),
+      legacyManualIgnored: driver.schengenManualRemainingDays !== null,
       windowDays: 180,
       usedDays: snapshot.usedDays,
       remainingDays: snapshot.remainingDays,

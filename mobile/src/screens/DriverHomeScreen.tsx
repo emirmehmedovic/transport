@@ -1176,6 +1176,13 @@ export function DriverHomeScreen({
               <Text style={{ color: "#374151" }}>
                 Preostalo dana: {schengen?.remainingDays ?? "-"}
               </Text>
+              {schengen?.freshness && <Text style={{ color: schengen.freshness.stale ? "#92400e" : "#475569", marginTop: 8 }}>
+                {schengen.freshness.note}{"\n"}Posljednja pozicija: {schengen.freshness.lastPositionAt ? new Date(schengen.freshness.lastPositionAt).toLocaleString("bs-BA", { timeZone: "Europe/Sarajevo" }) : "nema"}
+              </Text>}
+              {schengen?.freshness?.uncertainTransition && <Text style={{ color: "#92400e" }}>Prelazak obuhvata ponoć; provjerite datum.</Text>}
+              {schengen?.entryToday && <Text style={{ color: "#475569", marginTop: 8 }}>
+                Ako danas boravi (po dostupnim podacima): {schengen.entryToday.usedDaysIncludingToday}/90; poslije danas ostaje {schengen.entryToday.remainingAfterToday}. {!schengen.entryToday.withinLimit ? "Prekoračenje limita." : ""}
+              </Text>}
               <Text style={{ color: "#374151" }}>
                 Period:{" "}
                 {schengen

@@ -1,4 +1,6 @@
 export type DriverSchengenResponse = {
+  freshness?: { source: "nightly" | "live_or_other"; lastPositionAt: string | null; note: string; stale: boolean; assumedStillInside: boolean; noRecentPositions: boolean; uncertainTransition: boolean };
+  entryToday?: { usedDaysIncludingToday: number; remainingAfterToday: number; withinLimit: boolean };
   windowDays: number;
   usedDays: number;
   remainingDays: number;

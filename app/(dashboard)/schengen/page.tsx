@@ -1,5 +1,6 @@
 "use client";
 
+import { SchengenDataStatus, type SchengenDataInfo } from "@/components/SchengenDataStatus";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -9,7 +10,7 @@ import { formatDateDMY } from "@/lib/date";
 import { useAuth } from "@/lib/authContext";
 import { getDriverStatusLabel } from "@/lib/ui-labels";
 
-interface SchengenDriverRow {
+interface SchengenDriverRow extends SchengenDataInfo {
   driverId: string;
   name: string;
   email: string;
@@ -27,7 +28,7 @@ interface SchengenDriverRow {
   nextResetAt: string | null;
 }
 
-interface DriverSchengenStats {
+interface DriverSchengenStats extends SchengenDataInfo {
   usedDays: number;
   remainingDays: number;
   from: string;
@@ -394,6 +395,7 @@ export default function SchengenOverviewPage() {
                 </CardContent>
             </Card>
 
+            <SchengenDataStatus {...driverStats} />
             {/* Manual Entry Warning */}
             {driverStats.manual && (
               <Card className="rounded-2xl shadow-sm border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 backdrop-blur-sm">
@@ -481,7 +483,7 @@ export default function SchengenOverviewPage() {
         </div>
         {cycleStart && cycleEnd && (
           <div className="mt-4 rounded-2xl bg-white/10 border border-white/15 px-4 py-3 text-sm text-dark-100">
-            Aktivni Schengen ciklus: {formatDateDMY(cycleStart)} - {formatDateDMY(cycleEnd)}
+            Klizni period od 180 dana: {formatDateDMY(cycleStart)} - {formatDateDMY(cycleEnd)}
             {globalNextResetAt ? ` · Novi reset: ${formatDateDMY(globalNextResetAt)}` : ""}
           </div>
         )}
@@ -743,7 +745,7 @@ export default function SchengenOverviewPage() {
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900 truncate">{row.name}</p>
-                        <p className="text-xs text-slate-500 truncate mt-0.5">{row.email}</p>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">{row.email}</p><SchengenDataStatus {...row} />
                       </div>
                       <div className="flex-shrink-0">
                         <CircularProgress
@@ -818,7 +820,7 @@ export default function SchengenOverviewPage() {
                             <p className="font-semibold text-slate-900 group-hover:text-slate-700 transition-colors">
                               {row.name}
                             </p>
-                            <p className="text-xs text-slate-500 mt-0.5">{row.email}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{row.email}</p><SchengenDataStatus {...row} />
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -832,7 +834,7 @@ export default function SchengenOverviewPage() {
                             <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
                               <div
                                 className="h-full bg-slate-400 rounded-full transition-all duration-500"
-                                style={{ width: `${(row.usedDays / 90) * 100}%` }}
+                                style={{ width: `${Math.min(100, (row.usedDays / 90) * 100)}%` }}
                               />
                             </div>
                           </div>
@@ -862,7 +864,7 @@ export default function SchengenOverviewPage() {
                             </span>
                           ) : (
                             <span className="text-xs text-slate-400">
-                              {row.nextResetAt ? `Reset ${formatDateDMY(row.nextResetAt)}` : "-"}
+                              <SchengenDataStatus {...row} />
                             </span>
                           )}
                         </td>
@@ -913,7 +915,7 @@ export default function SchengenOverviewPage() {
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Historija slanja Schengen izvještaja</h3>
                 <p className="text-sm text-slate-500 mt-1">
-                  Pregled ručnih i automatskih slanja sedmičnog izvještaja.
+                  Pregled ručnih i automatskih slanja dnevnog izvještaja.
                 </p>
               </div>
               <button

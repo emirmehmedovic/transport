@@ -1,9 +1,11 @@
 "use client";
 
+import { MapContainer } from "@/components/maps/MapContainer";
+
 import { useEffect } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import { Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import type { LoadStopType } from "@prisma/client";
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;

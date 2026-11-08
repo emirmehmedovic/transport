@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<InvoiceTransmission xmlns="http://WizzAir.DI.Loaders.Fuel.IATA3.FuelInvoice_IATA3_v1_0">
+  <InvoiceTransmissionHeader>
+    <InvoiceTransmissionId>TZL-1484-2026-06-29</InvoiceTransmissionId>
+    <InvoiceCreationDate>2026-06-29T11:45:00</InvoiceCreationDate>
+    <Version>IATA:FuelInvoiceV3.2.1</Version>
+  </InvoiceTransmissionHeader>
+  <Invoice>
+    <InvoiceHeader>
+      <CustomerEntityID>26648525244</CustomerEntityID>
+      <IssuingEntityID>4200468580006</IssuingEntityID>
+      <InvoiceNumber>INV-001459-2026</InvoiceNumber>
+      <InvoiceIssueDate>2026-06-29</InvoiceIssueDate>
+      <InvoiceType InvoiceTransactionType="FI">INV</InvoiceType>
+      <InvoiceDeliveryLocation>TZL</InvoiceDeliveryLocation>
+      <InvoicePaymentTermsType>EF14</InvoicePaymentTermsType>
+      <InvoicePaymentTermsDateBasis>ID</InvoicePaymentTermsDateBasis>
+      <InvoicePaymentTermsNetDueDate>2026-07-14T11:45:00</InvoicePaymentTermsNetDueDate>
+      <InvoicePaymentTermsNetDueDays>15</InvoicePaymentTermsNetDueDays>
+      <InvoicePaymentTermsDescription>Payment due 15 days from invoice issue date</InvoicePaymentTermsDescription>
+      <TaxInvoiceNumber>INV-001459-2026</TaxInvoiceNumber>
+      <TaxPointDate>2026-06-29T11:45:00</TaxPointDate>
+      <InvoiceCurrencyCode>EUR</InvoiceCurrencyCode>
+      <InvoiceTotalAmount>4759.80</InvoiceTotalAmount>
+      <InvoiceIDDetails InvoiceIDType="II">
+        <InvoiceIDVATRegistrationNumber>4200468580006</InvoiceIDVATRegistrationNumber>
+        <InvoiceIDName1>HIFA-PETROL d.o.o. Sarajevo</InvoiceIDName1>
+        <InvoiceIDStreet1>Hotonj bb</InvoiceIDStreet1>
+        <InvoiceIDCity>Vogosca</InvoiceIDCity>
+        <InvoiceIDCountryCode>BA</InvoiceIDCountryCode>
+        <InvoiceIDPostalCode>71320</InvoiceIDPostalCode>
+      </InvoiceIDDetails>
+      <InvoiceIDDetails InvoiceIDType="BT">
+        <InvoiceIDVATRegistrationNumber>26648525244</InvoiceIDVATRegistrationNumber>
+        <InvoiceIDName1>Wizz Air Hungary Ltd.</InvoiceIDName1>
+        <InvoiceIDStreet1>Lechner Ödön fasor 6</InvoiceIDStreet1>
+        <InvoiceIDCity>Budapest</InvoiceIDCity>
+        <InvoiceIDCountryCode>HU</InvoiceIDCountryCode>
+        <InvoiceIDPostalCode>1095</InvoiceIDPostalCode>
+      </InvoiceIDDetails>
+    </InvoiceHeader>
+    <SubInvoiceHeader>
+      <InvoiceLine>
+        <ItemNumber>1</ItemNumber>
+        <ItemQuantity>
+          <ItemQuantityType>DL</ItemQuantityType>
+          <ItemQuantityFlag>GR</ItemQuantityFlag>
+          <ItemQuantityQty>4820.00</ItemQuantityQty>
+          <ItemQuantityUOM>KG</ItemQuantityUOM>
+        </ItemQuantity>
+        <ItemDeliveryLocation>TZL</ItemDeliveryLocation>
+        <ItemDeliveryReferenceValue ItemDeliveryReferenceType="FNO">W64241</ItemDeliveryReferenceValue>
+        <ItemDeliveryReferenceValue ItemDeliveryReferenceType="ARN">HA-LVP</ItemDeliveryReferenceValue>
+        <ItemDeliveryReferenceValue ItemDeliveryReferenceType="DTN">MST</ItemDeliveryReferenceValue>
+        <ItemReferenceLocalDate ItemReferenceDateTypes="DTA">2026-06-29T11:45:00</ItemReferenceLocalDate>
+        <ItemInvoiceAmount>4759.80</ItemInvoiceAmount>
+        <SubItem>
+          <SubItemProduct>
+            <SubItemProductID>Jet A-1</SubItemProductID>
+            <SubItemPricingUnitRateType>UR</SubItemPricingUnitRateType>
+            <SubItemPricingUnitRate>0.987510</SubItemPricingUnitRate>
+            <SubItemPricingUOM>KG</SubItemPricingUOM>
+            <SubItemPricingUOMFactor>1</SubItemPricingUOMFactor>
+            <SubItemPricingCurrencyCode>EUR</SubItemPricingCurrencyCode>
+            <SubItemPricingAmount>4820.00</SubItemPricingAmount>
+            <SubItemInvoiceUOM>KG</SubItemInvoiceUOM>
+            <SubItemQuantity>
+              <SubItemInvoiceQuantity>4820.00</SubItemInvoiceQuantity>
+              <SubItemQuantityType>DL</SubItemQuantityType>
+              <SubItemQuantityFlag>GR</SubItemQuantityFlag>
+            </SubItemQuantity>
+            <SubItemInvoiceUnitRate>0.987510</SubItemInvoiceUnitRate>
+            <SubItemInvoiceAmount>4759.80</SubItemInvoiceAmount>
+          </SubItemProduct>
+        </SubItem>
+      </InvoiceLine>
+    </SubInvoiceHeader>
+    <InvoiceSummary>
+      <InvoiceLineCount>1</InvoiceLineCount>
+      <TotalInvoiceLineAmount>4759.80</TotalInvoiceLineAmount>
+      <TotalInvoiceTaxAmount>0</TotalInvoiceTaxAmount>
+    </InvoiceSummary>
+  </Invoice>
+  <InvoiceTransmissionSmry>
+    <InvoiceMessageCount>1</InvoiceMessageCount>
+  </InvoiceTransmissionSmry>
+</InvoiceTransmission>

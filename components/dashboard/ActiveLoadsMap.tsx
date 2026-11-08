@@ -1,7 +1,9 @@
 "use client";
 
+import { MapContainer } from "@/components/maps/MapContainer";
+
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import { formatDateDMY } from "@/lib/date";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";

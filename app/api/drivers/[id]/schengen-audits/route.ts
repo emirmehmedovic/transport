@@ -2,7 +2,6 @@ import { AuditAction, AuditEntity, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
-import { getSchengenCycleInfo } from "@/lib/schengen-cycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,48 +32,6 @@ function parseStoredSchengenAudit(value: Prisma.JsonValue | null): StoredSchenge
   const changes = value as Prisma.JsonObject;
   if (changes.type !== "SCHENGEN_AUDIT") return null;
   return changes as unknown as StoredSchengenAudit;
-}
-
-async function restoreManualBaselineFromRemainingAudits(tx: Prisma.TransactionClient, driverId: string) {
-  const now = new Date();
-  const cycle = getSchengenCycleInfo(now);
-  const logs = await tx.auditLog.findMany({
-    where: {
-      entity: AuditEntity.DRIVER,
-      entityId: driverId,
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      changes: true,
-    },
-  });
-
-  const activeBaselineAudit = logs
-    .map((log) => parseStoredSchengenAudit(log.changes))
-    .find((audit) => {
-      if (!audit?.baselineApplied || !audit.suggestedManualBaseline) return false;
-      const asOf = new Date(audit.suggestedManualBaseline.asOf);
-      return asOf >= cycle.cycleStart && asOf < cycle.cycleEndExclusive;
-    });
-
-  if (!activeBaselineAudit?.suggestedManualBaseline) {
-    await tx.driver.update({
-      where: { id: driverId },
-      data: {
-        schengenManualRemainingDays: null,
-        schengenManualAsOf: null,
-      },
-    });
-    return;
-  }
-
-  await tx.driver.update({
-    where: { id: driverId },
-    data: {
-      schengenManualRemainingDays: Math.round(activeBaselineAudit.suggestedManualBaseline.remainingDays),
-      schengenManualAsOf: new Date(activeBaselineAudit.suggestedManualBaseline.asOf),
-    },
-  });
 }
 
 export async function GET(
@@ -165,7 +122,8 @@ export async function POST(
     const auditWindow = body?.auditWindow;
     const verdict = body?.verdict;
     const note = typeof body?.note === "string" ? body.note.trim() || null : null;
-    const applyBaseline = Boolean(body?.applyBaseline);
+    if (body?.applyBaseline) return NextResponse.json({ error: "Brojčani saldo se više ne primjenjuje. Sačuvajte audit i ispravite konkretne datume boravka." }, { status: 400 });
+    const applyBaseline = false;
     const suggestedManualBaseline = body?.suggestedManualBaseline ?? null;
 
     if ((provider !== "VOLVO" && provider !== "RIO") || typeof selectedUntilDate !== "string") {
@@ -220,15 +178,7 @@ export async function POST(
     });
 
     const result = await prisma.$transaction(async (tx) => {
-      if (applyBaseline && changes.suggestedManualBaseline) {
-        await tx.driver.update({
-          where: { id: id },
-          data: {
-            schengenManualRemainingDays: Math.round(changes.suggestedManualBaseline.remainingDays),
-            schengenManualAsOf: new Date(changes.suggestedManualBaseline.asOf),
-          },
-        });
-      }
+
 
       return tx.auditLog.create({
         data: {
@@ -314,7 +264,7 @@ export async function DELETE(
         },
       });
 
-      await restoreManualBaselineFromRemainingAudits(tx, id);
+
     });
 
     return NextResponse.json({ ok: true, deletedCount: idsToDelete.length, resetAll });

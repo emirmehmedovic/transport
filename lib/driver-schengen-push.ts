@@ -1,3 +1,5 @@
+import { countSchengenDaysWithFallback } from "./schengen-aggregate";
+import { getSchengenCycleInfo } from "./schengen-cycle";
 import { AppNotificationType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAndSendAppNotification } from "@/lib/app-notifications";
@@ -40,49 +42,8 @@ function getBorderLabel(nearestBorderCrossing: { name: string } | null) {
 
 async function getDriverSchengenSnapshot(driverId: string) {
   const now = new Date();
-  const windowFrom = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
-
-  const aggregated = await prisma.schengenDay.findMany({
-    where: {
-      driverId,
-      date: { gte: windowFrom },
-    },
-    select: {
-      inSchengen: true,
-    },
-  });
-
-  let usedDays = aggregated.filter((day) => day.inSchengen).length;
-
-  if (aggregated.length === 0) {
-    const positions = await prisma.position.findMany({
-      where: {
-        driverId,
-        recordedAt: { gte: windowFrom },
-      },
-      select: {
-        latitude: true,
-        longitude: true,
-        recordedAt: true,
-      },
-      orderBy: {
-        recordedAt: "asc",
-      },
-    });
-
-    const daysInSchengen = new Set<string>();
-    for (const pos of positions) {
-      if (!isInSchengen(pos.latitude, pos.longitude)) continue;
-      daysInSchengen.add(toDayKeyInTimeZone(new Date(pos.recordedAt)));
-    }
-    usedDays = daysInSchengen.size;
-  }
-
-  return {
-    usedDays,
-    remainingDays: Math.max(0, 90 - usedDays),
-    windowDays: 180,
-  };
+  const usedDays = await countSchengenDaysWithFallback(driverId, getSchengenCycleInfo(now).cycleStart, now);
+  return { usedDays, remainingDays: Math.max(0, 90 - usedDays), windowDays: 180 };
 }
 
 export async function processDriverBorderCrossingPushNotifications(driverId: string) {

@@ -5,7 +5,6 @@ const BORDER_MAX_ACCURACY_METERS = 250;
 const BORDER_MIN_CONFIRM_POINTS = 3;
 const BORDER_MIN_CONFIRM_MS = 10 * 60 * 1000;
 const BORDER_MIN_DISTANCE_METERS = 2000;
-const BORDER_EVENT_COOLDOWN_MS = 60 * 60 * 1000;
 
 export type BorderCrossingType = "EXIT_BIH" | "ENTRY_BIH";
 
@@ -82,7 +81,6 @@ export function detectBorderCrossings(
   let lastConfirmedPosition: TransitionPosition = validPositions[0];
   let candidateRegion: RegionState | null = null;
   let candidatePositions: TransitionPosition[] = [];
-  let lastEventAt: number | null = null;
 
   const resetCandidate = () => {
     candidateRegion = null;
@@ -139,15 +137,6 @@ export function detectBorderCrossings(
       continue;
     }
 
-    const crossingTime = first.recordedAt.getTime();
-    if (lastEventAt !== null && crossingTime - lastEventAt < BORDER_EVENT_COOLDOWN_MS) {
-      confirmedRegion = region;
-      lastConfirmedPosition = pos;
-      lastEventAt = crossingTime;
-      resetCandidate();
-      continue;
-    }
-
     const midpointLatitude = (lastConfirmedPosition.latitude + first.latitude) / 2;
     const midpointLongitude = (lastConfirmedPosition.longitude + first.longitude) / 2;
     const midpointTimestamp = new Date(
@@ -171,7 +160,6 @@ export function detectBorderCrossings(
 
     confirmedRegion = region;
     lastConfirmedPosition = pos;
-    lastEventAt = crossingTime;
     resetCandidate();
   }
 

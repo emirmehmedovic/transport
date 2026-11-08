@@ -1,7 +1,9 @@
 "use client";
 
+import { MapContainer } from "@/components/maps/MapContainer";
+
 import { useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMapEvents, CircleMarker } from "react-leaflet";
+import { TileLayer, Marker, Polyline, Popup, useMapEvents, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getLoadStatusLabel } from "@/lib/ui-labels";

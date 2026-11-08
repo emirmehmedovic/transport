@@ -23,7 +23,11 @@
     "check:salko": "node scripts/check-salko-positions.js",
     "check:positions": "node scripts/check-all-positions.js",
     "watch:gps": "./scripts/watch-gps-logs.sh",
-    "schengen:aggregate": "npx tsx scripts/aggregate-schengen.ts"
+    "schengen:aggregate": "npx tsx scripts/aggregate-schengen.ts",
+    "test:schengen": "node scripts/test-schengen.cjs",
+    "schengen:rebuild": "tsx scripts/rebuild-schengen.ts",
+    "test:maps": "node scripts/test-map-lifecycle.cjs",
+    "test:integration-alerts": "node scripts/test-integration-alerts.cjs"
   },
   "keywords": [],
   "author": "",
@@ -56,7 +60,8 @@
     "tailwindcss": "^3.4.18",
     "uuid": "^13.0.0",
     "xlsx": "^0.18.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "@react-leaflet/core": "^2.1.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

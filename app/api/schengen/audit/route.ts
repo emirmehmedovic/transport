@@ -1,7 +1,9 @@
+import { toDayKeyInTimeZone, localDayStart, shiftDay } from "@/lib/schengen-dates";
+import { getSchengenUsageDayKeysFromSignals } from "@/lib/schengen-aggregate";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getVerifiedAuthUserFromRequest } from "@/lib/api-auth";
-import { SCHENGEN_CYCLE_ENTITLEMENT_DAYS, SCHENGEN_RESET_BASE_DATE, getSchengenCycleInfo } from "@/lib/schengen-cycle";
+import { SCHENGEN_CYCLE_ENTITLEMENT_DAYS, getSchengenCycleInfo } from "@/lib/schengen-cycle";
 import { parseOemAuditReport } from "@/lib/oem-audit";
 import { fetchOsrmRoutes } from "@/lib/routing/osrm";
 import { buildReplayPathPlan, calculateGeometryDistanceKm } from "@/lib/replay-path";
@@ -18,7 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function toDayKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return toDayKeyInTimeZone(date);
 }
 
 export async function POST(req: NextRequest) {
@@ -49,13 +51,8 @@ export async function POST(req: NextRequest) {
     if (Number.isNaN(untilDate.getTime())) {
       return NextResponse.json({ error: "Neispravan datum" }, { status: 400 });
     }
-    untilDate.setUTCHours(23, 59, 59, 999);
-    if (untilDate < SCHENGEN_RESET_BASE_DATE) {
-      return NextResponse.json(
-        { error: "Audit datum mora biti na ili nakon 10.04.2026." },
-        { status: 400 }
-      );
-    }
+    const selectedEnd = new Date(localDayStart(shiftDay(untilRaw.slice(0, 10), 1)).getTime() - 1);
+    untilDate.setTime(Math.min(+selectedEnd, Date.now()));
 
     const driver = await prisma.driver.findUnique({
       where: { id: driverId },
@@ -87,22 +84,8 @@ export async function POST(req: NextRequest) {
 
     const effectiveUntilDate =
       report.periodEnd && report.periodEnd < untilDate ? report.periodEnd : untilDate;
-    const auditWindowFrom = new Date(SCHENGEN_RESET_BASE_DATE);
     const cycle = getSchengenCycleInfo(effectiveUntilDate);
-    const activeManualInCurrentCycle =
-      driver.schengenManualRemainingDays !== null &&
-      driver.schengenManualAsOf !== null &&
-      driver.schengenManualAsOf >= cycle.cycleStart &&
-      driver.schengenManualAsOf < cycle.cycleEndExclusive;
-    const manualAsOfDay = activeManualInCurrentCycle && driver.schengenManualAsOf
-      ? toDayKey(driver.schengenManualAsOf)
-      : null;
-    const reportOverlapsAfterManual =
-      activeManualInCurrentCycle &&
-      driver.schengenManualAsOf &&
-      report.periodEnd &&
-      report.periodEnd > driver.schengenManualAsOf;
-
+    const auditWindowFrom = localDayStart(cycle.cycleStart.toISOString().slice(0, 10));
     const positions = await prisma.position.findMany({
       where: {
         driverId,
@@ -133,12 +116,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const internalCoveredDaysSet = new Set<string>();
-    for (const position of positions) {
-      if (!isInSchengen(position.latitude, position.longitude)) continue;
-      internalCoveredDaysSet.add(position.recordedAt.toISOString().slice(0, 10));
-    }
-    const internalCoveredDays = Array.from(internalCoveredDaysSet).sort();
+    const previous = await prisma.position.findFirst({ where: { driverId, recordedAt: { lt: auditWindowFrom }, OR: [{ accuracy: null }, { accuracy: { lte: 250 } }] }, orderBy: { recordedAt: "desc" } });
+    const internalCoveredDays = [...getSchengenUsageDayKeysFromSignals({ positions: previous ? [previous, ...positions] : positions, from: auditWindowFrom, until: effectiveUntilDate })].sort();
     const internalSchengenDays = internalCoveredDays.length;
     const internalRemainingDays = Math.max(0, SCHENGEN_CYCLE_ENTITLEMENT_DAYS - internalSchengenDays);
 
@@ -155,32 +134,10 @@ export async function POST(req: NextRequest) {
 
     const internalDistance = await calculateInternalDistanceFromPositions(positions);
 
-    const oemCoveredDaysFromReset = report.coveredDays.filter((day) => {
-      const asDate = new Date(`${day}T00:00:00.000Z`);
-      return asDate >= SCHENGEN_RESET_BASE_DATE && asDate <= effectiveUntilDate;
-    });
-    const incrementalCoveredDays =
-      activeManualInCurrentCycle && manualAsOfDay && reportOverlapsAfterManual
-        ? oemCoveredDaysFromReset.filter((day) => day > manualAsOfDay)
-        : oemCoveredDaysFromReset;
-    const baseUsedDays =
-      activeManualInCurrentCycle &&
-      reportOverlapsAfterManual &&
-      driver.schengenManualRemainingDays !== null
-        ? SCHENGEN_CYCLE_ENTITLEMENT_DAYS - driver.schengenManualRemainingDays
-        : 0;
-    const oemUsedDays = Math.min(
-      SCHENGEN_CYCLE_ENTITLEMENT_DAYS,
-      baseUsedDays + incrementalCoveredDays.length
-    );
-    const oemRemainingDays = Math.max(
-      0,
-      activeManualInCurrentCycle &&
-        reportOverlapsAfterManual &&
-        driver.schengenManualRemainingDays !== null
-        ? driver.schengenManualRemainingDays - incrementalCoveredDays.length
-        : SCHENGEN_CYCLE_ENTITLEMENT_DAYS - oemUsedDays
-    );
+    const oemCoveredDaysFromReset = report.coveredDays.filter(day => day >= toDayKey(auditWindowFrom) && day <= toDayKey(effectiveUntilDate));
+    const incrementalCoveredDays = oemCoveredDaysFromReset;
+    const oemUsedDays = oemCoveredDaysFromReset.length;
+    const oemRemainingDays = Math.max(0, 90 - oemUsedDays);
 
     const oemCrossings: NormalizedAuditCrossing[] = report.borderCrossings.map((crossing) => ({
       type: crossing.from === "BIH" && crossing.to === "SCHENGEN" ? "EXIT_BIH" : "ENTRY_BIH",
@@ -244,10 +201,7 @@ export async function POST(req: NextRequest) {
         borderCrossings: report.borderCrossings,
         coveredDays: oemCoveredDaysFromReset,
         incrementalCoveredDays,
-        baselineMode:
-          activeManualInCurrentCycle && reportOverlapsAfterManual
-            ? "incremental_from_manual"
-            : "absolute_from_reset",
+        baselineMode: "rolling",
       },
       internal: {
         totalDistanceKm: internalDistance.totalDistanceKm,
@@ -267,10 +221,7 @@ export async function POST(req: NextRequest) {
       verdict,
       dayComparison,
       crossingComparison,
-      suggestedManualBaseline: {
-        asOf: effectiveUntilDate.toISOString(),
-        remainingDays: oemRemainingDays,
-      },
+      suggestedManualBaseline: null,
     });
   } catch (error: any) {
     console.error("Schengen audit error:", error);

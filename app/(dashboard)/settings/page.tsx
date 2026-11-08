@@ -169,7 +169,7 @@ export default function SettingsPage() {
       });
       setMessage({
         type: "success",
-        text: "Postavke sedmičnog Schengen mail izvještaja su sačuvane.",
+        text: "Postavke dnevnog Schengen mail izvještaja su sačuvane.",
       });
     } catch (error: any) {
       setMessage({ type: "error", text: error.message });
@@ -404,7 +404,7 @@ export default function SettingsPage() {
                 <Save className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-dark-900">Schengen sedmični mail izvještaj</h2>
+                <h2 className="text-xl font-bold text-dark-900">Schengen dnevni mail izvještaj</h2>
                 <p className="text-sm text-dark-600">
                   Svakog petka šalje se izvještaj sa vozačima poredanim od najmanjeg broja preostalih Schengen dana.
                 </p>
@@ -425,9 +425,9 @@ export default function SettingsPage() {
                   className="h-4 w-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500"
                 />
                 <div>
-                  <div className="font-semibold text-dark-900">Aktiviraj sedmični Schengen mail</div>
+                  <div className="font-semibold text-dark-900">Aktiviraj dnevni Schengen mail</div>
                   <div className="text-sm text-dark-600">
-                    Cron ga šalje petkom u 07:00 po vremenskoj zoni Europe/Sarajevo.
+                    Cron ga šalje svaki dan u 07:00 po vremenskoj zoni Europe/Sarajevo.
                   </div>
                 </div>
               </label>

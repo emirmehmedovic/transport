@@ -27,7 +27,7 @@ function parseBoolean(value: string | undefined, fallback = false) {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
-function createTransporter() {
+function createTransporter(timeoutMs?: number) {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = parseBoolean(process.env.SMTP_SECURE, port === 465);
@@ -47,6 +47,7 @@ function createTransporter() {
   }
 
   return nodemailer.createTransport({
+    ...(timeoutMs ? { connectionTimeout: timeoutMs, greetingTimeout: timeoutMs, socketTimeout: timeoutMs } : {}),
     host,
     port,
     secure,
@@ -67,13 +68,14 @@ export async function sendHtmlEmail(params: {
   html: string;
   text?: string;
   from?: string;
+  timeoutMs?: number;
 }) {
   const recipients = normalizeRecipients(params.to);
   if (recipients.length === 0) {
     throw new Error("Nema definisanih primalaca za email");
   }
 
-  const transporter = createTransporter();
+  const transporter = createTransporter(params.timeoutMs);
   const text = params.text?.trim() || stripHtml(params.html);
 
   await transporter.sendMail({

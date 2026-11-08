@@ -1,7 +1,9 @@
 "use client";
 
+import { MapContainer } from "@/components/maps/MapContainer";
+
 import { useEffect, useState, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Search, MapPin, Loader2, Info } from "lucide-react";

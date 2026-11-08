@@ -1,5 +1,6 @@
 "use client";
 
+import { SchengenDataStatus, type SchengenDataInfo } from "@/components/SchengenDataStatus";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -176,6 +177,9 @@ export default function DriverDetailPage() {
     remainingDays: number;
     from: string;
     to: string;
+    corrections?: Array<{ date: string; inSchengen: boolean; note: string }>;
+    freshness?: SchengenDataInfo["freshness"];
+    entryToday?: SchengenDataInfo["entryToday"];
     nextResetAt?: string | null;
     mode?: string;
     borderCrossings?: {
@@ -486,11 +490,7 @@ export default function DriverDetailPage() {
     try {
       setManualSaving(true);
       setManualError("");
-      const remaining = manualRemaining.trim();
-      const payload =
-        remaining.length === 0
-          ? { remainingDays: null }
-          : { remainingDays: Number(remaining), asOf: manualAsOf || undefined };
+      const payload = { date: manualAsOf, inSchengen: manualRemaining !== "0" };
 
       const res = await fetch(`/api/drivers/${driverId}/schengen-override`, {
         method: "POST",
@@ -516,7 +516,7 @@ export default function DriverDetailPage() {
       const res = await fetch(`/api/drivers/${driverId}/schengen-override`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remainingDays: null }),
+        body: JSON.stringify({ date: manualAsOf, inSchengen: null }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1400,23 +1400,17 @@ export default function DriverDetailPage() {
                 )}
                 <div className="border-t border-dark-100 pt-3">
                   <p className="text-xs text-dark-500 mb-2">
-                    Ručni unos (preostalo dana) – koristi se ako nema istorijskih GPS podataka.
+                    Korekcija konkretnog dana boravka. Ostaje sačuvana pri ponovnoj GPS agregaciji.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-dark-50 rounded-xl p-3 border border-dark-100">
                     <div>
-                      <label className="block text-xs text-dark-500 mb-1">Preostalo dana</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="90"
-                        className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm"
-                        value={manualRemaining}
-                        onChange={(e) => setManualRemaining(e.target.value)}
-                        placeholder="npr. 45"
-                      />
+                      <label className="block text-xs text-dark-500 mb-1">Boravak tog dana</label>
+                      <select className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm" value={manualRemaining === "0" ? "0" : "1"} onChange={e => setManualRemaining(e.target.value)}>
+                        <option value="1">Bio u Schengenu</option><option value="0">Nije bio u Schengenu</option>
+                      </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-dark-500 mb-1">Datum (as of)</label>
+                      <label className="block text-xs text-dark-500 mb-1">Datum boravka</label>
                       <input
                         type="date"
                         className="w-full rounded-lg border border-dark-200 px-3 py-2 text-sm"
@@ -1425,6 +1419,9 @@ export default function DriverDetailPage() {
                       />
                     </div>
                   </div>
+                  {!!schengenStats.corrections?.length && <ul className="mt-2 text-xs text-slate-600">
+                    {schengenStats.corrections.map(c => <li key={c.date}>{c.date}: {c.inSchengen ? "bio u Schengenu" : "nije bio u Schengenu"}</li>)}
+                  </ul>}
                   {manualError && <div className="text-xs text-red-600 mt-2">{manualError}</div>}
                   <div className="flex gap-2 mt-3">
                     <Button
@@ -1441,7 +1438,7 @@ export default function DriverDetailPage() {
                       onClick={handleClearManual}
                       disabled={manualSaving}
                     >
-                      Ukloni ručni unos
+                      Ukloni korekciju tog datuma
                     </Button>
                   </div>
                 </div>
@@ -1947,6 +1944,7 @@ export default function DriverDetailPage() {
                     </p>
                   </div>
 
+                  <SchengenDataStatus {...schengenStats} />
                   {schengenStats.manual && (
                     <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 px-5 py-4">
                       <p className="text-sm font-semibold text-amber-900">

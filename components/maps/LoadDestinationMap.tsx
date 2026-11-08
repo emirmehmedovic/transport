@@ -1,6 +1,8 @@
 "use client";
 
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { MapContainer } from "@/components/maps/MapContainer";
+
+import { Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Navigation } from "lucide-react";

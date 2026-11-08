@@ -117,6 +117,7 @@ async function rfmsFetch<T>(
       Authorization: `Basic ${authorization}`,
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
@@ -124,7 +125,13 @@ async function rfmsFetch<T>(
     throw new Error(`Volvo rFMS ${response.status}: ${text || response.statusText}`);
   }
 
-  const data = (await response.json()) as T;
+  // A successful no-content response also confirms API connectivity.
+  const data = (response.status === 204 ? {} : await response.json()) as T;
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Volvo rFMS invalid response format");
+  if (path.startsWith("/vehiclepositions")) {
+    const positions = (data as VolvoVehiclePositionsResponse).VehiclePosition;
+    if (positions !== undefined && !Array.isArray(positions)) throw new Error("Volvo rFMS invalid response format");
+  }
 
   if (cacheKey) {
     setCache(cacheKey, data, options?.ttlMs ?? 30_000);

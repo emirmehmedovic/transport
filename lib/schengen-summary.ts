@@ -1,3 +1,5 @@
+import { getSchengenFreshness, entryToday } from "./schengen-freshness";
+import { getRioNightlyStatus } from "./rio-status";
 import { DriverStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { countSchengenDaysWithFallbackBatch } from "@/lib/schengen-aggregate";
@@ -16,6 +18,9 @@ export type SchengenSummaryRow = {
   usedDays: number;
   remainingDays: number;
   warning: boolean;
+  freshness: Awaited<ReturnType<typeof getSchengenFreshness>>;
+  entryToday: ReturnType<typeof entryToday>;
+  legacyManualIgnored: boolean;
   manual: null | {
     remainingDays: number;
     asOf: string;
@@ -60,10 +65,12 @@ export async function getSchengenSummaryRows(): Promise<{
         manualRemainingDays: driver.schengenManualRemainingDays,
         manualAsOf: driver.schengenManualAsOf,
       }).countFrom,
-    }))
+    })), now
   );
 
-  const rows: SchengenSummaryRow[] = drivers.map((driver) => {
+  const rio = await getRioNightlyStatus();
+  const rows: SchengenSummaryRow[] = await Promise.all(drivers.map(async (driver) => {
+    const freshness = await getSchengenFreshness(driver.id, driver.primaryTruck?.truckNumber ?? null, now, rio);
     const snapshot = buildSchengenStatusSnapshot({
       now,
       manualRemainingDays: driver.schengenManualRemainingDays,
@@ -79,11 +86,14 @@ export async function getSchengenSummaryRows(): Promise<{
       truckNumber: driver.primaryTruck?.truckNumber || null,
       usedDays: snapshot.usedDays,
       remainingDays: snapshot.remainingDays,
-      warning: snapshot.remainingDays < 7,
+      warning: snapshot.remainingDays <= 7,
+      freshness,
+      entryToday: entryToday(snapshot.usedDays, freshness.todayRecorded),
+      legacyManualIgnored: driver.schengenManualRemainingDays !== null,
       manual: snapshot.manual,
       nextResetAt: snapshot.nextResetAt,
     };
-  });
+  }));
 
   rows.sort((a, b) => a.remainingDays - b.remainingDays);
 

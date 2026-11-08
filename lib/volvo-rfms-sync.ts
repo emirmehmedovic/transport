@@ -1,3 +1,4 @@
+import { observeVolvoApiFetch } from "./volvo-rfms-health";
 import { prisma } from "@/lib/prisma";
 import {
   fetchVolvoLatestVehiclePositions,
@@ -443,11 +444,8 @@ export async function syncVolvoRfmsPositions(options?: {
   explicitStoptime?: string | null;
   updateCursor?: boolean;
   allowAllMatchedDrivers?: boolean;
+  monitorApiHealth?: boolean;
 }) {
-  if (!isVolvoRfmsConfigured()) {
-    throw new Error("Volvo rFMS credentials nisu podešeni");
-  }
-
   const config = await getVolvoRfmsConfig();
   const starttime =
     options?.explicitStarttime && options.explicitStarttime.length > 0
@@ -458,10 +456,10 @@ export async function syncVolvoRfmsPositions(options?: {
         config.lastReceivedAt ||
         buildDefaultStarttime(config.initialLookbackHours);
 
-  const { positions, pagesFetched } = await fetchAllIncrementalPositions(
-    starttime,
-    options?.explicitStoptime || null
-  );
+  const fetchPositions = () => fetchAllIncrementalPositions(starttime, options?.explicitStoptime || null);
+  const { positions, pagesFetched } = options?.monitorApiHealth
+    ? await observeVolvoApiFetch(fetchPositions)
+    : await fetchPositions();
   const localTruckMap = await getLocalTruckMap();
 
   let matchedPositions = 0;

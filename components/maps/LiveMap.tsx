@@ -1,8 +1,10 @@
 "use client";
 
+import { MapContainer } from "@/components/maps/MapContainer";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, useMap, CircleMarker, useMapEvents } from "react-leaflet";
+import { TileLayer, Marker, Polyline, Popup, Tooltip, useMap, CircleMarker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Truck, Package, Navigation, ChevronDown, ChevronUp, MapPin, TrendingUp } from "lucide-react";
