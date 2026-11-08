@@ -19,7 +19,7 @@ export async function getSchengenFreshness(driverId: string, truckNumber: string
   const asset = truckNumber ? findRioAssetByTruckNumber(truckNumber) : null;
   const nightly = Boolean(!latest?.deviceId.startsWith("volvo:") && (asset || latest?.deviceId.toLowerCase().includes("rio")));
   const result = asset ? importStatus.lastRunResults.find(r => r.assetId === asset.assetId) : null;
-  const importComplete = nightly && importStatus.lastRunDate === yesterday && Boolean(importStatus.lastRunFinishedAt) && !importStatus.lastRunDryRun && Boolean(result && !result.error);
+  const importComplete = nightly && importStatus.lastRunDate === yesterday && Boolean(importStatus.lastRunFinishedAt) && !importStatus.lastRunDryRun && Boolean(result && !result.error && !result.skippedReason);
   const lastDay = latest ? toDayKeyInTimeZone(latest.recordedAt) : null;
   // Missing movement is normal on rest days. Only a failed/missing import or
   // absence of any known location is an evidence warning, not an old timestamp alone.

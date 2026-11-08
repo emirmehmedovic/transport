@@ -14,6 +14,7 @@ type RioNightlyAssetResult = {
   savedPoints?: number;
   skippedNearExisting?: number;
   skippedDuplicateSource?: number;
+  skippedReason?: string;
   error?: string;
 };
 
@@ -29,6 +30,7 @@ type RioNightlyStatus = {
     processedAssets: number;
     successfulAssets: number;
     failedAssets: number;
+    skippedAssets?: number;
   } | null;
   lastRunResults: RioNightlyAssetResult[];
 };
@@ -247,6 +249,8 @@ export default function RioNightlyPage() {
                           <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
                             {row.error}
                           </span>
+                        ) : row.skippedReason ? (
+                          <span className="text-amber-700">Preskočeno: {row.skippedReason}</span>
                         ) : (
                           <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
                             OK

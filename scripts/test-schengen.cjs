@@ -104,6 +104,9 @@ test('audit uses same local date boundary', () => {
  const rest=await freshnessModule.getSchengenFreshness('d',asset.truckNumber,until,{lastRunDate:'2026-11-11',lastRunFinishedAt:'2026-11-12T00:00:00Z',lastRunDryRun:false,lastRunResults:[{assetId:asset.assetId,scannedPoints:0}]});
  assert.equal(rest.stale,false); assert.equal(rest.importComplete,true); assert.ok(rest.note.includes('odmora')); assert.equal(rest.todayRecorded,false);
  passed++; console.log('PASS successful empty nightly report is not a data failure on rest days');
+ const skipped=await freshnessModule.getSchengenFreshness('d',asset.truckNumber,until,{lastRunDate:'2026-11-11',lastRunFinishedAt:'2026-11-12T00:00:00Z',lastRunDryRun:false,lastRunResults:[{assetId:asset.assetId,skippedReason:'No local driver'}]});
+ assert.equal(skipped.importComplete,false);assert.equal(skipped.stale,true);
+ passed++;console.log('PASS skipped target does not certify Schengen data as complete');
  positions=[p('2026-11-09T18:00:00+01:00')];
  const liveRest=await freshnessModule.getSchengenFreshness('d',null,until,{lastRunResults:[]});
  assert.equal(liveRest.stale,false); assert.equal(liveRest.noRecentPositions,true); assert.ok(liveRest.note.includes('odmor'));

@@ -11,6 +11,7 @@ export type RioNightlyAssetResult = {
   savedPoints?: number;
   skippedNearExisting?: number;
   skippedDuplicateSource?: number;
+  skippedReason?: string;
   error?: string;
 };
 
@@ -26,6 +27,7 @@ export type RioNightlyStatus = {
     processedAssets: number;
     successfulAssets: number;
     failedAssets: number;
+    skippedAssets?: number;
   } | null;
   lastRunResults: RioNightlyAssetResult[];
 };

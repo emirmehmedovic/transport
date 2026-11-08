@@ -24,7 +24,7 @@ const mocks={
   '@/lib/prisma': {prisma},
   '@/lib/email': {sendHtmlEmail:async mail => {if(smtpFails) throw Error('synthetic SMTP timeout');messages.push(mail);}},
   '@/data/rio-assets': {RIO_ASSETS:assets,findRioAssetByTruckNumber:n=>assets.find(a=>a.truckNumber===n)},
-  '@/lib/rio-import': {importRioHistoryPositions:async ({truckNumber}) => {if(rioMode==='partial' && truckNumber==='TEST-B') throw Error('synthetic vehicle import failure');return {scannedPoints:0,savedPoints:0,skippedNearExisting:0,skippedDuplicateSource:0};}},
+  '@/lib/rio-import': {importRioHistoryPositions:async ({truckNumber}) => {if(rioMode==='missing' && truckNumber==='TEST-B' || rioMode==='all-missing') throw new MissingTargetError('No local driver');if(rioMode==='partial' && truckNumber==='TEST-B') throw Error('synthetic vehicle import failure');return {scannedPoints:0,savedPoints:0,skippedNearExisting:0,skippedDuplicateSource:0};}},
   '@/lib/rio-portal': {withRioPortal:async fn => {if(rioMode==='fatal')throw Error('synthetic portal login failure');return fn({fetchHistoricEvents:async()=>({historic_events:[]})});}},
   'dotenv/config': {},
 };
@@ -43,6 +43,7 @@ function load(name, base=root) {
 }
 const health=load('@/lib/volvo-rfms-health'), alert=load('@/lib/integration-alerts'), rioAlert=load('@/lib/rio-nightly-alerts');
 const runner=load('@/scripts/rio-nightly-runner');
+const {RioImportTargetMissingError:MissingTargetError}=load('@/lib/rio-import-errors');
 const time=m=>new Date(Date.UTC(2026,10,8,9,m));
 const event=(m,ok)=>({startedAt:time(m),finishedAt:time(m),ok,error:ok?undefined:'network unavailable'});
 let passed=0;
@@ -131,6 +132,37 @@ async function test(name,fn){await fn();passed++;console.log('PASS',name);}
  await test('RIO disabled and completed full imports remain silent at deadline',async()=>{
    const before=messages.length;settings.set('rio_nightly_status',JSON.stringify({enabled:false}));await rioAlert.checkRioNightlyDeadline(new Date('2026-11-10T07:05:00+01:00'));
    settings.set('rio_nightly_status',JSON.stringify({enabled:true,lastRunDate:'2026-11-09',lastRunSuccess:true,lastRunFinishedAt:'2026-11-10T02:00:00Z',lastRunDryRun:false,lastRunResults:assets}));await rioAlert.checkRioNightlyDeadline(new Date('2026-11-10T07:05:00+01:00'));assert.equal(messages.length,before);
+ });
+ await test('nightly date follows Sarajevo midnight in winter and summer',()=>{
+   assert.equal(runner.previousLocalDayString(new Date('2026-11-09T00:40:00+01:00')),'2026-11-08');
+   assert.equal(runner.previousLocalDayString(new Date('2026-07-09T00:40:00+02:00')),'2026-07-08');
+ });
+ await test('missing local drivers are visible skips and never failure emails',async()=>{
+   const before=messages.length;rioMode='missing';
+   const result=await runner.runRioNightlyImport({date:'2026-11-12',notifyOnFailure:true});
+   assert.equal(result.successfulAssets,1);assert.equal(result.skippedAssets,1);assert.equal(result.failedAssets,0);
+   assert.equal(result.results[1].skippedReason,'No local driver');
+   assert.equal(JSON.parse(settings.get('rio_scheduled_run:2026-11-12')).status,'success');
+   settings.set('rio_nightly_status',JSON.stringify({...JSON.parse(settings.get('rio_nightly_status')),enabled:true}));
+   await rioAlert.checkRioNightlyDeadline(new Date('2026-11-13T07:05:00+01:00'));
+   assert.equal(messages.length,before);
+ });
+ await test('all missing targets are counted as skips, not successful imports',async()=>{
+   const before=messages.length;rioMode='all-missing';
+   const result=await runner.runRioNightlyImport({date:'2026-11-13',notifyOnFailure:true});
+   assert.equal(result.successfulAssets,0);assert.equal(result.skippedAssets,2);assert.equal(result.failedAssets,0);
+   assert.equal(messages.length,before);
+ });
+ await test('resolver distinguishes absent mapping from database failure',async()=>{
+   const original=mocks['@/lib/rio-import'];delete mocks['@/lib/rio-import'];
+   const {resolveRioImportTarget}=load('@/lib/rio-import');
+   mocks['@/lib/rio-import']=original;
+   prisma.truck={findMany:async()=>[]};
+   prisma.driver={findUnique:async()=>null};
+   await assert.rejects(resolveRioImportTarget({truckNumber:'UNKNOWN'}),MissingTargetError);
+   await assert.rejects(resolveRioImportTarget({driverId:'UNKNOWN'}),MissingTargetError);
+   prisma.truck.findMany=async()=>{throw Error('Database unavailable');};
+   await assert.rejects(resolveRioImportTarget({truckNumber:'TEST-A'}),e=>!(e instanceof MissingTargetError)&&e.message==='Database unavailable');
  });
  console.log(`${passed} integration alert checks passed; all email and external services mocked.`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

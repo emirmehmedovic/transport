@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { parseRioCsvReport } from "@/lib/rio-csv";
 import { extractRioHistoryPositionPoints, type RioHistoricEventsResponse } from "@/lib/rio-history";
 
+import { RioImportTargetMissingError } from "@/lib/rio-import-errors";
+
 const DEFAULT_TIME_TOLERANCE_MS = 5 * 60 * 1000;
 const DEFAULT_DISTANCE_TOLERANCE_METERS = 300;
 
@@ -23,7 +25,7 @@ export async function resolveRioImportTarget(params: {
     });
 
     if (!driver || !driver.primaryTruck) {
-      throw new Error("Vozač nije pronađen ili nema primarni kamion");
+      throw new RioImportTargetMissingError("Vozač nije pronađen ili nema primarni kamion");
     }
 
     return {
@@ -56,7 +58,7 @@ export async function resolveRioImportTarget(params: {
       null;
 
     if (!truck || !truck.primaryDriver) {
-      throw new Error("Kamion nije pronađen ili nema dodijeljenog primarnog vozača");
+      throw new RioImportTargetMissingError("Kamion nije pronađen ili nema dodijeljenog primarnog vozača");
     }
 
     return {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { RIO_ASSETS, findRioAssetByTruckNumber } from "@/data/rio-assets";
 import { localDayRangeToUtc } from "@/lib/rio-history";
 import { importRioHistoryPositions } from "@/lib/rio-import";
+import { RioImportTargetMissingError } from "@/lib/rio-import-errors";
 import { withRioPortal } from "@/lib/rio-portal";
 import { alertRioFailure, saveRioScheduledRun, reconcileRioScheduledSuccess } from "@/lib/rio-nightly-alerts";
 import { shiftDay, toDayKeyInTimeZone } from "@/lib/schengen-dates";
@@ -103,10 +104,12 @@ export async function runRioNightlyImport(options?: {
             assetId: asset.assetId,
             truckNumber: asset.truckNumber,
             label: asset.label,
-            error: errorMessage,
+            ...(error instanceof RioImportTargetMissingError
+              ? { skippedReason: errorMessage }
+              : { error: errorMessage }),
           });
 
-          if (isRioFatalAuthOrRateLimitError(error)) {
+          if (!(error instanceof RioImportTargetMissingError) && isRioFatalAuthOrRateLimitError(error)) {
             throw new Error(
               `RIO nightly prekinut na ${asset.truckNumber}: ${errorMessage}`
             );
@@ -125,7 +128,8 @@ export async function runRioNightlyImport(options?: {
       to: to.toISOString(),
       dryRun: options?.dryRun === true,
       processedAssets: runSummary.length,
-      successfulAssets: runSummary.filter((item) => !item.error).length,
+      successfulAssets: runSummary.filter((item) => !item.error && !item.skippedReason).length,
+      skippedAssets: runSummary.filter((item) => item.skippedReason).length,
       failedAssets: runSummary.filter((item) => item.error).length,
       results: runSummary,
     };
@@ -139,12 +143,13 @@ export async function runRioNightlyImport(options?: {
       lastRunDryRun: summary.dryRun,
       lastRunMessage:
         summary.failedAssets === 0
-          ? "RIO nightly run je uspješno završen."
+          ? `RIO nightly run završen: ${summary.successfulAssets} uspješnih, ${summary.skippedAssets} preskočenih vozila.`
           : `RIO nightly run završen sa ${summary.failedAssets} grešaka.`,
       lastRunSummary: {
         processedAssets: summary.processedAssets,
         successfulAssets: summary.successfulAssets,
         failedAssets: summary.failedAssets,
+        skippedAssets: summary.skippedAssets,
       },
       lastRunResults: summary.results,
     }));
@@ -162,7 +167,7 @@ export async function runRioNightlyImport(options?: {
   } catch (error) {
     const finishedAt = new Date().toISOString();
     await saveRioNightlyStatus({ lastRunDate: date, lastRunStartedAt: startedAt, lastRunFinishedAt: finishedAt, lastRunSuccess: false, lastRunDryRun: options?.dryRun === true, lastRunMessage: error instanceof Error ? error.message : "RIO import nije uspio", lastRunResults: runResults,
-      lastRunSummary: { processedAssets: runResults.length, successfulAssets: runResults.filter(r => !r.error).length, failedAssets: runResults.filter(r => r.error).length } });
+      lastRunSummary: { processedAssets: runResults.length, successfulAssets: runResults.filter(r => !r.error && !r.skippedReason).length, skippedAssets: runResults.filter(r => r.skippedReason).length, failedAssets: runResults.filter(r => r.error).length } });
     if (notify) {
       const completed = new Set(runResults.filter(r => !r.error).map(r => r.assetId));
       const run = { date, status: "failed" as const, startedAt, finishedAt, failedTrucks: RIO_ASSETS.filter(a => !completed.has(a.assetId)).map(a => a.truckNumber), reason: "Import je prekinut. Provjerite prijavu, pristup RIO servisu i detalje greške u historiji importa." };
@@ -173,8 +178,8 @@ export async function runRioNightlyImport(options?: {
   }
 }
 
-function previousLocalDayString() {
-  return shiftDay(toDayKeyInTimeZone(new Date()), -1);
+export function previousLocalDayString(now = new Date()) {
+  return shiftDay(toDayKeyInTimeZone(now), -1);
 }
 
 function sleep(ms: number) {
