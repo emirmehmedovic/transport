@@ -29,7 +29,8 @@
     "test:maps": "node scripts/test-map-lifecycle.cjs",
     "test:integration-alerts": "node scripts/test-integration-alerts.cjs",
     "test:dependencies": "node --import tsx scripts/test-dependencies.ts",
-    "test:dependency-migrations": "TZ=Europe/Sarajevo node --import tsx scripts/test-dependency-migrations.ts"
+    "test:dependency-migrations": "TZ=Europe/Sarajevo node --import tsx scripts/test-dependency-migrations.ts",
+    "test:deploy": "node scripts/test-deploy.cjs"
   },
   "keywords": [],
   "author": "",
