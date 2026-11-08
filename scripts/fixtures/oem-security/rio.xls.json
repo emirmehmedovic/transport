@@ -1,0 +1,75 @@
+{
+  "provider": "RIO",
+  "vehicleLabel": null,
+  "driverNames": [
+    "Test Šarić"
+  ],
+  "periodStart": "2026-11-01T22:50:00.000Z",
+  "periodEnd": "2026-11-01T23:10:00.000Z",
+  "totalDistanceKm": 15.5,
+  "schengenDays": 2,
+  "borderCrossings": [
+    {
+      "at": "2026-11-01T22:55:00.000Z",
+      "from": "BIH",
+      "to": "SCHENGEN",
+      "address": "Hrvatska"
+    },
+    {
+      "at": "2026-11-01T23:10:00.000Z",
+      "from": "SCHENGEN",
+      "to": "BIH",
+      "address": "Bosna i Hercegovina"
+    }
+  ],
+  "coveredDays": [
+    "2026-11-01",
+    "2026-11-02"
+  ],
+  "events": [
+    {
+      "timestamp": "2026-11-01T22:50:00.000Z",
+      "event": "Start",
+      "address": "Bosna i Hercegovina",
+      "driverName": "Test Šarić",
+      "distanceKm": 0,
+      "odometerKm": 1000,
+      "latitude": null,
+      "longitude": null,
+      "region": "BIH"
+    },
+    {
+      "timestamp": "2026-11-01T22:55:00.000Z",
+      "event": "Drive",
+      "address": "Hrvatska",
+      "driverName": "Test Šarić",
+      "distanceKm": 5.5,
+      "odometerKm": 1005.5,
+      "latitude": 45.815,
+      "longitude": 15.982,
+      "region": "SCHENGEN"
+    },
+    {
+      "timestamp": "2026-11-01T23:05:00.000Z",
+      "event": "Drive",
+      "address": "Hrvatska",
+      "driverName": "Test Šarić",
+      "distanceKm": 5,
+      "odometerKm": 1010.5,
+      "latitude": 45.815,
+      "longitude": 15.982,
+      "region": "SCHENGEN"
+    },
+    {
+      "timestamp": "2026-11-01T23:10:00.000Z",
+      "event": "Stop",
+      "address": "Bosna i Hercegovina",
+      "driverName": "Test Šarić",
+      "distanceKm": 5,
+      "odometerKm": 1015.5,
+      "latitude": null,
+      "longitude": null,
+      "region": "BIH"
+    }
+  ]
+}

@@ -27,7 +27,9 @@
     "test:schengen": "node scripts/test-schengen.cjs",
     "schengen:rebuild": "tsx scripts/rebuild-schengen.ts",
     "test:maps": "node scripts/test-map-lifecycle.cjs",
-    "test:integration-alerts": "node scripts/test-integration-alerts.cjs"
+    "test:integration-alerts": "node scripts/test-integration-alerts.cjs",
+    "test:dependencies": "node --import tsx scripts/test-dependencies.ts",
+    "test:dependency-migrations": "TZ=Europe/Sarajevo node --import tsx scripts/test-dependency-migrations.ts"
   },
   "keywords": [],
   "author": "",
@@ -35,22 +37,22 @@
   "description": "",
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
-    "@prisma/client": "^6.19.0",
+    "@prisma/client": "^6.19.3",
     "@tailwindcss/forms": "^0.5.10",
     "@types/leaflet": "^1.9.21",
     "@types/pdfkit": "^0.17.3",
-    "axios": "^1.13.2",
+    "axios": "^1.21.0",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
-    "file-type": "^21.1.1",
+    "file-type": "^21.3.4",
     "jsonwebtoken": "^9.0.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.554.0",
-    "next": "^15.5.19",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^8.0.7",
+    "next": "^15.5.29",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^10.4.0",
     "pdfkit": "^0.17.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -58,9 +60,9 @@
     "recharts": "^3.4.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^3.4.18",
-    "uuid": "^13.0.0",
-    "xlsx": "^0.18.5",
-    "zod": "^4.1.12",
+    "uuid": "^13.0.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.6.7",
     "@react-leaflet/core": "^2.1.0"
   },
   "devDependencies": {
@@ -68,16 +70,29 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.10.1",
-    "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.2.6",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.22",
     "eslint": "^9.39.1",
-    "eslint-config-next": "^15.5.19",
+    "eslint-config-next": "^15.5.29",
     "playwright": "^1.60.0",
-    "postcss": "^8.5.6",
-    "prisma": "^6.19.0",
+    "postcss": "^8.5.32",
+    "prisma": "^6.19.3",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "$postcss"
+    },
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.5"
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
