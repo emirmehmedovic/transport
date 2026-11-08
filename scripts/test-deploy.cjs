@@ -51,7 +51,7 @@ fs.writeFileSync(process.env.TEST_PM2,JSON.stringify(list));
 `, true);
   return {repo,home,db,calls:path.join(dir,'calls'),env:{...process.env,HOME:home,NVM_DIR:path.join(home,'.nvm'),PATH:bin+path.delimiter+process.env.PATH,TEST_PM2:db,TEST_CALLS:path.join(dir,'calls'),TRANSPORT_ALLOW_MISSING_PROCESSES:''}};
 }
-function run(f, script, overrides = {}) { const r=spawnSync('bash',[`scripts/deploy/${script}.sh`],{cwd:f.repo,env:{...f.env,...overrides},encoding:'utf8'}); return {status:r.status,output:r.stdout+r.stderr}; }
+function run(f, script, overrides = {}, args = []) { const r=spawnSync('bash',[`scripts/deploy/${script}.sh`, ...args],{cwd:f.repo,env:{...f.env,...overrides},encoding:'utf8'}); return {status:r.status,output:r.stdout+r.stderr}; }
 const marker = f => path.join(f.home,'transport-deploy/rebuild-complete.json');
 const calls = f => fs.readFileSync(f.calls,'utf8');
 let passed=0;
@@ -70,6 +70,19 @@ try {
   for(const p of procs){assert.equal(p.pm2_env.exec_interpreter,process.execPath);assert.equal(p.pm2_env.exec_mode,'fork_mode');assert.equal(p.pm2_env.env.RETAINED_SETTING,'yes');}
   assert.ok(calls(f).includes('pm2 save'));console.log('PASS successful backup/apply/start preserves env and pins Node/fork');passed++;
   fs.appendFileSync(path.join(f.repo,'.env'),'CHANGED=yes\n');assert.notEqual(run(f,'start-production').status,0);console.log('PASS changed configuration blocks startup');passed++;
+  const reuse=fixture('reuse');assert.equal(run(reuse,'backup-and-rebuild').status,0);
+  put(path.join(reuse.repo,'.next/BUILD_ID'),'new-build');
+  assert.notEqual(run(reuse,'start-production').status,0);
+  const reused=run(reuse,'start-production',{},['--reuse-schengen-rebuild']);
+  assert.equal(reused.status,0,reused.output);
+  assert.equal(calls(reuse).split('\n').filter(line=>line==='apply').length,1);
+  fs.appendFileSync(path.join(reuse.repo,'.env'),'CHANGED=yes\n');
+  assert.notEqual(run(reuse,'start-production',{},['--reuse-schengen-rebuild']).status,0);
+  console.log('PASS explicit rebuild reuse permits a new build but still rejects changed environment');passed++;
+  const absent=fixture('absent');
+  assert.notEqual(run(absent,'start-production',{},['--reuse-schengen-rebuild']).status,0);
+  assert.ok(!calls(absent).includes('pm2 delete'));
+  console.log('PASS reuse requires an existing successful backup and apply');passed++;
   const retry=fixture('retry');assert.equal(run(retry,'backup-and-rebuild').status,0);
   assert.notEqual(run(retry,'start-production',{FAIL_HTTP:'1'}).status,0);
   assert.equal(JSON.parse(fs.readFileSync(retry.db)).some(p=>p.name==='transport-cron'),false);

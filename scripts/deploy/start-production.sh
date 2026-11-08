@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
+# Use --reuse-schengen-rebuild only when the new build does not change
+# Schengen reconstruction logic and the previous apply completed successfully.
+if [ "$#" -gt 1 ] || { [ "$#" -eq 1 ] && [ "$1" != "--reuse-schengen-rebuild" ]; }; then
+  echo 'Upotreba: bash scripts/deploy/start-production.sh [--reuse-schengen-rebuild]' >&2
+  exit 1
+fi
 export TRANSPORT_ALLOW_MISSING_PROCESSES=1
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 command -v curl >/dev/null
-node scripts/deploy/helpers.cjs prepare-start
+node scripts/deploy/helpers.cjs prepare-start "$@"
 # Snapshot and config have already been validated before removing the old definitions.
 while IFS= read -r process_name; do
   [ -n "$process_name" ] || continue

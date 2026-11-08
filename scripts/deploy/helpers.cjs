@@ -65,6 +65,10 @@ async function main() {
     case 'prepare-start': {
       const marker = read(path.join(state, 'rebuild-complete.json'));
       for (const [key, value] of Object.entries(fingerprint())) {
+        if (key === 'build' && marker[key] !== value && process.argv[3] === '--reuse-schengen-rebuild') {
+          console.log('Novi build: koristim prethodno uspješno završen Schengen preračun.');
+          continue;
+        }
         if (marker[key] !== value) throw Error(`Stanje nakon preračuna se promijenilo (${key}); pregledaj prije pokretanja.`);
       }
       if (!fs.statSync(marker.backup).size) throw Error('Nedostaje backup.');
